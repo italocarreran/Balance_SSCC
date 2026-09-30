@@ -175,14 +175,13 @@ class PruebaCargaEntradas(unittest.TestCase):
         self.assertEqual(servicios.iloc[0].tolist(), [0.5, 0.5, 0.0])
         self.assertEqual(servicios.iloc[1].tolist(), [5.0, 1.0, 4.0])
 
-    def test_sc_co_avisa_fechas_de_otro_mes(self):
-        avisos = []
-        cra.construir_sc_co(
-            _reporte_cra(self.base / "r.csv"),
-            _sobrecostos(self.base / "s.xlsx"),
-            registrar=avisos.append, periodo=(2026, 9),
-        )
-        self.assertEqual(sum("fuera de 2026-09" in a for a in avisos), 2)
+    def test_sc_co_con_fechas_de_otro_mes_se_rechaza(self):
+        with self.assertRaises(cra.ErrorEntrada):
+            cra.construir_sc_co(
+                _reporte_cra(self.base / "r.csv"),
+                _sobrecostos(self.base / "s.xlsx"),
+                periodo=(2026, 9),
+            )
 
     def test_fd_copia_la_hoja_con_sus_encabezados(self):
         ruta = _sscc_desempeno(self.base / "SSCC_Desempeño_Agosto_2026.xlsx")
@@ -222,6 +221,44 @@ class PruebaCargaEntradas(unittest.TestCase):
             cra.construir_fp(ruta)
 
         self.assertIn("Otra", str(ctx.exception))
+
+
+REPORTE_REAL = (
+    Path(__file__).resolve().parent.parent
+    / "docs" / "Reporte_CRA_15min_2512_real.csv"
+)
+
+
+@unittest.skipUnless(REPORTE_REAL.exists(), "falta el CSV real en docs/")
+class PruebaReporteCraReal(unittest.TestCase):
+    """Contra el Reporte_CRA_15min_2512.csv real que entrego el usuario."""
+
+    def test_lee_el_csv_real(self):
+        df = cra.construir_sc_co_desde_reporte(REPORTE_REAL, periodo=(2025, 12))
+
+        self.assertEqual(len(df), 6867)
+        self.assertEqual(set(df[p.CAMPO_TIPO]), {"CO"})
+        self.assertEqual(set(df[p.CAMPO_CLAVE_ANIO_MES]), {2512})
+        self.assertEqual(df.iloc[0][p.CAMPO_UNIDAD_SC], "CANUTILLAR-1")
+        self.assertEqual(df.iloc[0][p.CAMPO_CLAVE_BLOQUE], "1#38")
+        self.assertEqual(df.iloc[-1][p.CAMPO_CLAVE_BLOQUE], "16#92")
+
+    def test_participacion_coincide_con_la_del_archivo(self):
+        # El CSV trae ademas Prorrata_CPF/CSF/CTF (P, Q, R) ya sumadas:
+        # tienen que dar lo mismo que CPF(+) + CPF(-), etc.
+        df = cra.construir_sc_co_desde_reporte(REPORTE_REAL)
+        propias = cra.participacion_por_servicio(df)
+
+        from Script.cra.lectura import leer_columnas
+        archivo = leer_columnas(REPORTE_REAL, None, 2, ["P", "Q", "R"])
+
+        for servicio, letra in zip(("CPF", "CSF", "CTF"), "PQR"):
+            diferencia = (propias[servicio] - archivo[letra].astype(float)).abs()
+            self.assertLess(diferencia.max(), 1e-6, servicio)
+
+    def test_otro_periodo_se_rechaza(self):
+        with self.assertRaises(cra.ErrorEntrada):
+            cra.construir_sc_co_desde_reporte(REPORTE_REAL, periodo=(2026, 1))
 
 
 class PruebaProceso(unittest.TestCase):

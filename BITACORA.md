@@ -14,12 +14,13 @@ Referencia: `docs/Trazabilidad_CRA_Periodo_Generico_v3.md`. Nada de esto
 se adivinó: lo que depende de una respuesta quedó como constante en
 `Script/cra/parametros.py` o como hoja PENDIENTE en el árbol.
 
-- **ENERGIA `K`, `L` y `M` (`Neto`).** El usuario confirmó que son
+- **ENERGIA `K`, `L` y `M` (`Neto`)** — el usuario las revisa; por ahora
+  la hoja lleva solo los datos y la fórmula se agrega después. Son
   fórmulas (K y L, una corrección sobre kWhD/kWhR; M, el `Neto` que usa
   `CÁLCULO_CRA`). No están en la trazabilidad (6.1 lo deja "pendiente de
   cierre"): hace falta el texto de las fórmulas de `K10`, `L10` y `M10`,
   y de cualquier tabla o celda que consulten.
-- **CO: de dónde sale `CO!L`.** `CÁLCULO_CRA!Q` (`CO_Barra_Propia`) es
+- **CO: de dónde sale `CO!L`** (el usuario: "después lo vemos"). `CÁLCULO_CRA!Q` (`CO_Barra_Propia`) es
   `SUMIFS(CO!L:L; CO!B mes; C día; D hora; G embalse; H configuración)`.
   Solo está definida la carga de `CO!N:R` (cvar) y `FP!U:X` (fp); las
   columnas `CO!B:L` (y `CO!AA:AB`, unidad → embalse) son fórmulas que
@@ -29,16 +30,15 @@ se adivinó: lo que depende de una respuesta quedó como constante en
 - **RENDIMIENTOS, EMPRESAS, unidades candidatas, COTAS,
   CONDICION_EMBALSE:** fuera de foco por ahora (usuario: "enfocarnos en lo
   que tenemos").
-- **Sobrecostos, `Clave Año_Mes`:** ¿el archivo trae un solo mes o
-  varios? Hoy se cargan todas las filas y solo se avisa si hay fechas de
-  otro mes.
-- **Reporte_CRA en CSV:** se detecta el separador (`;`, `,` o tab); con
-  `;` la coma es el decimal, y las fechas en texto se leen año-mes-día o
-  día-mes-año (nunca mes-día-año). Confirmar con el CSV real.
 - **FD_CPF/CSF/CTF:** se copian enteras (todas las unidades, encabezados
-  de la fila 11). Confirmar contra las hojas `FD_*` del Excel del CRA si
-  tienen otra forma; el filtro por unidad candidata queda para
-  `CÁLCULO_CRA`.
+  de la fila 11). El usuario cree que la forma de las hojas `FD_*` del
+  Excel está en la trazabilidad, pero la sección 6.7 solo da la clave
+  (InfoTécnica + fecha/hora) y marca el origen como PENDIENTE. Si las
+  hojas del Excel tienen otra forma, hace falta verlas.
+- **Nombres de unidad:** el Reporte_CRA real trae `CANUTILLAR-1`, el
+  `CÁLCULO_CRA` usa `CANUTILLAR_U1`: el diccionario SC/CO → Nombre CRA
+  hace falta para `CÁLCULO_CRA` (no para cargar la hoja).
+- Falta un `Cálculo_SobrecostosSSCC_*.xlsm` real para validar la parte SC.
 - **PRORRATA_RETIROS:** solo el bloque 1 (matriz período × empresa, en
   orden alfabético). Los cuadros 2 y 3 esperan a `CÁLCULO_CRA`.
 - **Cambio de hora (92/100 períodos):** la `Clave_Bloque` de SC replica
@@ -4178,4 +4178,28 @@ tkinter.
 
 **Verificación:** `py_compile`, `pyflakes` del CRA, 164 pruebas (13 del
 CRA). La ventana sigue sin poder abrirse acá (sin tkinter).
+
+---
+
+## 2026-09-30 (3) — CRA: `Reporte_CRA` real validado; un solo mes por archivo
+
+**Respuestas del usuario:** ENERGIA sigue solo con datos (las fórmulas de
+K/L/M las revisa él); CO se ve después; Sobrecostos trae **un solo mes**;
+entregó un `Reporte_CRA_15min_2512.csv` real; sobre la forma de `FD_*`
+dice que debería estar en la trazabilidad (no lo está: ver pendientes).
+
+**Qué se hizo:**
+
+- El CSV real quedó en `docs/Reporte_CRA_15min_2512_real.csv` y su
+  estructura en `docs/Estructura_Archivos_Reales.md` §D.1. Con el lector
+  tal como estaba se leyó bien: 6.867 filas, `Clave_Bloque` `1#38`..`16#92`,
+  y las participaciones calculadas (`CPF = CPF(+)+CPF(-)`, etc.)
+  coinciden con las columnas P/Q/R que trae el propio archivo (diferencia
+  máxima 1e-9). Tres pruebas nuevas contra ese archivo.
+- Como cada archivo de SC y CO es de un solo mes, una fecha fuera del
+  período ya no es un aviso sino `ErrorEntrada` (archivo equivocado o
+  fecha mal leída).
+- Los enteros del CSV quedan enteros (`2512`, no `2512.0`).
+
+**Verificación:** 167 pruebas (16 del CRA), `pyflakes` del CRA limpio.
 

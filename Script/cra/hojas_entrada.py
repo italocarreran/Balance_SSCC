@@ -143,7 +143,7 @@ def construir_sc_co_desde_reporte(ruta, registrar=_nada, periodo=None):
     Reporte_CRA*.csv (registros CO), desde la fila 2.
     Clave_Bloque = DIA(C) & "#" & E.
 
-    periodo: (anio, mes) para avisar si hay fechas de otro mes.
+    periodo: (anio, mes) para validar que todas las fechas sean del mes.
     """
 
     letras = list(p.COPIA_REPORTE_CRA) + [
@@ -159,7 +159,7 @@ def construir_sc_co_desde_reporte(ruta, registrar=_nada, periodo=None):
     )
 
     fechas = origen[p.LETRA_FECHA_REPORTE_CRA]
-    _avisar_otro_mes(fechas, periodo, "Reporte_CRA",
+    _validar_mes(fechas, periodo, "Reporte_CRA",
                      p.LETRA_FECHA_REPORTE_CRA, registrar)
     dias = fechas.map(dia_excel)
     df[p.CAMPO_CLAVE_BLOQUE] = [
@@ -216,7 +216,7 @@ def construir_sc_co_desde_sobrecostos(ruta, registrar=_nada, periodo=None):
         )
 
     fechas = origen[p.LETRA_FECHA_SOBRECOSTOS]
-    _avisar_otro_mes(fechas, periodo, "Sobrecostos",
+    _validar_mes(fechas, periodo, "Sobrecostos",
                      p.LETRA_FECHA_SOBRECOSTOS, registrar)
     dias = fechas.map(dia_excel)
     periodos = origen[p.LETRA_PERIODO_SOBRECOSTOS].map(numero_o_nada)
@@ -287,12 +287,11 @@ def _avisar_sin_dia(dias, origen, letra, registrar):
         )
 
 
-def _avisar_otro_mes(valores, periodo, origen, letra, registrar):
+def _validar_mes(valores, periodo, origen, letra, registrar):
     """
-    Aviso (no error) si hay fechas fuera del periodo: no esta confirmado
-    que cada archivo traiga un solo mes (la tabla tiene su propia
-    "Clave Año_Mes"). Sirve ademas para detectar una fecha de texto mal
-    leida (dia y mes cruzados).
+    Cada archivo de SC y CO trae un solo mes (confirmado por el usuario):
+    una fecha de otro mes quiere decir que el archivo no es el del
+    periodo (o que una fecha de texto se leyo con dia y mes cruzados).
     """
 
     if periodo is None:
@@ -303,8 +302,8 @@ def _avisar_otro_mes(valores, periodo, origen, letra, registrar):
 
     if otras:
         meses = sorted({f"{f.year}-{f.month:02d}" for f in otras})
-        registrar(
-            f"  AVISO SC y CO: {len(otras)} fila(s) de {origen} con fecha "
-            f"(columna {letra}) fuera de {periodo[0]}-{periodo[1]:02d}: "
-            f"{', '.join(meses[:5])}."
+        raise ErrorEntrada(
+            f"{origen}: {len(otras)} fila(s) con fecha (columna {letra}) "
+            f"fuera del periodo {periodo[0]}-{periodo[1]:02d} "
+            f"({', '.join(meses[:5])}). Revisar que sea el archivo del mes."
         )

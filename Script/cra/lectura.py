@@ -199,8 +199,10 @@ def leer_csv(ruta):
     """
     Todas las lineas del CSV como listas de valores. Separador ";", ","
     o tabulador (se detecta). Los textos que son numeros se pasan a
-    numero, como hace Excel al abrir el CSV: con ";" de separador la
-    coma es el decimal ("1.234,5" -> 1234.5); con "," el punto.
+    numero, como hace Excel al abrir el CSV ("38" -> 38, "0.91" -> 0.91).
+    El Reporte_CRA real (docs/Reporte_CRA_15min_2512_real.csv) usa ";"
+    y punto decimal; si con ";" apareciera una coma en un numero, se toma
+    como decimal ("1.234,5" -> 1234.5).
     """
 
     crudo = Path(ruta).read_bytes()
@@ -234,9 +236,11 @@ def _valor_csv(texto, separador):
         candidato = texto.replace(".", "").replace(",", ".")
 
     try:
-        return float(candidato)
+        numero = float(candidato)
     except ValueError:
         return texto
+
+    return int(numero) if numero.is_integer() and "." not in candidato else numero
 
 
 # ============================================================

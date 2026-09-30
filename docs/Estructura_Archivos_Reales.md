@@ -531,6 +531,43 @@ fila, jamás por posición de letra).
 
 ---
 
+## D. CRA (`Balance_CRA.py`) — archivos de entrada
+
+Dominio: `docs/Trazabilidad_CRA_Periodo_Generico_v3.md`. Mapeos en
+`Script/cra/parametros.py`.
+
+### D.1 `SC y CO/Reporte_CRA_15min_<AAMM>.csv` ✅
+
+- **Archivo real de referencia**: `docs/Reporte_CRA_15min_2512_real.csv`
+  (diciembre 2025, 6.867 filas + encabezado). Hay pruebas contra él en
+  `tests/test_cra_entradas.py` (`PruebaReporteCraReal`).
+- **Formato**: CSV UTF-8, fin de línea CRLF, separador `;`, **punto**
+  decimal, sin comillas. Encabezado en la fila 1, datos desde la 2.
+- **Columnas reales** (en Excel sería la hoja `Reporte_CRA_15min_AAMM`):
+
+  | Letra | Encabezado real | Ejemplo | Uso en `SC y CO` |
+  |---|---|---|---|
+  | A | `Clave año_mes` | `2512` (AAMM, no AAAAMM) | `Clave Año_Mes` |
+  | B | `Tipo` | `CO` | `Tipo` |
+  | C | `FECHA` | `01-12-2025` (día-mes-año) | día de `Clave_Bloque` |
+  | D | `Hora` | `10` (1..24) | — |
+  | E | `Bloque_15min` | `38` (1..96 del día) | bloque de `Clave_Bloque` |
+  | F | `Hora_Mensual_15min` | `38` (1..N del mes) | — |
+  | G | `FECHA_HORA` | `01-12-2025 9:15` | — |
+  | H | `UNIDAD GENERADORA` | `CANUTILLAR-1` | `Unidad` |
+  | I | `RCO` | `3202.189645` | `Costo de Oportunidad y sobrecosto` |
+  | J..O | `Prorrata_CPF(+)`, `(-)`, `Prorrata_CSF(+)`, `(-)`, `Prorrata_CTF(+)`, `(-)` | | `CPF(+)`..`CTF(-)` |
+  | P, Q, R | `Prorrata_CPF`, `Prorrata_CSF`, `Prorrata_CTF` | | no se cargan: son la suma (+)+(−) que se calcula en memoria (coinciden a 1e-9) |
+
+- **Observaciones del archivo real**: todas las filas son `Tipo = CO` y
+  del mismo mes; las unidades vienen con guion (`CANUTILLAR-1`,
+  `ELTORO-1`, `PE-SANGABRIEL`), **no** con el nombre del `CÁLCULO_CRA`
+  (`CANUTILLAR_U1`): el cruce necesita el diccionario SC/CO → Nombre CRA
+  (traz. 16.1), todavía pendiente. 309 filas tienen `RCO = 0` y las tres
+  prorratas en 0 (suman 0, no 1); el resto suma 1.
+
+---
+
 ## C. Qué hacer con un Excel nuevo que te manden
 
 1. Si el nombre/estructura coincide con alguno de los 7 de la sección A → es una entrada real del
