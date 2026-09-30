@@ -53,8 +53,10 @@ def _reporte_cra(ruta):
 
     lineas = [
         ";".join(f"enc {letra}" for letra in "ABCDEFGHIJKLMNO"),
-        "202608;CO;05-08-2026 00:00;x;17;x;x;RAPEL_U1;1234,5;"
+        "202608;CO;05-08-2026 00:00;x;17;x;x;RAPEL-1;1234,5;"
         "0,25;0,25;0,5;0;0;0",
+        "202608;CO;05-08-2026 00:00;x;18;x;x;PE-TOLPANSUR;1;1;0;0;0;0;0",
+        "202608;CO;05-08-2026 00:00;x;19;x;x;NUEVA-7;1;1;0;0;0;0;0",
     ]
     ruta.parent.mkdir(parents=True, exist_ok=True)
     ruta.write_text("\n".join(lineas) + "\n", encoding="latin-1")
@@ -96,7 +98,7 @@ def _sobrecostos(ruta):
     celdas = {(6, "A"): "encabezado"}
     fila = {
         "A": dt.datetime(2026, 8, 3), "R": 2 * 96 + 10,
-        "S": 202608, "T": "SC", "U": "COLBUN_U1", "W": 99.0,
+        "S": 202608, "T": "SCCF", "U": "COLBUN-1", "W": 99.0,
         "AW": 1, "BC": 2, "BI": 3,          # CPF(+) = 6
         "AX": -1,                           # CPF(-) = -1 (BD, BJ vacias)
         "AY": 0.5, "BE": 0.5,               # CSF(+) = 1
@@ -158,13 +160,19 @@ class PruebaCargaEntradas(unittest.TestCase):
         reporte = _reporte_cra(self.base / "r.csv")
         sobrecostos = _sobrecostos(self.base / "s.xlsx")
 
-        df = cra.construir_sc_co(reporte, sobrecostos)
+        avisos = []
+        df = cra.construir_sc_co(reporte, sobrecostos, avisos.append)
 
+        # SC arriba, CO abajo; solo embalses (PE-TOLPANSUR y NUEVA-7 fuera).
         self.assertEqual(list(df.columns), p.COLUMNAS_SC_CO)
-        self.assertEqual(df[p.CAMPO_TIPO].tolist(), ["CO", "SC"])
-        self.assertEqual(df[p.CAMPO_CLAVE_BLOQUE].tolist(), ["5#17", "3#10"])
+        self.assertEqual(df[p.CAMPO_TIPO].tolist(), ["SCCF", "CO"])
+        self.assertEqual(df[p.CAMPO_UNIDAD_SC].tolist(), ["COLBUN-1", "RAPEL-1"])
+        self.assertEqual(df[p.CAMPO_CLAVE_BLOQUE].tolist(), ["3#10", "5#17"])
+        self.assertTrue(any("NUEVA-7" in a and "unidad nueva" in a for a in avisos))
+        self.assertFalse(any("PE-TOLPANSUR" in a and "unidad nueva" in a
+                             for a in avisos))
 
-        sc = df.iloc[1]
+        sc = df.iloc[0]
         self.assertEqual(sc[p.CAMPO_CPF_MAS], 6)
         self.assertEqual(sc[p.CAMPO_CPF_MENOS], -1)
         self.assertEqual(sc[p.CAMPO_CSF_MAS], 1)
@@ -172,8 +180,8 @@ class PruebaCargaEntradas(unittest.TestCase):
         self.assertEqual(sc[p.CAMPO_CTF_MAS], 4)
 
         servicios = cra.participacion_por_servicio(df)
-        self.assertEqual(servicios.iloc[0].tolist(), [0.5, 0.5, 0.0])
-        self.assertEqual(servicios.iloc[1].tolist(), [5.0, 1.0, 4.0])
+        self.assertEqual(servicios.iloc[0].tolist(), [5.0, 1.0, 4.0])
+        self.assertEqual(servicios.iloc[1].tolist(), [0.5, 0.5, 0.0])
 
     def test_sc_co_con_fechas_de_otro_mes_se_rechaza(self):
         with self.assertRaises(cra.ErrorEntrada):
@@ -236,7 +244,10 @@ class PruebaReporteCraReal(unittest.TestCase):
     def test_lee_el_csv_real(self):
         df = cra.construir_sc_co_desde_reporte(REPORTE_REAL, periodo=(2025, 12))
 
-        self.assertEqual(len(df), 6867)
+        # 6.867 filas en el archivo; los dos parques eolicos
+        # (PE-TOLPANSUR 650, PE-SANGABRIEL 531) no son embalse.
+        self.assertEqual(len(df), 6867 - 650 - 531)
+        self.assertFalse(df[p.CAMPO_UNIDAD_SC].str.startswith("PE-").any())
         self.assertEqual(set(df[p.CAMPO_TIPO]), {"CO"})
         self.assertEqual(set(df[p.CAMPO_CLAVE_ANIO_MES]), {2512})
         self.assertEqual(df.iloc[0][p.CAMPO_UNIDAD_SC], "CANUTILLAR-1")
@@ -246,11 +257,16 @@ class PruebaReporteCraReal(unittest.TestCase):
     def test_participacion_coincide_con_la_del_archivo(self):
         # El CSV trae ademas Prorrata_CPF/CSF/CTF (P, Q, R) ya sumadas:
         # tienen que dar lo mismo que CPF(+) + CPF(-), etc.
+        from Script.cra.hojas_entrada import filtrar_embalses
+        from Script.cra.lectura import leer_columnas
+
         df = cra.construir_sc_co_desde_reporte(REPORTE_REAL)
         propias = cra.participacion_por_servicio(df)
 
-        from Script.cra.lectura import leer_columnas
-        archivo = leer_columnas(REPORTE_REAL, None, 2, ["P", "Q", "R"])
+        archivo = leer_columnas(REPORTE_REAL, None, 2, ["H", "P", "Q", "R"])
+        archivo = filtrar_embalses(
+            archivo.rename(columns={"H": p.CAMPO_UNIDAD_SC}), "prueba"
+        )
 
         for servicio, letra in zip(("CPF", "CSF", "CTF"), "PQR"):
             diferencia = (propias[servicio] - archivo[letra].astype(float)).abs()

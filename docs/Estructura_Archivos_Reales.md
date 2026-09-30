@@ -565,6 +565,9 @@ Dominio: `docs/Trazabilidad_CRA_Periodo_Generico_v3.md`. Mapeos en
   (`CANUTILLAR_U1`): el cruce necesita el diccionario SC/CO → Nombre CRA
   (traz. 16.1), todavía pendiente. 309 filas tienen `RCO = 0` y las tres
   prorratas en 0 (suman 0, no 1); el resto suma 1.
+- **Filtro de embalses:** `SC y CO` se queda solo con las centrales de
+  `CENTRALES_EMBALSE`; de este archivo salen `PE-TOLPANSUR` (650 filas) y
+  `PE-SANGABRIEL` (531) y quedan 5.686.
 
 ---
 

@@ -1050,6 +1050,8 @@ importable como cualquier módulo.
   regla), como define cada carga la trazabilidad. Hoja de cada origen en
   `HOJA_ORIGEN_*`: nombre, `0` (la primera) o `None` (no confirmada: la
   única, o se para si hay varias).
+- **`SC y CO`:** SC (Sobrecostos) arriba y CO (Reporte_CRA) abajo, solo
+  centrales de embalse (`CENTRALES_EMBALSE`, `filtrar_embalses()`).
 - **Expone:** `generar_balance_cra(carpeta_base, aamm, secciones=None,
   registrar, progreso)`, `traer_fd(carpeta_base, aamm, ...)`, `SECCIONES`
   (`energia`, `fp`, `co`, `sc_co`, `fd_cpf`, `fd_csf`, `fd_ctf`,

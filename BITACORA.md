@@ -39,6 +39,9 @@ se adivinó: lo que depende de una respuesta quedó como constante en
   `CÁLCULO_CRA` usa `CANUTILLAR_U1`: el diccionario SC/CO → Nombre CRA
   hace falta para `CÁLCULO_CRA` (no para cargar la hoja).
 - Falta un `Cálculo_SobrecostosSSCC_*.xlsm` real para validar la parte SC.
+- **Lista de centrales de embalse** (`CENTRALES_EMBALSE`): hoy está en el
+  código, copiada del `Actualiza_SC_CO.py` del usuario. Evaluar si pasa a
+  un maestro (junto con EMPRESAS / unidades candidatas) cuando se definan.
 - **PRORRATA_RETIROS:** solo el bloque 1 (matriz período × empresa, en
   orden alfabético). Los cuadros 2 y 3 esperan a `CÁLCULO_CRA`.
 - **Cambio de hora (92/100 períodos):** la `Clave_Bloque` de SC replica
@@ -4202,4 +4205,33 @@ dice que debería estar en la trazabilidad (no lo está: ver pendientes).
 - Los enteros del CSV quedan enteros (`2512`, no `2512.0`).
 
 **Verificación:** 167 pruebas (16 del CRA), `pyflakes` del CRA limpio.
+
+---
+
+## 2026-09-30 (4) — CRA: `SC y CO` solo con centrales de embalse, SC arriba
+
+**Pedido del usuario:** en `SC y CO` hay que filtrar las centrales de
+embalse; entregó su `Actualiza_SC_CO.py` (xlwings, sobre la planilla) para
+ver la lógica, aclarando que el origen de CO ahí es otro (`Calculo_CO`) y
+no hay que fijarse en eso.
+
+**Qué se tomó de ese script (y qué no):**
+
+- La lista `CENTRALES_EMBALSE` (27 unidades, nombre exacto del origen) →
+  `Script/cra/parametros.py`. Se filtra en las dos fuentes, comparando
+  normalizado.
+- Los avisos: centrales de la lista sin ninguna fila, y centrales que
+  terminan en `-número` sin estar en la lista (posible unidad nueva).
+- El **orden** de la hoja: SC arriba y CO abajo. Estaba al revés.
+- **No** se tomó: el origen `Calculo_CO` / hoja `PRORRATA CO` ni sus
+  letras (`AU:BJ`, `BM:CB` de 16 columnas de prorrata), porque el usuario
+  dijo que en este caso el origen es otro; se sigue la trazabilidad
+  (`Reporte_CRA` + las sumas de 3 componentes de `SOBRECOSTOS`).
+  Tampoco la Clave Año_Mes copiada de SC a CO: `Reporte_CRA` ya la trae.
+
+**Resultado con el CSV real:** 5.686 de 6.867 filas (salen `PE-TOLPANSUR`
+y `PE-SANGABRIEL`); aviso de 13 centrales de la lista sin filas en el mes
+(RALCO, COLBUN, PANGUE, ANTUCO, ANGOSTURA, CIPRESES-2, RAPEL-5).
+
+**Verificación:** 167 pruebas, `pyflakes` limpio.
 

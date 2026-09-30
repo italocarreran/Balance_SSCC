@@ -9,11 +9,12 @@ esta documentada; lo que la trazabilidad deja PENDIENTE (el Neto de
 ENERGIA, CO_Barra_Propia) no se calcula aca.
 """
 
+import re
 from pathlib import Path
 
 import pandas as pd
 
-from ..nucleo.utiles import ErrorEntrada
+from ..nucleo.utiles import ErrorEntrada, normalizar
 from . import parametros as p
 from .lectura import (
     a_fecha_hora,
@@ -169,7 +170,7 @@ def construir_sc_co_desde_reporte(ruta, registrar=_nada, periodo=None):
 
     _avisar_sin_dia(dias, "Reporte_CRA", p.LETRA_FECHA_REPORTE_CRA, registrar)
 
-    return df[p.COLUMNAS_SC_CO].reset_index(drop=True)
+    return filtrar_embalses(df[p.COLUMNAS_SC_CO], "Reporte_CRA", registrar)
 
 
 def construir_sc_co_desde_sobrecostos(ruta, registrar=_nada, periodo=None):
@@ -233,24 +234,73 @@ def construir_sc_co_desde_sobrecostos(ruta, registrar=_nada, periodo=None):
         dias, "Sobrecostos", p.LETRA_FECHA_SOBRECOSTOS, registrar
     )
 
-    return df[p.COLUMNAS_SC_CO].reset_index(drop=True)
+    return filtrar_embalses(df[p.COLUMNAS_SC_CO], "Sobrecostos", registrar)
 
 
 def construir_sc_co(ruta_reporte, ruta_sobrecostos, registrar=_nada,
                     periodo=None):
     """
-    La tabla SC y CO: primero los registros CO (Reporte_CRA) y abajo
-    los SC (Sobrecostos), apilados con el mismo esquema (traz. 6.6).
+    La tabla SC y CO: primero los registros SC (Sobrecostos) y abajo
+    los CO (Reporte_CRA), apilados con el mismo esquema (traz. 6.6), solo
+    de las centrales de embalse. El orden SC arriba / CO abajo es el de la
+    hoja real (Actualiza_SC_CO.py del usuario).
     """
 
-    co = construir_sc_co_desde_reporte(ruta_reporte, registrar, periodo)
     sc = construir_sc_co_desde_sobrecostos(ruta_sobrecostos, registrar, periodo)
+    co = construir_sc_co_desde_reporte(ruta_reporte, registrar, periodo)
 
     registrar(
-        f"  SC y CO: {len(co)} registro(s) CO + {len(sc)} registro(s) SC."
+        f"  SC y CO: {len(sc)} registro(s) SC + {len(co)} registro(s) CO."
     )
 
-    return pd.concat([co, sc], ignore_index=True)
+    return pd.concat([sc, co], ignore_index=True)
+
+
+# Una central que termina en "-numero" es una unidad: si no esta en la
+# lista de embalses, puede ser una unidad de embalse nueva.
+_RE_UNIDAD = re.compile(r"-\d+\s*$")
+
+
+def filtrar_embalses(df, origen, registrar=_nada):
+    """
+    Solo las filas de centrales de embalse (p.CENTRALES_EMBALSE). Avisa
+    que centrales de la lista no tienen ninguna fila y cuales terminan
+    en "-numero" sin estar en la lista.
+    """
+
+    permitidas = {normalizar(c) for c in p.CENTRALES_EMBALSE}
+    nombres = df[p.CAMPO_UNIDAD_SC].map(texto_excel)
+    claves = nombres.map(normalizar)
+    quedan = claves.isin(permitidas)
+
+    descartadas = sorted(set(nombres[~quedan & nombres.ne("")]))
+    registrar(
+        f"  {origen}: {int(quedan.sum())} fila(s) de embalse de "
+        f"{len(df)}; se descartan {len(descartadas)} central(es) que no "
+        f"son embalse"
+        + (f" ({', '.join(descartadas[:8])}"
+           + (", ..." if len(descartadas) > 8 else "") + ")"
+           if descartadas else "")
+        + "."
+    )
+
+    vistas = set(claves[quedan])
+    faltan = [c for c in p.CENTRALES_EMBALSE if normalizar(c) not in vistas]
+    if faltan:
+        registrar(
+            f"  AVISO {origen}: sin filas para {len(faltan)} central(es) de "
+            f"embalse: {', '.join(faltan)}."
+        )
+
+    sospechosas = [n for n in descartadas if _RE_UNIDAD.search(n)]
+    if sospechosas:
+        registrar(
+            f"  AVISO {origen}: terminan en '-numero' y NO estan en la lista "
+            f"de embalses (¿unidad nueva?): {', '.join(sospechosas)}. Si lo "
+            f"son, agregarlas a CENTRALES_EMBALSE en Script/cra/parametros.py."
+        )
+
+    return df[quedan].reset_index(drop=True)
 
 
 def participacion_por_servicio(sc_co):

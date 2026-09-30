@@ -261,6 +261,25 @@ SUMAS_SOBRECOSTOS = {
 LETRA_FECHA_SOBRECOSTOS = "A"
 LETRA_PERIODO_SOBRECOSTOS = "R"
 
+# Centrales de embalse: SC y CO se filtran a estas (las demas, p. ej.
+# los parques eolicos PE-*, se descartan). Van con el nombre EXACTO del
+# origen (Reporte_CRA!H, SOBRECOSTOS!U); se comparan normalizados.
+# Sale de la lista del Actualiza_SC_CO.py del usuario (2026-09-30).
+# Si se agrega una unidad de embalse nueva, se agrega aca: una central
+# que termina en "-numero" y no esta en la lista se avisa, por si es eso.
+CENTRALES_EMBALSE = [
+    "CANUTILLAR-1", "CANUTILLAR-2",
+    "ELTORO-1", "ELTORO-2", "ELTORO-3", "ELTORO-4",
+    "RALCO-1", "RALCO-2",
+    "RAPEL-1", "RAPEL-2", "RAPEL-3", "RAPEL-4", "RAPEL-5",
+    "PEHUENCHE-1", "PEHUENCHE-2",
+    "COLBUN-1", "COLBUN-2",
+    "CIPRESES-1", "CIPRESES-2", "CIPRESES-3",
+    "PANGUE-1", "PANGUE-2",
+    "ANTUCO-1", "ANTUCO-2",
+    "ANGOSTURA-1", "ANGOSTURA-2", "ANGOSTURA-3",
+]
+
 # Los 96 de la formula de Clave_Bloque SC. Se replica tal cual el
 # Excel; la traz. 6.6.3 advierte que no sirve para dias de 92/100
 # periodos (cambio de hora) y que eso se revisa aparte.
