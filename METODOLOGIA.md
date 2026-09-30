@@ -557,6 +557,6 @@ Lista de solo agregar, para no volver a discutir lo mismo en cada sesión.
 - **CRA: carga por letra y fila, como la trazabilidad.** A diferencia del
   SoC del BESS (detección por encabezados), las entradas del CRA se leen
   por letra de columna y fila de inicio, porque así las define
-  `docs/Trazabilidad_CRA_Periodo_Generico_v3.md`. La hoja de cada origen,
+  `docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md`. La hoja de cada origen,
   mientras no esté confirmada, no se adivina: si el libro tiene varias,
   se para y las lista.

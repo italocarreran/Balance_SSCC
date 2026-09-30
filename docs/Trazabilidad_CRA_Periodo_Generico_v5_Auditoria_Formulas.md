@@ -13,7 +13,7 @@ La regla aplicada es: **replicar y entender primero la lógica actual del Excel;
 **Alcance de la especificación:** **GENÉRICO PARA CUALQUIER PERÍODO MENSUAL**; agosto 2026 se usa únicamente como caso real de validación.  
 **Salida principal:** hoja `RESUMEN`  
 **Objetivo funcional:** obtener el cuadro de pago mensual por empresa del CRA.  
-**Actualización de trazabilidad:** incorpora definiciones operativas entregadas para los orígenes de `TC`, `ENERGIA`, `CO`, `FP` y `SC y CO`; mantiene `COTAS` y `CONDICION_EMBALSE` como pendientes.
+**Actualización de trazabilidad:** incorpora definiciones operativas entregadas para los orígenes de `TC`, `ENERGIA`, `CO`, `FP` y `SC y CO`, más una **auditoría reforzada de fórmulas y excepciones**; mantiene `COTAS` y la regla final de `CONDICION_EMBALSE` como pendientes.
 
 ---
 
@@ -67,6 +67,48 @@ Todos los rangos mensuales deben ser **dinámicos**. En particular:
 - claves `AAAA`, `MM`, `AAAAMM`, día, hora y período de 15 min.
 
 Las cantidades observadas en agosto 2026 deben utilizarse para validar equivalencia con Excel, pero no para dimensionar el proceso futuro.
+
+---
+
+# 0.2 Auditoría específica de fórmulas — revisión reforzada
+
+Dado que las **fórmulas son el elemento más importante para una réplica fiel**, se realizó una segunda pasada directamente sobre la estructura de fórmulas del workbook, revisando familias, rangos, cambios de lógica y errores almacenados.
+
+## Hallazgo transversal: el libro está en cálculo manual
+
+El workbook está guardado con:
+
+```text
+calcMode = manual
+```
+
+Por lo tanto, **no se debe asumir que el valor almacenado en una celda calculada corresponde necesariamente a la fórmula actualmente escrita**. Para la migración a Python, la fórmula es la fuente de verdad primaria; los valores guardados sirven solo como referencia/validación cuando el libro fue recalculado conscientemente.
+
+Esto explica por qué existen algunos valores cacheados aparentemente incompatibles con errores presentes en fórmulas aguas arriba.
+
+## Cobertura confirmada de fórmulas en la rama principal
+
+| Hoja | Bloque auditado | Resultado |
+|---|---|---|
+| `ENERGIA` | `K:L:M` | Fórmulas continuas en las **136.896 filas** de datos del ejemplo (`10:136905`). No hay huecos dentro del bloque. |
+| `CO` | `A:L` | Grilla ampliamente calculada hasta la fila `41672`; se identificaron excepciones de fórmula que se documentan en `6.4`. |
+| `CONDICION_EMBALSE` | `A:I` | La grilla temporal y la cota son calculadas; la condición final `K` **no está generada por una fórmula única**. |
+| `SC y CO` | `AA:AC`, `AF:AG`, `AI` | Bloques calculados confirmados; existe homologación mediante `dict_SCCO`. |
+| `FD_CPF` | `A` | Clave calculada en 82.584 registros. |
+| `FD_CSF` | `A` | Clave calculada en 95.976 registros. |
+| `FD_CTF` | `A` | Clave calculada en 369.024 registros. |
+| `CÁLCULO_CRA` | núcleo `A:AI` | La grilla del ejemplo tiene **74.400 filas unidad-período**; la mayoría de las columnas principales tienen fórmula en todas esas filas. |
+| `CÁLCULO_CRA` | `AL:AO` | Consolidación por período sobre 2.976 períodos en agosto 2026. |
+| `PRORRATA_RETIROS` | `EF:EJ` y `EP:IV` | Enlace del CRA y asignación de pagos calculados por período. |
+| `RESUMEN` | `C:F` | Agregación mensual final desde `PRORRATA_RETIROS`. |
+
+## Casos que no deben perderse en Python
+
+1. Existen **fórmulas de arranque distintas** de las fórmulas repetitivas en algunas secuencias temporales.
+2. `CO!H` tiene **dos familias de fórmula distintas pero funcionalmente equivalentes** (`INDEX` y luego `OFFSET`).
+3. Hay rangos fijos del Excel (`75000`, `30000`, `26792`, `8936`, etc.) que son artefactos del libro y **no deben transformarse en límites fijos de Python**.
+4. Hay errores `#N/A` reales en algunas filas no candidatas de `CÁLCULO_CRA` y en homologaciones de `SC y CO`. Deben documentarse y controlarse, no ocultarse.
+5. Las claves de FD son **horarias**, aunque el CRA se calcula a 15 minutos: cuatro períodos de 15 min comparten la misma fecha/hora para el FD.
 
 ---
 
@@ -592,23 +634,142 @@ periodo_calculo = J * 4 + ((MINUTO(G) + 15) / 15)
 
 Esta regla debe conservarse al migrar a Python y validarse contra los valores reales del archivo de entrada.
 
-### Relación con el campo utilizado finalmente por `CÁLCULO_CRA`
+### Transformación interna obligatoria: columnas corregidas `K`, `L` y `M`
 
-El libro actual termina utilizando `ENERGIA!M` (`Neto`) para el cálculo técnico. Por tanto, existen dos niveles distintos:
+Esta transformación **forma parte de la rama principal del cálculo**. No corresponde clasificar `K:L:M` como columnas de revisión, porque `CÁLCULO_CRA` consume directamente `ENERGIA!M` (`Neto`).
+
+En la fila 8, el Excel identifica este bloque como **“Corregidas”**. Los encabezados de la fila 9 son:
+
+| Campo lógico | Columna | Tipo | Origen | Uso |
+|---|---:|---|---|---|
+| `kWhD corregido` | `K` | Calculada | `kWhD (I)` + `kWhR (J)` | Componente corregida usada para construir `Neto`. |
+| `kWhR corregido` | `L` | Calculada | `kWhD (I)` + `kWhR (J)` | Componente corregida usada para construir `Neto`. |
+| `Neto` | `M` | Calculada | `K + L` | **Entrada directa de la generación utilizada por `CÁLCULO_CRA`.** |
+
+En el archivo de agosto 2026 estas fórmulas están presentes desde la fila 10 hasta la fila 136.905. Esa cantidad de filas corresponde al caso de ejemplo y **no debe fijarse en Python**; el rango debe crecer según unidades y períodos reales del mes.
+
+#### `K` — `kWhD` corregido
+
+**Fórmula modelo original del Excel:**
+
+```excel
+=IF(I10<0,I10,IF(AND(I10=0,J10<0),J10,IF(J10<=0,J10,IF(AND(I10>0,J10>0,I10>J10),-J10,-I10))))
+```
+
+Equivalente visual en Excel español:
+
+```excel
+=SI(I10<0;I10;SI(Y(I10=0;J10<0);J10;SI(J10<=0;J10;SI(Y(I10>0;J10>0;I10>J10);-J10;-I10))))
+```
+
+La fórmula se copia fila a fila sustituyendo `10` por la fila correspondiente.
+
+#### `L` — `kWhR` corregido
+
+**Fórmula modelo original del Excel:**
+
+```excel
+=IF(AND(J10>0,J10>I10),J10,IF(AND(J10=0,I10>0),I10,IF(I10>=0,I10,IF(AND(I10>0,J10>0,I10>J10),I10,J10))))
+```
+
+Equivalente visual en Excel español:
+
+```excel
+=SI(Y(J10>0;J10>I10);J10;SI(Y(J10=0;I10>0);I10;SI(I10>=0;I10;SI(Y(I10>0;J10>0;I10>J10);I10;J10))))
+```
+
+La fórmula se copia fila a fila sustituyendo `10` por la fila correspondiente.
+
+#### `M` — `Neto`
+
+**Fórmula modelo:**
+
+```excel
+=L10+K10
+```
+
+Por tanto:
+
+```text
+Neto = kWhR corregido + kWhD corregido
+```
+
+#### Comportamiento funcional de `K:L:M`
+
+Sea:
+
+```text
+I = kWhD de entrada
+J = kWhR de entrada
+```
+
+La lógica efectiva del Excel puede leerse así:
+
+| Condición | `K` corregido | `L` corregido | `M = Neto` |
+|---|---:|---:|---:|
+| `I < 0` | `I` | `J` | `I + J` |
+| `I >= 0` y `J <= 0` | `J` | `I` | `I + J` |
+| `I >= 0`, `J > 0` e `I > J` | `-J` | `I` | `I - J` |
+| `I >= 0`, `J > 0` e `I <= J` | `-I` | `J` | `J - I` |
+
+Esta tabla es una **traducción funcional de las fórmulas existentes**, no una instrucción para reemplazarlas por una simplificación distinta sin validar primero que la implementación Python reproduce exactamente el Excel.
+
+### Consumo de `Neto (M)` en `CÁLCULO_CRA`
+
+`CÁLCULO_CRA` utiliza `ENERGIA!M:M` para obtener su campo **`Generación`**. La fórmula modelo observada en `CÁLCULO_CRA!L9` es:
+
+```excel
+=SUMIFS(ENERGIA!$M:$M,ENERGIA!$B:$B,CÁLCULO_CRA!$G9,ENERGIA!$E:$E,CÁLCULO_CRA!$B9,ENERGIA!$F:$F,CÁLCULO_CRA!$C9,ENERGIA!$H:$H,CÁLCULO_CRA!$D9)/250
+```
+
+En Excel español, conceptualmente:
+
+```excel
+=SUMAR.SI.CONJUNTO(
+    ENERGIA!Neto;
+    ENERGIA!Unidad_Generadora; Unidad_CRA;
+    ENERGIA!Mes; Mes_CRA;
+    ENERGIA!DIA; Dia_CRA;
+    ENERGIA!PERIODO_DE_CALCULO; Periodo_CRA
+)/250
+```
+
+**Clave lógica de cruce:**
+
+```text
+Unidad Generadora/Central + Mes + Día + Período de cálculo
+```
+
+**Salida:**
+
+```text
+CÁLCULO_CRA.Generación (L)
+```
+
+**Conversión aplicada:** el resultado agregado de `Neto` se divide por `250`. La escala `/250` debe conservarse exactamente en la primera réplica Python y documentarse/validarse como conversión de unidad antes de cualquier simplificación.
+
+### Flujo completo de `ENERGIA` hacia el motor CRA
 
 ```text
 Formato_Solicitud_SSAA_SSCC_Hidro_MesAAAA.xlsx
                 ↓
-      columnas base B:J de ENERGIA
+       campos base B:J de ENERGIA
                 ↓
-   transformación interna del Excel
+       I = kWhD      J = kWhR
                 ↓
-             Neto (M)
-                ↓
-           CÁLCULO_CRA
+        fórmulas de corrección
+          K              L
+     kWhD corregido  kWhR corregido
+          └──────┬───────┘
+                 ↓
+            M = Neto
+                 ↓
+ SUMAR.SI.CONJUNTO por Unidad+Mes+Día+Período
+                 ↓
+               /250
+                 ↓
+       CÁLCULO_CRA.Generación
 ```
-
-`PENDIENTE DE CIERRE`: documentar de manera explícita la transformación desde `kWhD` / `kWhR` y demás columnas internas hasta `Neto (M)`, salvo que en Python se determine que puede reproducirse directamente desde los campos de entrada con una regla ya evidenciada en el Excel.
 
 ## 6.2 `COTAS`
 
@@ -738,7 +899,91 @@ La relación previamente identificada se mantiene conceptualmente como:
 CO_Barra_Propia = CO base × factor FP aplicable
 ```
 
-`PENDIENTE DE CIERRE`: documentar con precisión toda la transformación desde el bloque externo `CO!N:R` y `FP!U:X` hasta los campos de `CO` que consulta `CÁLCULO_CRA`, de modo que la implementación Python no dependa de coordenadas auxiliares innecesarias.
+### Fórmulas confirmadas de `FP` y `CO`
+
+La segunda auditoría permite cerrar gran parte de esta transformación.
+
+#### `FP`: reconstrucción del factor aplicable
+
+La entrada externa se encuentra en `U:X` (`BarNom`, `Hora`, `FP`, `dia`). La grilla de trabajo `B:J` hace lo siguiente:
+
+```excel
+B9 = CO!B9                         // Mes
+C9 = CO!C9                         // Día
+D9 = CO!E9                         // Hora mensual
+E9 = CO!D9                         // Hora día
+F9 = CO!F9                         // Bloque
+I9 = SUMIFS(W:W,U:U,H9,V:V,E9,X:X,C9)
+J9 = I9
+```
+
+La fórmula crítica es `I`: busca el FP externo por:
+
+```text
+BarNom homologada + Hora día + Día
+```
+
+`G = BARRA BALANCE` y `H = BARRA POLITICA` **no son fórmulas** en la grilla observada: funcionan como una tabla/maestro de homologación entre la barra utilizada por `CO` y la barra utilizada por el archivo externo de FP. Esta homologación debe existir también en Python; no puede inferirse únicamente desde `U:X`.
+
+#### `CO`: construcción de `CO_Barra_Propia`
+
+El bloque calculado `A:L` genera una grilla de configuración × hora. Sus fórmulas esenciales son:
+
+```excel
+B9 = MONTH(B2)
+F9 = IF(D9<=8,1,IF(D9>18,3,2))
+G9 = VLOOKUP(H9,$T$9:$W$68,3,0)
+H9 = INDEX($T$9:$T$100,1+A9)
+I9 = SUMIFS($R$9:$R$52160,$N$9:$N$52160,H9,$P$9:$P$52160,C9,$Q$9:$Q$52160,D9)
+J9 = VLOOKUP(H9,$T$9:$U$68,2,0)
+K9 = SUMIFS(FP!$J$9:$J$5960,FP!$G$9:$G$5960,J9,FP!$C$9:$C$5960,C9,FP!$E$9:$E$5960,D9)
+L9 = I9*K9
+```
+
+Funcionalmente:
+
+```text
+Configuración
+   ↓ homologación
+Embalse + Barra
+   ↓
+CO base por Configuración + Día + Hora
+   +
+FP por Barra + Día + Hora
+   ↓
+CO_Barra_Propia = CO base × FP
+```
+
+#### Excepciones de fórmula en `CO`
+
+**Secuencia de hora día (`D`)**
+
+La primera fórmula de continuidad es distinta:
+
+```excel
+D10 = IF(D9<24,D9+1,1)
+```
+
+Desde la fila siguiente aparece la lógica que admite un día de 25 horas:
+
+```excel
+D11 = IF(C10=$F$2,IF(D10<25,D10+1,1),IF(D10<24,D10+1,1))
+```
+
+La regla se desplaza fila a fila. Por tanto, no debe implementarse `D10` como si fuera la única familia de fórmula.
+
+**Selección de configuración (`H`)**
+
+Se observaron dos fórmulas:
+
+```excel
+H9:H20488     → INDEX($T$9:$T$100,1+A_fila)
+H20489:H41672 → OFFSET($T$9,A_fila,0,1,1)
+```
+
+Ambas seleccionan conceptualmente la misma posición de la lista de configuraciones. Para Python puede implementarse una sola operación de indexación, pero debe validarse que reproduzca ambos tramos del Excel.
+
+**Estado:** la transformación principal `FP → CO → CO_Barra_Propia` queda **CONFIRMADA POR FÓRMULA**. Sigue pendiente únicamente formalizar el maestro de homologación `BARRA BALANCE ↔ BARRA POLITICA` para no depender de una grilla hardcodeada.
 
 ## 6.5 `CONDICION_EMBALSE`
 
@@ -758,9 +1003,36 @@ El resultado relevante es:
 CONDICION EMBALSE / Configuración
 ```
 
+### Fórmulas confirmadas de la grilla previa
+
+Aunque la condición final sigue pendiente, sí quedó confirmada la preparación que la antecede:
+
+```excel
+A9 = CONCATENATE(C9,"#",F9,"#",H9)
+F9 = D9&"#"&E9
+G9 = INT((E9-1)/4)+1
+H9 = IFERROR(VLOOKUP(J9,CO!$X$8:$Y$68,2,0),J9)
+I9 = SUMIFS(COTAS!$H$8:$H$9000,
+            COTAS!$E$8:$E$9000,H9,
+            COTAS!$B$8:$B$9000,C9,
+            COTAS!$C$8:$C$9000,D9,
+            COTAS!$G$8:$G$9000,G9)
+```
+
+Además, `D` y `E` construyen el calendario de día/período con lógica para 96 períodos normales y hasta 100 períodos en el día especial parametrizado.
+
 ### Estado de trazabilidad
 
-`PENDIENTE`: el resultado final de condición en la columna principal no queda completamente explicado por una fórmula única aguas arriba; existen zonas del libro preparadas/completadas manualmente. Para Python será necesario definir exactamente cómo se construye esta condición antes de eliminar cualquier intervención manual.
+La columna **`K = CONDICION EMBALSE`**, que es precisamente la que termina consumiendo `CÁLCULO_CRA`, aparece poblada como **valores**, no como una fórmula reproducible fila a fila. Existen bloques auxiliares `M:T` y ventanas manuales `V:AA`, pero no existe una dependencia de fórmula directa que permita afirmar que éstos generan automáticamente `K`.
+
+Por tanto:
+
+```text
+A:I  → preparación y datos calculados: CONFIRMADO POR FÓRMULA
+K    → condición final: PENDIENTE DE DEFINIR / intervención manual o externa
+```
+
+Para Python será necesario cerrar explícitamente la regla que transforma cota + embalse + ventanas/condición en el valor final de `K`; no debe inventarse a partir de los bloques auxiliares.
 
 ## 6.6 `SC y CO`
 
@@ -928,6 +1200,32 @@ CTF
 
 Esta tabla sustituye funcionalmente las columnas auxiliares que hoy se usan solo para llegar a esos tres valores consolidados.
 
+### Fórmulas actuales que todavía representan lógica necesaria
+
+En el Excel actual se confirmaron:
+
+```excel
+AA = SUM(J,I,O,P,U,V)       // CPF
+AB = SUM(K,M,Q,S,W,Y)       // CSF
+AC = SUM(L,N,R,T,X,Z)       // CTF
+AD = 1-SUM(AA:AC)           // control/residual
+AF = AG&"_"&F               // clave homologada + bloque
+AG = INDEX(dict_SCCO[],MATCH(E,dict_SCCO[Central],0),3)
+AI = AND(F_fila=F_anterior,E_fila=E_anterior) // control de duplicidad/continuidad
+```
+
+La tabla Excel `dict_SCCO` está en `AT8:AV49` y contiene:
+
+```text
+Central
+Config. Infotecnica
+Nombre CRA
+```
+
+La columna `AG` homologa la `Unidad` original (`E`) al **Nombre CRA** que posteriormente consulta `CÁLCULO_CRA`. En la versión Python normalizada, esta homologación sigue siendo necesaria aunque se eliminen las columnas físicas `AF:AI`.
+
+**Control encontrado:** existen 795 filas cuyo `MATCH` no encuentra homologación y deja `AG=#N/A` (y por consecuencia `AF=#N/A`). En el archivo de agosto aparecen asociadas a: `PE-AURORA`, `PE-TOLPANSUR`, `ANGOSTURA-3`, `PE-TALINAYORIENTE`, `PE-TALINAYPONIENTE`, `PE-CANELA-2` y `PE-SANGABRIEL`. Deben tratarse como control de maestro faltante; no deben desaparecer silenciosamente en Python.
+
 ## 6.7 `FD_CPF`, `FD_CSF`, `FD_CTF`
 
 ### Rol
@@ -951,6 +1249,44 @@ Después:
 ```text
 CRA servicio final = CRA servicio pre × FD servicio
 ```
+
+### Fórmula de clave confirmada
+
+Las tres hojas construyen en la columna `A` la misma clave lógica:
+
+```excel
+=D7&(B7+TIMEVALUE((C7)&" :00"))
+```
+
+con:
+
+```text
+B = Fecha
+C = Hora
+D = Unidad / InfoTécnica
+```
+
+Por tanto, la clave efectiva es:
+
+```text
+Unidad InfoTécnica + FechaHora redondeada a hora
+```
+
+Los factores que consume `CÁLCULO_CRA` son:
+
+```text
+FD_CPF!I = Factor de Desempeño (Fd_CPF)
+FD_CSF!H = Factor de Desempeño (Fd_CSF)
+FD_CTF!I = Factor de Desempeño (Fd_CTF)
+```
+
+`CÁLCULO_CRA!H` también construye una fecha/hora **horaria**:
+
+```excel
+=DATE(YEAR($B$2),B9,C9)+TIMEVALUE((F9-1)&" :00")
+```
+
+No incorpora el cuarto de hora `D`. Por diseño actual, los cuatro períodos de 15 minutos pertenecientes a una misma hora consultan el mismo FD.
 
 **PENDIENTE:** documentar el origen externo exacto y el procedimiento de actualización de cada archivo/tabla FD antes de automatizar por completo la carga.
 
@@ -1053,14 +1389,16 @@ Esta hoja contiene tres piezas distintas y es esencial no mezclarlas.
 
 ## 8.1 Bloque 1 — Matriz de prorrata de retiros
 
-Rango conceptual principal:
+Rango físico reservado en el Excel:
 
 ```text
 B:DI
 ```
 
+Sin embargo, en agosto 2026 se identifican **88 empresas activas** en los encabezados `C:CL`; las columnas posteriores están vacías o reservadas.
+
 - filas: períodos de cálculo;
-- columnas: empresas pagadoras;
+- columnas activas: empresas pagadoras;
 - valores: participación de cada empresa en el retiro total del período.
 
 El encabezado dice `Hora`, pero la secuencia principal llega de `1` a `2976`. Por estructura, corresponde a **períodos de 15 minutos**, no a 2.976 horas.
@@ -1097,11 +1435,13 @@ Este bloque genera el lado **RECIBE** del resumen mensual.
 
 ## 8.3 Bloque 3 — Cuadro N°3: Asignación de pagos
 
-Rango conceptual:
+Rango físico reservado:
 
 ```text
 EO:IV
 ```
+
+Para las 88 empresas activas del ejemplo, las asignaciones efectivas corresponden a `EP:HY`; el resto funciona como espacio reservado/cero. Python debe construir el ancho dinámicamente desde el universo real de empresas.
 
 Por cada período y empresa pagadora:
 
@@ -1304,6 +1644,43 @@ Debe cerrarse la regla exacta de construcción/actualización de la condición f
 
 ---
 
+## 13.6 Libro en modo de cálculo manual
+
+El workbook tiene `calcMode=manual`. Esto obliga a que la validación de la futura réplica compare fórmulas/reglas y, cuando se comparen valores, se utilice una copia conscientemente recalculada. Un valor cacheado no prueba por sí solo que la fórmula actual produzca ese resultado.
+
+## 13.7 `CÁLCULO_CRA!J`: `#N/A` en unidades no candidatas
+
+Se encontraron **8.928 celdas `#N/A`** en `Config (J)`, equivalentes exactamente a 2.976 períodos para cada una de estas tres unidades:
+
+```text
+CENTRAL_ANGOSTURA
+ANTUCO_U1
+ANTUCO_U2
+```
+
+Las tres aparecen con `Es candidata? = 0`, por lo que su CRA pretendido es cero, pero el lookup de condición se ejecuta igualmente antes de esa multiplicación. Como otras fórmulas posteriores también usan `J`, esto debe mantenerse como **POSIBLE INCONSISTENCIA / REVISAR** y convertirse en una validación explícita en Python.
+
+## 13.8 `SC y CO`: homologaciones faltantes
+
+El `MATCH` contra `dict_SCCO` deja **795 filas sin homologación** en `AG` y, por arrastre, `AF`. Los nombres observados son siete centrales/unidades eólicas indicadas en la sección `6.6`.
+
+No se debe reemplazar automáticamente el `#N/A` por cero sin determinar si esos registros están fuera del universo CRA o si falta actualizar el diccionario.
+
+## 13.9 Rangos fijos del Excel que no deben heredarse
+
+Se observaron, entre otros:
+
+```text
+CÁLCULO_CRA consolidación: hasta fila 75000
+CÁLCULO_CRA → CONDICION_EMBALSE: A8:K26792
+CÁLCULO_CRA → COTAS: hasta fila 8936
+CÁLCULO_CRA → SC y CO: hasta fila 30000
+CO → FP: hasta fila 5960
+```
+
+Son límites físicos del archivo de referencia, no reglas de negocio. En Python deben sustituirse por tablas/rangos dinámicos y controles de cardinalidad.
+
+
 # 14. Elementos deliberadamente fuera del detalle principal
 
 Se dejan fuera de la especificación de primera prioridad:
@@ -1331,44 +1708,44 @@ Se dejan fuera de la especificación de primera prioridad:
 7. Cargar TC desde la fuente de CMg.
 8. Leer Formato_Solicitud_SSAA_SSCC_Hidro_MesAAAA.xlsx.
 9. Normalizar ENERGIA: Unidad, Punto de Medida, Año, Mes, Día, HoraDía, Período de cálculo, kWhD y kWhR.
-10. Reproducir/validar la transformación necesaria hasta la variable de energía neta utilizada por CRA.
-11. Cargar COTAS cuando se cierre su origen/formato.
-12. Mantener/cargar RENDIMIENTOS como maestro técnico sin modificación de su lógica.
-13. Leer fp_*.xlsx y normalizar BarNom, Hora, FP y día.
-14. Leer cvar_cra_AAMM_*.xlsx y normalizar nombre_configuración, Día, Hora y Costos_Operación.
-15. Construir CO_Barra_Propia preservando la relación con FP y las claves de configuración/barra.
-16. Construir CONDICION_EMBALSE cuando se cierre su regla exacta.
-17. Leer Reporte_CRA*.xlsx y normalizar registros CO de la tabla SC y CO.
-18. Leer Cálculo_SobrecostosSSCC_*.xlsm y normalizar registros SC de la tabla SC y CO.
-19. Calcular internamente CPF, CSF y CTF desde sus componentes (+)/(-).
-20. Apilar verticalmente registros CO + SC en una sola tabla normalizada.
-21. Cargar FD_CPF, FD_CSF y FD_CTF.
-22. Construir grilla Unidad candidata × Período real del mes.
-23. Adjuntar empresa, embalse, configuración, generación y cota.
-24. Resolver escalones de matriz de rendimiento y obtener Max {}.
-25. Obtener CO_Barra_Propia.
-26. Calcular CRA [USD].
-27. Convertir a CRA [$] pre con TC diario.
-28. Obtener participación CPF/CSF/CTF desde la tabla SC y CO normalizada.
-29. Separar CRA pre entre CPF/CSF/CTF.
-30. Aplicar FD de cada servicio.
-31. Sumar CRA_CPF + CRA_CSF + CRA_CTF → CRA final unidad-período.
-32. Agrupar dinámicamente por Empresa + Período → CRA empresa-período.
-33. Sumar todas las empresas receptoras → CRA total período.
-34. Cargar prorrata de retiros del mismo período mensual.
-35. Validar cobertura exacta de períodos y suma de prorratas ≈ 1 por período.
-36. Calcular pago_empresa_periodo = CRA total período × prorrata.
-37. Sumar por empresa para obtener PAGA mensual.
-38. Sumar CRA empresa-período para obtener RECIBE mensual.
-39. Construir dinámicamente el universo de empresas = receptores ∪ pagadores.
-40. Calcular NETO = RECIBE - PAGA.
-41. Validar Total RECIBE = Total PAGA y SUM(NETO) ≈ 0.
-42. Exportar cuadro equivalente a RESUMEN.
+10. Calcular `kWhD corregido (K)` y `kWhR corregido (L)` reproduciendo exactamente las fórmulas del Excel; luego calcular `Neto (M) = K + L`.
+11. Obtener `CÁLCULO_CRA.Generación` agregando `Neto` por Unidad + Mes + Día + Período de cálculo y dividiendo el resultado por `250`.
+12. Cargar COTAS cuando se cierre su origen/formato.
+13. Mantener/cargar RENDIMIENTOS como maestro técnico sin modificación de su lógica.
+14. Leer fp_*.xlsx y normalizar BarNom, Hora, FP y día.
+15. Leer cvar_cra_AAMM_*.xlsx y normalizar nombre_configuración, Día, Hora y Costos_Operación.
+16. Construir CO_Barra_Propia preservando la relación con FP y las claves de configuración/barra.
+17. Construir CONDICION_EMBALSE cuando se cierre su regla exacta.
+18. Leer Reporte_CRA*.xlsx y normalizar registros CO de la tabla SC y CO.
+19. Leer Cálculo_SobrecostosSSCC_*.xlsm y normalizar registros SC de la tabla SC y CO.
+20. Calcular internamente CPF, CSF y CTF desde sus componentes (+)/(-).
+21. Apilar verticalmente registros CO + SC en una sola tabla normalizada.
+22. Cargar FD_CPF, FD_CSF y FD_CTF.
+23. Construir grilla Unidad candidata × Período real del mes.
+24. Adjuntar empresa, embalse, configuración, generación y cota.
+25. Resolver escalones de matriz de rendimiento y obtener Max {}.
+26. Obtener CO_Barra_Propia.
+27. Calcular CRA [USD].
+28. Convertir a CRA [$] pre con TC diario.
+29. Obtener participación CPF/CSF/CTF desde la tabla SC y CO normalizada.
+30. Separar CRA pre entre CPF/CSF/CTF.
+31. Aplicar FD de cada servicio.
+32. Sumar CRA_CPF + CRA_CSF + CRA_CTF → CRA final unidad-período.
+33. Agrupar dinámicamente por Empresa + Período → CRA empresa-período.
+34. Sumar todas las empresas receptoras → CRA total período.
+35. Cargar prorrata de retiros del mismo período mensual.
+36. Validar cobertura exacta de períodos y suma de prorratas ≈ 1 por período.
+37. Calcular pago_empresa_periodo = CRA total período × prorrata.
+38. Sumar por empresa para obtener PAGA mensual.
+39. Sumar CRA empresa-período para obtener RECIBE mensual.
+40. Construir dinámicamente el universo de empresas = receptores ∪ pagadores.
+41. Calcular NETO = RECIBE - PAGA.
+42. Validar Total RECIBE = Total PAGA y SUM(NETO) ≈ 0.
+43. Exportar cuadro equivalente a RESUMEN.
 ```
-
 ### Regla de diseño importante
 
-Los pasos 8 a 20 deben implementarse como una **capa de ingestión y normalización de entradas** separada del motor CRA. Esto permite cambiar el formato físico de los archivos fuente sin modificar la lógica de negocio del cálculo.
+Los pasos 8 a 21 deben implementarse como una **capa de ingestión y normalización de entradas** separada del motor CRA. Esto permite cambiar el formato físico de los archivos fuente sin modificar la lógica de negocio del cálculo.
 
 # 16. Especificación funcional para Python
 
@@ -1417,7 +1794,7 @@ candidate_units
 unit_company
 unit_reservoir
 reservoir_levels
-energy_15m
+energy_15m  # incluye kWhD, kWhR, kWhD_corregido, kWhR_corregido y Neto
 performance_matrix
 penalty_factor
 operating_cost
@@ -1467,6 +1844,11 @@ sin registros de energía requeridos faltantes
 sin cota requerida faltante
 sin punto de rendimiento aplicable
 sin CO_Barra_Propia requerido faltante
+sin homologación `dict_SCCO` para registros relevantes
+`Config` faltante/#N/A en unidad candidata
+FD sin match para una unidad/período que participe en el servicio
+rango mensual truncado por límites heredados del Excel
+workbook/archivo de control no recalculado cuando se use como benchmark
 sin FD requerido faltante
 prorrata >= 0 según reglas de negocio
 suma de prorrata ≈ 1 por período
@@ -1485,7 +1867,6 @@ No se recomienda ocultar automáticamente los casos sin match sustituyéndolos p
 |---|---|---|
 | Definir procedimiento exacto que construye `CONDICION EMBALSE` | Parte del valor parece depender de preparación/manualidad | Selección de configuración y luego CO |
 | Documentar origen/formato exacto de `COTAS` | Aún no se ha entregado el mapeo de carga | Cota y selección de rendimiento |
-| Cerrar transformación de `ENERGIA` desde `kWhD/kWhR` hasta `Neto (M)` | La fuente base ya está definida, pero el motor CRA usa finalmente `Neto` | Generación utilizada por CRA |
 | Cerrar transformación interna de bloques fuente `FP` y `CO` hasta `CO_Barra_Propia` | Ya están definidos los archivos y columnas de entrada | Costo de operación usado por CRA |
 | Confirmar nomenclatura genérica de archivo `fp_2603*.xlsx` para otros períodos | El ejemplo recibido contiene `2603` | Automatización mensual |
 | Validar `Clave_Bloque` SC en días de 92/100 períodos | La fórmula recibida resta `(día-1)*96` | Meses con cambio horario |
@@ -1503,6 +1884,7 @@ No se recomienda ocultar automáticamente los casos sin match sustituyéndolos p
 | Tema | Certeza |
 |---|---|
 | `RESUMEN` obtiene RECIBE/PAGA desde `PRORRATA_RETIROS` | **CONFIRMADO POR FÓRMULA** |
+| `ENERGIA!K:L:M` transforma `kWhD/kWhR` en `Neto` y `CÁLCULO_CRA` consume `M` | **CONFIRMADO POR FÓRMULA** |
 | `PAGA` = CRA total período × prorrata de retiro | **CONFIRMADO POR FÓRMULA** |
 | `RECIBE` proviene del CRA consolidado por empresa | **CONFIRMADO POR FÓRMULA** |
 | `NETO = RECIBE - PAGA` | **CONFIRMADO POR FÓRMULA** |

@@ -10,31 +10,37 @@ estado, no un historial.
 
 ### CRA (`Balance_CRA.py` / `Script/cra/`) — preguntas abiertas al usuario
 
-Referencia: `docs/Trazabilidad_CRA_Periodo_Generico_v3.md`. Nada de esto
+Referencia: `docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md`. Nada de esto
 se adivinó: lo que depende de una respuesta quedó como constante en
 `Script/cra/parametros.py` o como hoja PENDIENTE en el árbol.
 
-- **ENERGIA `K`, `L` y `M` (`Neto`)** — el usuario las revisa; por ahora
-  la hoja lleva solo los datos y la fórmula se agrega después. Son
-  fórmulas (K y L, una corrección sobre kWhD/kWhR; M, el `Neto` que usa
-  `CÁLCULO_CRA`). No están en la trazabilidad (6.1 lo deja "pendiente de
-  cierre"): hace falta el texto de las fórmulas de `K10`, `L10` y `M10`,
-  y de cualquier tabla o celda que consulten.
-- **CO: de dónde sale `CO!L`** (el usuario: "después lo vemos"). `CÁLCULO_CRA!Q` (`CO_Barra_Propia`) es
-  `SUMIFS(CO!L:L; CO!B mes; C día; D hora; G embalse; H configuración)`.
-  Solo está definida la carga de `CO!N:R` (cvar) y `FP!U:X` (fp); las
-  columnas `CO!B:L` (y `CO!AA:AB`, unidad → embalse) son fórmulas que
-  hay que conocer: la fila 9 de `CO!B:L` y `CO!AA:AB`, y las columnas con
-  fórmula de `FP` si `CO` las usa.
+- **Maestros que el Excel tiene escritos a mano (bloquean CO, FP y
+  `CÁLCULO_CRA`).** La v5 confirma por fórmula `FP → CO → CO_Barra_Propia`,
+  pero esas fórmulas consultan tablas que no son fórmula ni vienen de
+  ningún archivo de entrada:
+  - `CO!T:W` — lista de configuraciones con su barra/embalse
+    (`CO!G`, `H`, `J` la usan);
+  - `FP!G:H` — `BARRA BALANCE ↔ BARRA POLITICA` (homologa la barra del
+    CO con la del `fp_`);
+  - `CO!F2` — el día con cambio de hora (la hora día llega a 25);
+  - `CO!AA:AB` — unidad → embalse; `CO!X:Y` — lo usa `CONDICION_EMBALSE!H`;
+  - `dict_SCCO` (`SC y CO!AT8:AV49`) — Central → Config. InfoTécnica →
+    Nombre CRA; en agosto le falta `ANGOSTURA-3` (está en la lista de
+    embalses) y todos los `PE-*`;
+  - `EMPRESAS`, unidades candidatas (`CÁLCULO_CRA!AQ:AS`), `RENDIMIENTOS`.
+  Hay que decidir de dónde los lee Python (¿un `Maestros_CRA.xlsx` en el
+  caso, como el `Centrales.xlsx` del BESS?).
+- **CO: de dónde sale `CO!L`** — resuelto en la v5 (6.4): `L = I × K`,
+  CO base × FP por barra + día + hora. Falta solo lo de los maestros.
 - **TC:** pendiente (usuario, 2026-09-30).
 - **RENDIMIENTOS, EMPRESAS, unidades candidatas, COTAS,
   CONDICION_EMBALSE:** fuera de foco por ahora (usuario: "enfocarnos en lo
   que tenemos").
-- **FD_CPF/CSF/CTF:** se copian enteras (todas las unidades, encabezados
-  de la fila 11). El usuario cree que la forma de las hojas `FD_*` del
-  Excel está en la trazabilidad, pero la sección 6.7 solo da la clave
-  (InfoTécnica + fecha/hora) y marca el origen como PENDIENTE. Si las
-  hojas del Excel tienen otra forma, hace falta verlas.
+- **FD_CPF/CSF/CTF:** la v5 (6.7) confirma la forma: clave en `A`
+  (Unidad + Fecha/Hora horaria) y el FD en `I`/`H`/`I`, igual que las hojas
+  horarias del `SSCC_Desempeño`, con todas las unidades (82.584 / 95.976 /
+  369.024 filas en agosto). Resuelto; falta validar contra un archivo
+  real.
 - **Nombres de unidad:** el Reporte_CRA real trae `CANUTILLAR-1`, el
   `CÁLCULO_CRA` usa `CANUTILLAR_U1`: el diccionario SC/CO → Nombre CRA
   hace falta para `CÁLCULO_CRA` (no para cargar la hoja).
@@ -4234,4 +4240,35 @@ y `PE-SANGABRIEL`); aviso de 13 centrales de la lista sin filas en el mes
 (RALCO, COLBUN, PANGUE, ANTUCO, ANGOSTURA, CIPRESES-2, RAPEL-5).
 
 **Verificación:** 167 pruebas, `pyflakes` limpio.
+
+---
+
+## 2026-09-30 (5) — CRA: trazabilidad v5 (auditoría de fórmulas); ENERGIA con `Neto`
+
+**Entrega del usuario:** `Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_
+Formulas.md`, que **reemplaza** a la v3 en `docs/` (se movió con `git mv`
+para conservar la historia; las referencias se actualizaron salvo en las
+entradas viejas de esta bitácora, que no se editan).
+
+**Qué trae de nuevo, y qué se hizo con cada cosa:**
+
+- **ENERGIA `K`, `L`, `M`** (6.1) → implementado: `corregir_energia()`
+  transcribe rama por rama las dos fórmulas `SI(...)` y `Neto = L + K`;
+  celda vacía = 0 (como la fórmula). Se comprobó que coinciden con la
+  "tabla funcional" del documento en una grilla de casos (negativos,
+  cero, positivos, iguales). La hoja `ENERGIA` ahora trae
+  `kWhD corregido`, `kWhR corregido` y `Neto`.
+- **Clave de `FD_*`** (6.7) → cada hoja FD empieza con `Fecha Hora`
+  (= `Fecha + Hora` horas), que junto con `Unidad` es la clave del libro
+  (`A = D & (B + TIMEVALUE(C & " :00"))`). No se copia el texto pegado del
+  Excel (número de serie como texto): el cruce será por las dos columnas.
+- **Control `AI` de `SC y CO`** → aviso si se repite Tipo + Unidad +
+  Clave_Bloque.
+- **`FP → CO → CO_Barra_Propia`, `CONDICION_EMBALSE!A:I`, `dict_SCCO`** →
+  confirmados por fórmula pero dependen de tablas escritas a mano en el
+  libro; quedaron como pregunta en "Pendientes abiertos → CRA".
+- Libro en `calcMode = manual` (13.6): al validar contra el Excel, hacerlo
+  con una copia recalculada.
+
+**Verificación:** 18 pruebas del CRA, suite completa en verde.
 

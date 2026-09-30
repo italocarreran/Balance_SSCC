@@ -1023,7 +1023,7 @@ importable como cualquier módulo.
 ## `Balance_CRA.py` y `Script/cra/` — remuneración CRA
 
 - **Qué hace:** replica, hoja por hoja, `5_REMUNERACIÓN_CRA_<AAMM>_
-  Definitivo.xlsx`. Dominio: `docs/Trazabilidad_CRA_Periodo_Generico_v3.md`
+  Definitivo.xlsx`. Dominio: `docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md`
   (se busca la sección puntual, no se lee entero). Hoy están **solo las
   hojas de entrada con carga definida**: `ENERGIA`, `FP`, `CO`, `SC y CO`,
   `FD_CPF`/`FD_CSF`/`FD_CTF` y el bloque 1 de `PRORRATA_RETIROS` (estas
@@ -1050,6 +1050,10 @@ importable como cualquier módulo.
   regla), como define cada carga la trazabilidad. Hoja de cada origen en
   `HOJA_ORIGEN_*`: nombre, `0` (la primera) o `None` (no confirmada: la
   única, o se para si hay varias).
+- **`ENERGIA`:** B:J del origen + `kWhD corregido`, `kWhR corregido` y
+  `Neto` (`corregir_energia()`, fórmulas K/L/M de la traz. 6.1).
+- **`FD_*`:** `Fecha Hora` (clave horaria, con `Unidad`) + la hoja horaria
+  del `SSCC_Desempeño` tal cual.
 - **`SC y CO`:** SC (Sobrecostos) arriba y CO (Reporte_CRA) abajo, solo
   centrales de embalse (`CENTRALES_EMBALSE`, `filtrar_embalses()`).
 - **Expone:** `generar_balance_cra(carpeta_base, aamm, secciones=None,

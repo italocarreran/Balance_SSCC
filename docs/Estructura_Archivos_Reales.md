@@ -533,7 +533,7 @@ fila, jamás por posición de letra).
 
 ## D. CRA (`Balance_CRA.py`) — archivos de entrada
 
-Dominio: `docs/Trazabilidad_CRA_Periodo_Generico_v3.md`. Mapeos en
+Dominio: `docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md`. Mapeos en
 `Script/cra/parametros.py`.
 
 ### D.1 `SC y CO/Reporte_CRA_15min_<AAMM>.csv` ✅

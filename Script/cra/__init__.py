@@ -16,7 +16,7 @@ nunca importa nada de aca. La ventana es Balance_CRA.py.
     proceso.py        Las secciones y generar_balance_cra().
     estructura.py     El arbol que dibuja la ventana.
 
-Referencia de dominio: docs/Trazabilidad_CRA_Periodo_Generico_v3.md.
+Referencia de dominio: docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md.
 """
 
 from ..nucleo.utiles import ErrorEntrada

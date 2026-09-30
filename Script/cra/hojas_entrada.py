@@ -82,7 +82,76 @@ def construir_energia(ruta, anio, mes, registrar=_nada):
 
     _validar_periodo(df, anio, mes, ruta)
 
+    corregidas = [
+        corregir_energia(d, r)
+        for d, r in zip(
+            _numeros_o_cero(df[p.CAMPO_KWHD], "kWhD", registrar),
+            _numeros_o_cero(df[p.CAMPO_KWHR], "kWhR", registrar),
+        )
+    ]
+    df[p.CAMPO_KWHD_CORREGIDO] = [k for k, _, _ in corregidas]
+    df[p.CAMPO_KWHR_CORREGIDO] = [l for _, l, _ in corregidas]
+    df[p.CAMPO_NETO] = [m for _, _, m in corregidas]
+
     return df[p.COLUMNAS_ENERGIA].reset_index(drop=True)
+
+
+def corregir_energia(i, j):
+    """
+    ENERGIA!K, L y M (traz. v5, 6.1), con I = kWhD y J = kWhR:
+
+      K = SI(I<0; I; SI(Y(I=0; J<0); J; SI(J<=0; J;
+            SI(Y(I>0; J>0; I>J); -J; -I))))
+      L = SI(Y(J>0; J>I); J; SI(Y(J=0; I>0); I; SI(I>=0; I;
+            SI(Y(I>0; J>0; I>J); I; J))))
+      M = L + K   (Neto)
+
+    Se transcriben las dos formulas tal cual, rama por rama, en vez de
+    la tabla "funcional" del documento: asi no hay que demostrar que son
+    equivalentes. Devuelve (K, L, M).
+    """
+
+    if i < 0:
+        k = i
+    elif i == 0 and j < 0:
+        k = j
+    elif j <= 0:
+        k = j
+    elif i > 0 and j > 0 and i > j:
+        k = -j
+    else:
+        k = -i
+
+    if j > 0 and j > i:
+        l = j
+    elif j == 0 and i > 0:
+        l = i
+    elif i >= 0:
+        l = i
+    elif i > 0 and j > 0 and i > j:
+        l = i
+    else:
+        l = j
+
+    return k, l, l + k
+
+
+def _numeros_o_cero(valores, nombre, registrar):
+    """
+    Como las lee la formula: una celda vacia vale 0. Un texto que no es
+    numero tambien queda en 0, pero se avisa (en Excel daria otra cosa).
+    """
+
+    numeros = valores.map(numero_o_nada)
+    texto = int((numeros.isna() & valores.map(texto_excel).ne("")).sum())
+
+    if texto:
+        registrar(
+            f"  AVISO ENERGIA: {texto} celda(s) de {nombre} con texto no "
+            f"numerico; para K/L/M se toman como 0."
+        )
+
+    return numeros.fillna(0.0).tolist()
 
 
 def _validar_periodo(df, anio, mes, ruta):
@@ -253,7 +322,31 @@ def construir_sc_co(ruta_reporte, ruta_sobrecostos, registrar=_nada,
         f"  SC y CO: {len(sc)} registro(s) SC + {len(co)} registro(s) CO."
     )
 
-    return pd.concat([sc, co], ignore_index=True)
+    tabla = pd.concat([sc, co], ignore_index=True)
+    _avisar_duplicados(tabla, registrar)
+
+    return tabla
+
+
+def _avisar_duplicados(tabla, registrar):
+    """
+    Control del libro (SC y CO!AI, traz. v5 6.6): la misma Unidad con la
+    misma Clave_Bloque en dos filas. Se avisa, no se corrige: CÁLCULO_CRA
+    no esta todavia y no se sabe cual de las dos usaria.
+    """
+
+    claves = [p.CAMPO_TIPO, p.CAMPO_UNIDAD_SC, p.CAMPO_CLAVE_BLOQUE]
+    repetidas = tabla[tabla.duplicated(claves, keep=False)]
+
+    if not repetidas.empty:
+        ejemplos = (
+            repetidas[claves].astype(str).drop_duplicates().head(5)
+            .apply(lambda f: " ".join(f), axis=1)
+        )
+        registrar(
+            f"  AVISO SC y CO: {len(repetidas)} fila(s) con Tipo + Unidad + "
+            f"Clave_Bloque repetidos (por ejemplo: {', '.join(ejemplos)})."
+        )
 
 
 # Una central que termina en "-numero" es una unidad: si no esta en la

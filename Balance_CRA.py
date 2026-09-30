@@ -30,7 +30,7 @@ un boton en cada fila que se puede generar.
             hoja 'ENERGIA'                 [Actualizar]
 
 Por ahora solo estan las hojas de entrada con su carga definida en
-docs/Trazabilidad_CRA_Periodo_Generico_v3.md; el resto se muestra como
+docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md; el resto se muestra como
 PENDIENTE.
 
 Todo el calculo vive en Script/cra: esta ventana solo lo llama.

@@ -4,7 +4,7 @@ Nombres de archivo, carpeta y hoja del caso CRA, y el mapeo de columnas
 de cada archivo de entrada.
 
 Todo lo que viene de la trazabilidad
-(docs/Trazabilidad_CRA_Periodo_Generico_v3.md) esta citado con su
+(docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md) esta citado con su
 seccion. Lo que NO viene de ahi es una propuesta de esta migracion y lo
 dice al lado (PROPUESTA / PENDIENTE): se cambia aca y nada mas.
 """
@@ -161,9 +161,16 @@ COPIA_ENERGIA = {
 LETRA_FECHA_HORA_ENERGIA = "G"
 LETRA_HORA_ENERGIA = "J"
 
+# "Corregidas" (traz. v5, 6.1): K, L y M son formulas del libro y M
+# (Neto) es lo que consume CÁLCULO_CRA. Ver corregir_energia().
+CAMPO_KWHD_CORREGIDO = "kWhD corregido"
+CAMPO_KWHR_CORREGIDO = "kWhR corregido"
+CAMPO_NETO = "Neto"
+
 COLUMNAS_ENERGIA = [
     CAMPO_UNIDAD, CAMPO_PUNTO, CAMPO_ANIO, CAMPO_MES, CAMPO_DIA,
     CAMPO_HORADIA, CAMPO_PERIODO, CAMPO_KWHD, CAMPO_KWHR,
+    CAMPO_KWHD_CORREGIDO, CAMPO_KWHR_CORREGIDO, CAMPO_NETO,
 ]
 
 # --- FP (traz. 6.4.1): origen A2:D -------------------------
@@ -294,6 +301,16 @@ PERIODOS_POR_DIA_FORMULA_SC = 96
 # ============================================================
 
 FILA_ENCABEZADO_FD = 11
+
+# Clave de las hojas FD del libro (traz. v5, 6.7):
+#   A = D & (B + TIMEVALUE(C & " :00"))  -> Unidad + Fecha/Hora horaria.
+# Se escribe como una columna "Fecha Hora" (Fecha + Hora horas) al
+# principio de la hoja; la Unidad ya esta. El texto pegado del Excel (el
+# numero de serie de la fecha como texto) no se reproduce: el cruce se
+# hace por (Unidad, Fecha Hora).
+CAMPO_FECHA_HORA_FD = "Fecha Hora"
+LETRA_FECHA_FD = "B"
+LETRA_HORA_FD = "C"
 
 HOJAS_FD = {
     # seccion: (hoja de salida, hoja del SSCC_Desempeño, columnas)

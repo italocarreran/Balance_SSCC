@@ -16,6 +16,7 @@ InfoTecnica) se aplica recien en CÁLCULO_CRA, que no esta todavia.
 """
 
 import calendar
+import datetime as dt
 
 
 from ..nucleo.prorrata_retiros import (
@@ -25,7 +26,12 @@ from ..nucleo.prorrata_retiros import (
     leer_prorrata_retiros,
 )
 from . import parametros as p
-from .lectura import leer_columnas, leer_encabezados
+from .lectura import (
+    a_fecha_hora,
+    leer_columnas,
+    leer_encabezados,
+    numero_o_nada,
+)
 
 
 def _nada(*_args, **_kwargs):
@@ -52,10 +58,37 @@ def construir_fd(ruta_sscc, seccion, registrar=_nada):
         ruta_sscc, hoja_origen, p.FILA_ENCABEZADO_FD + 1, letras
     )
 
+    fechas_horas = [
+        _fecha_hora(fecha, hora)
+        for fecha, hora in zip(datos[p.LETRA_FECHA_FD], datos[p.LETRA_HORA_FD])
+    ]
     datos.columns = _nombres_unicos(letras, encabezados)
+    datos.insert(0, p.CAMPO_FECHA_HORA_FD, fechas_horas)
+
+    sin_clave = sum(1 for v in fechas_horas if v is None)
+    if sin_clave:
+        registrar(
+            f"  AVISO {hoja_origen}: {sin_clave} fila(s) sin Fecha/Hora "
+            f"valida: quedan sin '{p.CAMPO_FECHA_HORA_FD}'."
+        )
     registrar(f"  {hoja_origen}: {len(datos):,} fila(s).")
 
     return datos.reset_index(drop=True)
+
+
+def _fecha_hora(fecha, hora):
+    """B + TIMEVALUE(C & " :00"): la fecha del dia mas C horas (0..23)."""
+
+    fecha = a_fecha_hora(fecha)
+    hora = numero_o_nada(hora)
+
+    if fecha is None or hora is None:
+        return None
+
+    return (
+        dt.datetime(fecha.year, fecha.month, fecha.day)
+        + dt.timedelta(hours=hora)
+    )
 
 
 def _nombres_unicos(letras, encabezados):

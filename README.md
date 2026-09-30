@@ -3,7 +3,7 @@
 > El repositorio tiene ahora **dos** planillas: el Balance BESS
 > (`Balance_BESS.py`, todo lo de abajo) y, en construcción, la
 > remuneración CRA (`Balance_CRA.py`, paquete `Script/cra/`, dominio en
-> `docs/Trazabilidad_CRA_Periodo_Generico_v3.md`). Del CRA están hoy solo
+> `docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md`). Del CRA están hoy solo
 > las hojas de entrada `ENERGIA`, `FP`, `CO`, `SC y CO`, `FD_*` y la matriz
 > de `PRORRATA_RETIROS`; ver `MAPA.md` y
 > `BITACORA.md` → "Pendientes abiertos → CRA".
@@ -352,7 +352,7 @@ resultado, siempre que la carpeta base seleccionada sea la misma.
 | Qué hace cada script, en dos líneas | `MAPA.md` |
 | Historial de sesiones y pendientes abiertos | `BITACORA.md` |
 | Reglas de negocio del cálculo y el plan completo de migración | `docs/Plan_Traspaso_Python_Balance_BESS.md` |
-| CRA: de dónde sale cada hoja de `5_REMUNERACIÓN_CRA_*`, fórmulas y pendientes | `docs/Trazabilidad_CRA_Periodo_Generico_v3.md` |
+| CRA: de dónde sale cada hoja de `5_REMUNERACIÓN_CRA_*`, fórmulas y pendientes | `docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md` |
 | El código VBA original, las fórmulas del `.xlsm` y de dónde sale cada dato | `docs/Trazabilidad_11_PAGOS_BESS_2607_Definitivo.md` |
 | La hoja `Calculo RE545` real (recortada), con sus nombres de columna y fórmulas | `docs/Calculo_RE545_reducido_para_IA.xlsx` |
 | La hoja `Subastas` real, con encabezados y fórmulas (fuente de la corrección de `NOMBRES_SUBASTAS`); también trae la hoja `E COSTOS` con los encabezados de grupo reales (celdas combinadas), fuente de `GRUPOS_CALCULO_E_COSTOS` | `docs/Libro1_Subastas_real.xlsx` |

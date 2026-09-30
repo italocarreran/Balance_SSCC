@@ -2,7 +2,7 @@
 """
 Hojas de entrada del CRA (Script/cra): ENERGIA, FP, CO y SC y CO, con
 archivos sinteticos armados con la forma que describe la trazabilidad
-(docs/Trazabilidad_CRA_Periodo_Generico_v3.md, 6.1, 6.4 y 6.6).
+(docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md, 6.1, 6.4 y 6.6).
 """
 
 import datetime as dt
@@ -132,6 +132,31 @@ class PruebaCargaEntradas(unittest.TestCase):
         self.assertEqual(df[p.CAMPO_KWHD].tolist(), [100, 110, 90])
         self.assertEqual(df[p.CAMPO_KWHR].tolist(), [5, 0, 1])
 
+    def test_energia_corregidas_k_l_m(self):
+        from Script.cra.hojas_entrada import corregir_energia
+
+        # (I kWhD, J kWhR) -> (K, L, M), una fila por rama de las formulas.
+        casos = {
+            (-3, 2): (-3, 2, -1),     # I<0
+            (0, -4): (-4, 0, -4),     # I=0 y J<0
+            (5, 0): (0, 5, 5),        # J<=0 (y L: J=0 e I>0)
+            (5, -2): (-2, 5, 3),      # J<0, I>0
+            (5, 2): (-2, 5, 3),       # I>J>0
+            (2, 5): (-2, 5, 3),       # J>I>0
+            (3, 3): (-3, 3, 0),       # I=J>0
+            (0, 0): (0, 0, 0),
+        }
+        for (i, j), esperado in casos.items():
+            self.assertEqual(corregir_energia(i, j), esperado, (i, j))
+
+    def test_energia_escribe_neto(self):
+        df = cra.construir_energia(_energia(self.base / "e.xlsx"), 2026, 8)
+
+        # kWhD/kWhR = (100, 5), (110, 0), (90, 1)
+        self.assertEqual(df[p.CAMPO_NETO].tolist(), [95, 110, 89])
+        self.assertEqual(df[p.CAMPO_KWHD_CORREGIDO].tolist(), [-5, 0, -1])
+        self.assertEqual(df[p.CAMPO_KWHR_CORREGIDO].tolist(), [100, 110, 90])
+
     def test_energia_de_otro_mes_se_rechaza(self):
         ruta = _energia(self.base / "e.xlsx", mes=7)
 
@@ -197,9 +222,13 @@ class PruebaCargaEntradas(unittest.TestCase):
         cpf = cra.construir_fd(ruta, "fd_cpf")
         csf = cra.construir_fd(ruta, "fd_csf")
 
-        self.assertEqual(list(cpf.columns)[:3], ["Fecha", "Hora", "Unidad"])
-        self.assertEqual(len(cpf.columns), 9)            # B:J
-        self.assertEqual(len(csf.columns), 7)            # B:H
+        # "Fecha Hora" (la clave horaria del libro) + B:J / B:H.
+        self.assertEqual(list(cpf.columns)[:4],
+                         [p.CAMPO_FECHA_HORA_FD, "Fecha", "Hora", "Unidad"])
+        self.assertEqual(len(cpf.columns), 1 + 9)
+        self.assertEqual(len(csf.columns), 1 + 7)
+        self.assertEqual(cpf.iloc[0][p.CAMPO_FECHA_HORA_FD],
+                         dt.datetime(2026, 8, 1, 0))
         self.assertEqual(cpf.iloc[0]["Unidad"], "RAPEL_U1")
         self.assertEqual(cpf.iloc[0]["Col J"], 0.9)
 
