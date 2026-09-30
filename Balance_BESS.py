@@ -109,6 +109,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from Script import config, nucleo
+from Script.arbol import _prefijos_arbol
 
 
 COLOR_OK = "#1a6b1a"
@@ -317,56 +318,9 @@ def formato_tiempo(segundos):
 # revisar_estructura() devuelve una lista plana de filas con su
 # NIVEL (0 = raiz del caso, 1 = adentro de una carpeta/archivo, 2 =
 # un nivel mas). Aca solo se traduce esa lista a prefijos de consola
-# (├── / └── / │): nucleo.py sabe de estructura, no de dibujo.
+# (├── / └── / │): nucleo.py sabe de estructura, no de dibujo. Los
+# prefijos viven en Script/arbol.py (los comparte Balance_CRA.py).
 # ============================================================
-
-def _es_ultimo_en_su_nivel(niveles, i):
-    """
-    True si, mirando hacia adelante desde i, se sube de nivel antes
-    de encontrar otra fila con el MISMO nivel (o se llega al final de
-    la lista): o sea, si i es la ultima de su grupo.
-    """
-    nivel = niveles[i]
-    for j in range(i + 1, len(niveles)):
-        if niveles[j] < nivel:
-            return True
-        if niveles[j] == nivel:
-            return False
-    return True
-
-
-def _prefijos_arbol(niveles):
-    """
-    Prefijos tipo consola (├── / └── / │) para una lista plana de
-    niveles (0 = raiz), calculando el relleno de cada ancestro segun
-    si ESE ancestro es o no el ultimo de su propio grupo.
-    """
-    n = len(niveles)
-    ultimos = [_es_ultimo_en_su_nivel(niveles, i) for i in range(n)]
-    prefijos = []
-
-    for i, nivel in enumerate(niveles):
-
-        if nivel == 0:
-            prefijos.append("")
-            continue
-
-        relleno = ""
-        for ancestro_nivel in range(1, nivel):
-            indice_ancestro = next(
-                (k for k in range(i - 1, -1, -1) if niveles[k] == ancestro_nivel),
-                None,
-            )
-            relleno += (
-                "    "
-                if (indice_ancestro is None or ultimos[indice_ancestro])
-                else "│   "
-            )
-
-        prefijos.append(relleno + ("└── " if ultimos[i] else "├── "))
-
-    return prefijos
-
 
 # ============================================================
 # VENTANA

@@ -19,8 +19,8 @@ resto (regla de expansión de contexto, convenciones, trampas conocidas).
    verificarlo en la misma sesión, o dejar explícito en `BITACORA.md` qué
    falta y por qué se cortó.
 5. Antes de dar un cambio por terminado: correr
-   `python -m py_compile Balance_BESS.py Script/nucleo/*.py
-   Script/*/*.py` **y** `python -m unittest discover` desde la raíz
+   `python -m py_compile Balance_BESS.py Balance_CRA.py Script/*.py
+   Script/nucleo/*.py Script/*/*.py` **y** `python -m unittest discover` desde la raíz
    (revisar que el total de pruebas no baje: si dice `Ran 0 tests`,
    algo se rompió en el descubrimiento, no es un verde). Las pruebas de
    la ventana (`tests/test_ventana_rueda.py`) se saltean si no hay

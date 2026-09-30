@@ -544,3 +544,19 @@ Lista de solo agregar, para no volver a discutir lo mismo en cada sesión.
   `pd.read_excel(ruta, sheet_name=...)` vuelve a parsear el archivo
   entero.
 - **El programa crea las CARPETAS de un caso, nunca sus archivos.** `crear_estructura_caso()` arma la carpeta del período y sus subcarpetas vacías, es idempotente y no borra ni mueve nada; los archivos de entrada los pone la persona (o los traen los botones "Traer"). Y no se impone una convención de nombre de caso: se propone el nombre del período anterior con el AAMM cambiado y el usuario lo edita antes de crear. Preguntar sólo cuando se puede saber (la carpeta no existe, o su nombre trae otro AAMM); si el nombre no dice nada del período, no se pregunta.
+- **Más de una planilla en el mismo repositorio (desde el CRA).** Cada
+  planilla tiene su ventana en la raíz (`Balance_BESS.py`,
+  `Balance_CRA.py`) y su paquete de cálculo en `Script/` (`nucleo/` es el
+  del BESS, `cra/` el del CRA). Un paquete de planilla puede usar las
+  piezas genéricas de otro (`nucleo.utiles`, `nucleo.formato`), nunca al
+  revés, y nunca el cálculo de negocio de otra planilla. Lo de
+  presentación que comparten las ventanas va en `Script/` suelto
+  (`arbol.py`). Si un tercer proyecto necesita las mismas piezas
+  genéricas, recién ahí evaluar moverlas a un paquete común
+  (`Script/comun/`) en vez de seguir importándolas de `nucleo`.
+- **CRA: carga por letra y fila, como la trazabilidad.** A diferencia del
+  SoC del BESS (detección por encabezados), las entradas del CRA se leen
+  por letra de columna y fila de inicio, porque así las define
+  `docs/Trazabilidad_CRA_Periodo_Generico_v3.md`. La hoja de cada origen,
+  mientras no esté confirmada, no se adivina: si el libro tiene varias,
+  se para y las lista.

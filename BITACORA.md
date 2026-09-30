@@ -8,6 +8,46 @@ estado, no un historial.
 
 ## Pendientes abiertos
 
+### CRA (`Balance_CRA.py` / `Script/cra/`) — preguntas abiertas al usuario
+
+Referencia: `docs/Trazabilidad_CRA_Periodo_Generico_v3.md`. Nada de esto
+se adivinó: lo que depende de una respuesta quedó como constante en
+`Script/cra/parametros.py` o como hoja PENDIENTE en el árbol.
+
+- **Hoja de cada archivo origen.** La trazabilidad da letras y fila de
+  inicio pero no el nombre de la hoja. Hoy (`HOJA_ORIGEN_* = None`) se lee
+  la única hoja si hay una, y si hay varias el programa se detiene y las
+  lista. El `Cálculo_SobrecostosSSCC_*.xlsm` casi seguro tiene varias:
+  falta su nombre para poder generar `SC y CO`.
+- **Estructura de carpetas del caso.** Se propuso una subcarpeta por hoja
+  (`Energia/`, `FP/`, `CO/`, `SC y CO/`); confirmar o cambiar.
+- **Nombres de archivo.** `fp_*`: ¿lleva siempre el AAMM (traz. 17)?
+  `Formato_Solicitud_SSAA_SSCC_Hidro_MesAAAA`: ¿el mes va con nombre
+  (`Agosto2026`) o número? Hoy se busca solo por el prefijo y se valida el
+  período con las columnas Año/Mes del archivo.
+- **ENERGIA: de `kWhD`/`kWhR` a `Neto` (M)**, que es lo que usa
+  `CÁLCULO_CRA` (traz. 6.1, pendiente de cierre). No se calculó `Neto`.
+- **CO: de `CO!N:R` + `FP!U:X` a `CO_Barra_Propia`** (traz. 6.4,
+  pendiente de cierre): incluye el maestro configuración → barra/embalse
+  (`CO!AA:AB`).
+- **TC:** "origen CMg", pero ¿qué archivo y qué columna? (¿el mismo CSV
+  15-minutal que usa el BESS, o otro?).
+- **RENDIMIENTOS, EMPRESAS, unidades candidatas (`AQ:AS`), diccionario
+  SC/CO → Nombre CRA:** son maestros; ¿de qué archivo se leen (algo tipo
+  `Auxiliares/Centrales.xlsx` del BESS)?
+- **FD_CPF/CSF/CTF y prorrata de retiros:** ¿son las mismas fuentes que ya
+  trae el BESS (`SSCC_Desempeño_*` del DCO y `Prorrata_Retiros_<AAMM>`
+  hoja `Prorrata 15min`)? Si sí, se reutiliza ese código.
+- **COTAS y CONDICION_EMBALSE:** siguen pendientes en la trazabilidad.
+- **Cambio de hora (92/100 períodos):** la `Clave_Bloque` de SC replica
+  el `*96` del Excel; revisar con un mes con cambio de hora.
+- Validar las cuatro hojas contra los archivos reales de un período (hoy
+  solo hay pruebas sintéticas armadas con la forma de la trazabilidad).
+- Abrir `Balance_CRA.py` en Windows (en el entorno de esta sesión no hay
+  tkinter: la ventana solo se compiló y pasó `pyflakes`).
+
+### BESS
+
 - Crear casos de prueba con datos reales y comparar la salida Python
   contra `11_PAGOS_BESS_2607_Definitivo.xlsm` (Medidores, Ofertas SSCC,
   CMg, FD, Subastas, Calculo E Costos) (plan §13 punto 10, §20.3). Todo se
@@ -4052,3 +4092,47 @@ cancelar (vuelve el período anterior), Examinar (cambia y anota), volver al
 mes anterior (vuelve solo), carpeta sin AAMM en el nombre (aparece el tercer
 botón) y Crear la carpeta (queda creada con sus 7 subcarpetas y el caso
 abierto ahí).
+
+---
+
+## 2026-09-30 — Inicio del CRA: `Balance_CRA.py` y `Script/cra/` (hojas de entrada)
+
+**Pedido del usuario:** pasar a Python una segunda planilla,
+`5_REMUNERACIÓN_CRA_<AAMM>_Definitivo.xlsx`, en el mismo repositorio que el
+BESS, con su propia ventana `Balance_CRA.py` y compartiendo código; empezar
+por las hojas con sus entradas resueltas y preguntar lo que no sea obvio.
+Entregó la trazabilidad, que quedó versionada en
+`docs/Trazabilidad_CRA_Periodo_Generico_v3.md`.
+
+**Qué se hizo:**
+
+- `Script/cra/`, paquete hermano de `nucleo` (el del BESS). Usa de
+  `nucleo` solo las piezas genéricas (`normalizar`, `ErrorEntrada`,
+  `formatear_hoja`); `nucleo` no importa nada de `cra`.
+- Las cuatro hojas de entrada cuya carga está definida en la trazabilidad,
+  escritas en `Balance_CRA.xlsx` (una fila por hoja en la ventana, cada una
+  con su botón **Actualizar**; las que no se tocan se conservan):
+  - `ENERGIA` (traz. 6.1): B:F, `HORADIA = HORA(G)`,
+    `PERIODO DE CALCULO = J*4 + (MINUTO(G)+15)/15`, kWhD/kWhR. Se valida
+    que Año/Mes de todas las filas sean los del período.
+  - `FP` (6.4.1) y `CO` (6.4.2): copia de sus bloques A2:D.
+  - `SC y CO` (6.6): Reporte_CRA (CO) apilado arriba de Sobrecostos (SC),
+    11 columnas; las sumas de tres componentes y las dos `Clave_Bloque`
+    replican las fórmulas entregadas (incluido el `*96`). CPF/CSF/CTF
+    quedan en memoria (`participacion_por_servicio()`), no se escriben.
+- Lectura por **letra y fila real de Excel** con openpyxl
+  (`lectura.leer_columnas`), porque así define la trazabilidad cada carga.
+- `Script/arbol.py`: los prefijos del árbol (`├──`/`└──`) salieron de
+  `Balance_BESS.py` para que las dos ventanas usen la misma función.
+
+**Qué NO se hizo, a propósito:** TC, COTAS, RENDIMIENTOS,
+CONDICION_EMBALSE, FD_*, EMPRESAS, el `Neto` de ENERGIA, `CO_Barra_Propia`
+y el cálculo (`CÁLCULO_CRA` → `PRORRATA_RETIROS` → `RESUMEN`). Aparecen en el
+árbol como PENDIENTE con el motivo; las preguntas están en "Pendientes
+abiertos → CRA".
+
+**Verificación:** `py_compile` de todo, 160 pruebas (9 nuevas en
+`tests/test_cra_entradas.py`, con archivos sintéticos armados con la forma
+de la trazabilidad). La ventana no se pudo abrir: el entorno no tiene
+tkinter.
+

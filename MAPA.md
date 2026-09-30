@@ -9,12 +9,14 @@ de.
 ## Estructura del repositorio
 
 ```
-Balance_BESS.py            <- la ventana (lo unico que se ejecuta)
+Balance_BESS.py            <- la ventana del BESS
+Balance_CRA.py             <- la ventana del CRA (ver su bloque abajo)
 config.ejemplo.json        <- el formato de "claves_api" para copiar
 config.json                <- local, NO se versiona (claves + por usuario)
 Script/
     __init__.py
     config.py              <- lo unico que lee y escribe config.json
+    arbol.py               <- prefijos del arbol (las dos ventanas)
     nucleo/                <- el calculo del caso, una etapa por modulo
         __init__.py            <- la fachada: nucleo.<lo que sea>
         externos.py            <- los paquetes hermanos, en un solo lugar
@@ -52,6 +54,15 @@ Script/
         orquestador.py         <- el grafo de "Ejecutar todo" (plan y corrida)
         traer.py               <- los botones Traer/Generar
         medidas_sae.py         <- Medidas_SAE.xlsx
+    cra/                   <- el calculo del CRA (hermano de nucleo/)
+        __init__.py            <- la fachada: cra.<lo que sea>
+        parametros.py          <- carpetas, patrones, hojas y mapeos por letra
+        lectura.py             <- busqueda por prefijo y lectura por letra/fila
+        rutas.py               <- rutas del caso y validar_aamm
+        hojas_entrada.py       <- ENERGIA, FP, CO, SC y CO
+        escritura.py           <- Balance_CRA.xlsx (conserva lo que no toca)
+        proceso.py             <- SECCIONES y generar_balance_cra()
+        estructura.py          <- el arbol que dibuja Balance_CRA.py
     Cmg/
         __init__.py
         Extrae_CMG_barras.py   <- arma cmg.xlsx desde el CSV 15-minutal
@@ -1005,6 +1016,48 @@ importable como cualquier módulo.
   orden de inserción ES el orden final de columnas), `COLUMNAS_VACIAS`.
 - **Depende de:** `pandas`, `openpyxl` (como engine de
   `pd.ExcelWriter`/`pd.read_excel`), `calendar` (stdlib, días del mes).
+
+---
+
+## `Balance_CRA.py` y `Script/cra/` — remuneración CRA
+
+- **Qué hace:** replica, hoja por hoja, `5_REMUNERACIÓN_CRA_<AAMM>_
+  Definitivo.xlsx`. Dominio: `docs/Trazabilidad_CRA_Periodo_Generico_v3.md`
+  (se busca la sección puntual, no se lee entero). Hoy están **solo las
+  hojas de entrada con carga definida**: `ENERGIA`, `FP`, `CO` y `SC y CO`.
+- **Ventana (`Balance_CRA.py`):** mismo patrón que la del BESS, más
+  acotada: carpeta base + AAMM + árbol (`cra.revisar_estructura()`) con un
+  botón **Actualizar** en la fila de `Balance_CRA.xlsx` (todas las hojas) y
+  en cada hoja; registro, barra y tiempo. Recuerda carpeta y AAMM en su
+  propia sección de `config.json` (`<host>_<usuario>_CRA`), para no pisar
+  la del BESS. Todavía **no** tiene la regla "un período, una carpeta" ni
+  "Ejecutar todo" del BESS.
+- **Caso (PROPUESTA, sin confirmar):**
+  `Energia/Formato_Solicitud_SSAA_SSCC_Hidro_*`, `FP/fp_*`,
+  `CO/cvar_cra_<AAMM>_*`, `SC y CO/Reporte_CRA*` y
+  `SC y CO/Cálculo_SobrecostosSSCC_*`, y la salida `Balance_CRA.xlsx`.
+  Los archivos se buscan por prefijo normalizado; si hay dos del mismo
+  tipo, se para (no se elige por fecha).
+- **Lectura:** por letra de columna y fila real de Excel
+  (`lectura.leer_columnas`, openpyxl `data_only`), como define cada carga
+  la trazabilidad. La hoja de cada origen no está confirmada
+  (`HOJA_ORIGEN_* = None`): se usa la única hoja, y si hay varias se para.
+- **Expone:** `generar_balance_cra(carpeta_base, aamm, secciones=None,
+  registrar, progreso)`, `SECCIONES` (`energia`, `fp`, `co`, `sc_co`),
+  `construir_energia/fp/co/sc_co`, `participacion_por_servicio` (CPF, CSF,
+  CTF en memoria), `revisar_estructura`, `crear_carpetas_caso`,
+  `validar_aamm`.
+- **Depende de:** `nucleo.utiles` (`normalizar`, `ErrorEntrada`),
+  `nucleo.formato` (`formatear_hoja`), `Script/config.py`,
+  `Script/arbol.py`. `nucleo` no importa nada de `cra`.
+- **Pendiente:** ver `BITACORA.md` → "Pendientes abiertos → CRA".
+
+## `Script/arbol.py`
+
+- **Qué hace:** `_prefijos_arbol(niveles)` (y `_es_ultimo_en_su_nivel`):
+  la lista plana de niveles de `revisar_estructura()` → prefijos
+  `├──`/`└──`/`│`. Sin tkinter. Salió de `Balance_BESS.py` para que la
+  compartan las dos ventanas.
 
 ---
 
