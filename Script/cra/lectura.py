@@ -7,9 +7,14 @@ origen se lleva a FP!U9:X").
 Se lee con openpyxl directo (no con pandas.read_excel) porque la fila
 de inicio tiene que ser la fila REAL de Excel: pandas, en modo solo
 lectura, puede saltarse filas vacias del principio y correr todo.
+
+Un .csv se lee con la misma regla: la columna A es el primer campo de
+cada linea y la fila N es la linea N.
 """
 
+import csv
 import datetime as dt
+import io
 from pathlib import Path
 
 import pandas as pd
@@ -24,10 +29,12 @@ from .parametros import EXTENSIONES_EXCEL
 # BUSQUEDA DE ARCHIVOS
 # ============================================================
 
-def buscar_por_prefijo(carpeta, prefijo, descripcion):
+def buscar_por_prefijo(carpeta, prefijos, descripcion,
+                       extensiones=EXTENSIONES_EXCEL):
     """
-    El unico archivo Excel de `carpeta` cuyo nombre normalizado empieza
-    con `prefijo`. None si no hay ninguno.
+    El unico archivo de `carpeta` (con una de `extensiones`) cuyo nombre
+    normalizado empieza con `prefijos` (un texto o una tupla de textos
+    alternativos). None si no hay ninguno.
 
     Si hay mas de uno, ErrorEntrada con la lista: no se elige por fecha
     (mismo criterio que el SoC del BESS).
@@ -38,14 +45,16 @@ def buscar_por_prefijo(carpeta, prefijo, descripcion):
     if not carpeta.is_dir():
         return None
 
-    prefijo = normalizar(prefijo)
+    if isinstance(prefijos, str):
+        prefijos = (prefijos,)
+    prefijos = tuple(normalizar(prefijo) for prefijo in prefijos)
 
     candidatos = sorted(
         ruta for ruta in carpeta.iterdir()
         if ruta.is_file()
-        and ruta.suffix.lower() in EXTENSIONES_EXCEL
+        and ruta.suffix.lower() in extensiones
         and not ruta.name.startswith("~$")      # temporales de Excel abierto
-        and normalizar(ruta.stem).startswith(prefijo)
+        and normalizar(ruta.stem).startswith(prefijos)
     )
 
     if len(candidatos) > 1:
@@ -65,12 +74,20 @@ def buscar_por_prefijo(carpeta, prefijo, descripcion):
 
 def elegir_hoja(libro, hoja, ruta):
     """
-    La hoja a leer. Si `hoja` es None (no esta confirmada), se usa la
-    unica que haya; si hay varias, se para y se listan.
+    La hoja a leer. Un entero es la posicion (0 = la primera). Si `hoja`
+    es None (no esta confirmada), se usa la unica que haya; si hay
+    varias, se para y se listan.
     """
+
+    if isinstance(hoja, int):
+        return libro[libro.sheetnames[hoja]]
 
     if hoja is not None:
         if hoja not in libro.sheetnames:
+            # Misma hoja con otras mayusculas/tildes/espacios.
+            for nombre in libro.sheetnames:
+                if normalizar(nombre) == normalizar(hoja):
+                    return libro[nombre]
             raise ErrorEntrada(
                 f"{Path(ruta).name} no tiene la hoja '{hoja}'. "
                 f"Hojas: {', '.join(libro.sheetnames)}."
@@ -104,6 +121,14 @@ def leer_columnas(ruta, hoja, fila_inicio, letras):
     indices = [column_index_from_string(letra) for letra in letras]
     minimo, maximo = min(indices), max(indices)
 
+    if Path(ruta).suffix.lower() == ".csv":
+        filas = [
+            [fila[i - 1] if i <= len(fila) else None for i in indices]
+            for fila in leer_csv(ruta)[fila_inicio - 1:]
+        ]
+        filas = [f for f in filas if not all(_vacio(v) for v in f)]
+        return pd.DataFrame(filas, columns=letras, dtype=object)
+
     try:
         libro = load_workbook(ruta, read_only=True, data_only=True)
     except Exception as error:
@@ -134,8 +159,84 @@ def leer_columnas(ruta, hoja, fila_inicio, letras):
     return pd.DataFrame(filas, columns=letras, dtype=object)
 
 
+def leer_encabezados(ruta, hoja, fila, letras):
+    """{letra: texto de la celda} de la fila de encabezados."""
+
+    tabla = leer_columnas_fila(ruta, hoja, fila, letras)
+
+    return {letra: texto_excel(valor) for letra, valor in tabla.items()}
+
+
+def leer_columnas_fila(ruta, hoja, fila, letras):
+    indices = [column_index_from_string(letra) for letra in letras]
+    minimo, maximo = min(indices), max(indices)
+
+    libro = load_workbook(ruta, read_only=True, data_only=True)
+    try:
+        ws = elegir_hoja(libro, hoja, ruta)
+        valores = next(
+            ws.iter_rows(min_row=fila, max_row=fila, min_col=minimo,
+                         max_col=maximo, values_only=True),
+            (),
+        )
+    finally:
+        libro.close()
+
+    valores = list(valores) + [None] * (maximo - minimo + 1 - len(valores))
+
+    return {letra: valores[i - minimo] for letra, i in zip(letras, indices)}
+
+
 def _vacio(valor):
     return valor is None or (isinstance(valor, str) and not valor.strip())
+
+
+# ============================================================
+# CSV
+# ============================================================
+
+def leer_csv(ruta):
+    """
+    Todas las lineas del CSV como listas de valores. Separador ";", ","
+    o tabulador (se detecta). Los textos que son numeros se pasan a
+    numero, como hace Excel al abrir el CSV: con ";" de separador la
+    coma es el decimal ("1.234,5" -> 1234.5); con "," el punto.
+    """
+
+    crudo = Path(ruta).read_bytes()
+    for codificacion in ("utf-8-sig", "latin-1"):
+        try:
+            texto = crudo.decode(codificacion)
+            break
+        except UnicodeDecodeError:
+            continue
+
+    muestra = "\n".join(texto.splitlines()[:20])
+    try:
+        separador = csv.Sniffer().sniff(muestra, delimiters=";,\t").delimiter
+    except csv.Error:
+        separador = ";" if muestra.count(";") >= muestra.count(",") else ","
+
+    return [
+        [_valor_csv(v, separador) for v in fila]
+        for fila in csv.reader(io.StringIO(texto), delimiter=separador)
+    ]
+
+
+def _valor_csv(texto, separador):
+    texto = texto.strip()
+
+    if not texto:
+        return None
+
+    candidato = texto
+    if separador != "," and "," in texto:
+        candidato = texto.replace(".", "").replace(",", ".")
+
+    try:
+        return float(candidato)
+    except ValueError:
+        return texto
 
 
 # ============================================================
@@ -163,6 +264,30 @@ def a_fecha_hora(valor):
 
     if isinstance(valor, (int, float)) and not isinstance(valor, bool):
         return ORIGEN_SERIAL_EXCEL + dt.timedelta(days=float(valor))
+
+    if isinstance(valor, str):
+        return _fecha_desde_texto(valor.strip())
+
+    return None
+
+
+# Fechas escritas como texto (lo normal en un CSV). Primero el formato
+# ISO (año adelante, sin ambiguedad) y despues dia/mes/año, que es como
+# lo lee Excel en Chile. Nunca mes/dia/año.
+FORMATOS_FECHA_TEXTO = (
+    "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S",
+    "%Y/%m/%d %H:%M:%S", "%Y/%m/%d %H:%M", "%Y/%m/%d",
+    "%d-%m-%Y %H:%M:%S", "%d-%m-%Y %H:%M", "%d-%m-%Y",
+    "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y",
+)
+
+
+def _fecha_desde_texto(texto):
+    for formato in FORMATOS_FECHA_TEXTO:
+        try:
+            return dt.datetime.strptime(texto, formato)
+        except ValueError:
+            continue
 
     return None
 

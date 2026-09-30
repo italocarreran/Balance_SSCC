@@ -15,18 +15,23 @@ un boton en cada fila que se puede generar.
         CO/
             cvar_cra_<AAMM>_*.xlsx
         SC y CO/
-            Reporte_CRA*.xlsx
-            Cálculo_SobrecostosSSCC_*.xlsm
+            Reporte_CRA*.csv
+            Cálculo_SobrecostosSSCC_*.xlsm (hoja SOBRECOSTOS)
+        FD/
+            SSCC_Desempeño_*.xlsx          [Traer]
+        Prorrata retiros/
+            Prorrata_Retiros_<AAMM>_pre/_def.xlsx
         Balance_CRA.xlsx                   [Actualizar]
+            hoja 'PRORRATA_RETIROS'        [Actualizar]  (solo bloque 1)
+            hoja 'FD_CTF' / 'FD_CSF' / 'FD_CPF'  [Actualizar]
             hoja 'SC y CO'                 [Actualizar]
             hoja 'CO'                      [Actualizar]
             hoja 'FP'                      [Actualizar]
             hoja 'ENERGIA'                 [Actualizar]
 
-La estructura de carpetas es una PROPUESTA (ver
-Script/cra/parametros.py). Por ahora solo estan las hojas de entrada
-con su carga definida en docs/Trazabilidad_CRA_Periodo_Generico_v3.md;
-el resto se muestra como PENDIENTE.
+Por ahora solo estan las hojas de entrada con su carga definida en
+docs/Trazabilidad_CRA_Periodo_Generico_v3.md; el resto se muestra como
+PENDIENTE.
 
 Todo el calculo vive en Script/cra: esta ventana solo lo llama.
 """
@@ -196,8 +201,11 @@ def main():
             except tk.TclError:
                 pass
 
-    def lanzar(secciones):
-        """Corre generar_balance_cra en un hilo aparte."""
+    def lanzar(funcion, **kwargs):
+        """
+        Corre funcion(base, aamm, **kwargs, registrar, progreso) en un
+        hilo aparte, reportando al registro y a la barra.
+        """
 
         if corriendo["activo"]:
             return
@@ -225,8 +233,8 @@ def main():
         def trabajo():
             try:
                 root.after(0, var_estado.set, "Procesando...")
-                cra.generar_balance_cra(
-                    base, aamm, secciones=secciones,
+                funcion(
+                    base, aamm, **kwargs,
                     registrar=lambda m: root.after(0, log, m),
                     progreso=lambda v: root.after(
                         0, barra.configure, {"value": v}
@@ -258,12 +266,17 @@ def main():
         """(texto, comando) del boton de esa fila, o None."""
 
         if fila["id"] == "salida":
-            return "Actualizar", lambda: lanzar(None)
+            return "Actualizar", lambda: lanzar(cra.generar_balance_cra)
+
+        if fila["id"] == "sscc_desempeno":
+            return "Traer", lambda: lanzar(cra.traer_fd)
 
         if fila["id"].startswith("hoja_"):
             seccion = fila["id"][len("hoja_"):]
             if seccion in cra.SECCIONES:
-                return "Actualizar", lambda s=seccion: lanzar([s])
+                return "Actualizar", lambda s=seccion: lanzar(
+                    cra.generar_balance_cra, secciones=[s]
+                )
 
         return None
 

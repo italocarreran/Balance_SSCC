@@ -138,10 +138,12 @@ def construir_co(ruta, registrar=_nada):
 # SC y CO (traz. 6.6)
 # ============================================================
 
-def construir_sc_co_desde_reporte(ruta, registrar=_nada):
+def construir_sc_co_desde_reporte(ruta, registrar=_nada, periodo=None):
     """
-    Reporte_CRA*.xlsx (registros CO), desde la fila 2.
+    Reporte_CRA*.csv (registros CO), desde la fila 2.
     Clave_Bloque = DIA(C) & "#" & E.
+
+    periodo: (anio, mes) para avisar si hay fechas de otro mes.
     """
 
     letras = list(p.COPIA_REPORTE_CRA) + [
@@ -156,7 +158,10 @@ def construir_sc_co_desde_reporte(ruta, registrar=_nada):
         dtype=object,
     )
 
-    dias = origen[p.LETRA_FECHA_REPORTE_CRA].map(dia_excel)
+    fechas = origen[p.LETRA_FECHA_REPORTE_CRA]
+    _avisar_otro_mes(fechas, periodo, "Reporte_CRA",
+                     p.LETRA_FECHA_REPORTE_CRA, registrar)
+    dias = fechas.map(dia_excel)
     df[p.CAMPO_CLAVE_BLOQUE] = [
         _clave_bloque(dia, bloque)
         for dia, bloque in zip(dias, origen[p.LETRA_BLOQUE_REPORTE_CRA])
@@ -167,7 +172,7 @@ def construir_sc_co_desde_reporte(ruta, registrar=_nada):
     return df[p.COLUMNAS_SC_CO].reset_index(drop=True)
 
 
-def construir_sc_co_desde_sobrecostos(ruta, registrar=_nada):
+def construir_sc_co_desde_sobrecostos(ruta, registrar=_nada, periodo=None):
     """
     Cálculo_SobrecostosSSCC_*.xlsm (registros SC), desde la fila 7.
 
@@ -210,7 +215,10 @@ def construir_sc_co_desde_sobrecostos(ruta, registrar=_nada):
             f"Sobrecostos (en Excel darian #¡VALOR!); se contaron como 0."
         )
 
-    dias = origen[p.LETRA_FECHA_SOBRECOSTOS].map(dia_excel)
+    fechas = origen[p.LETRA_FECHA_SOBRECOSTOS]
+    _avisar_otro_mes(fechas, periodo, "Sobrecostos",
+                     p.LETRA_FECHA_SOBRECOSTOS, registrar)
+    dias = fechas.map(dia_excel)
     periodos = origen[p.LETRA_PERIODO_SOBRECOSTOS].map(numero_o_nada)
     df[p.CAMPO_CLAVE_BLOQUE] = [
         None if dia is None or periodo is None
@@ -228,14 +236,15 @@ def construir_sc_co_desde_sobrecostos(ruta, registrar=_nada):
     return df[p.COLUMNAS_SC_CO].reset_index(drop=True)
 
 
-def construir_sc_co(ruta_reporte, ruta_sobrecostos, registrar=_nada):
+def construir_sc_co(ruta_reporte, ruta_sobrecostos, registrar=_nada,
+                    periodo=None):
     """
     La tabla SC y CO: primero los registros CO (Reporte_CRA) y abajo
     los SC (Sobrecostos), apilados con el mismo esquema (traz. 6.6).
     """
 
-    co = construir_sc_co_desde_reporte(ruta_reporte, registrar)
-    sc = construir_sc_co_desde_sobrecostos(ruta_sobrecostos, registrar)
+    co = construir_sc_co_desde_reporte(ruta_reporte, registrar, periodo)
+    sc = construir_sc_co_desde_sobrecostos(ruta_sobrecostos, registrar, periodo)
 
     registrar(
         f"  SC y CO: {len(co)} registro(s) CO + {len(sc)} registro(s) SC."
@@ -275,4 +284,27 @@ def _avisar_sin_dia(dias, origen, letra, registrar):
         registrar(
             f"  AVISO SC y CO: {sin_dia} fila(s) de {origen} sin fecha "
             f"en la columna {letra}: quedan sin Clave_Bloque."
+        )
+
+
+def _avisar_otro_mes(valores, periodo, origen, letra, registrar):
+    """
+    Aviso (no error) si hay fechas fuera del periodo: no esta confirmado
+    que cada archivo traiga un solo mes (la tabla tiene su propia
+    "Clave Año_Mes"). Sirve ademas para detectar una fecha de texto mal
+    leida (dia y mes cruzados).
+    """
+
+    if periodo is None:
+        return
+
+    fechas = valores.map(a_fecha_hora).dropna()
+    otras = [f for f in fechas if (f.year, f.month) != tuple(periodo)]
+
+    if otras:
+        meses = sorted({f"{f.year}-{f.month:02d}" for f in otras})
+        registrar(
+            f"  AVISO SC y CO: {len(otras)} fila(s) de {origen} con fecha "
+            f"(columna {letra}) fuera de {periodo[0]}-{periodo[1]:02d}: "
+            f"{', '.join(meses[:5])}."
         )

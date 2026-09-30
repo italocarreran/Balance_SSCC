@@ -17,12 +17,12 @@ from Script import cra
 from Script.cra import parametros as p
 
 
-def _libro(ruta, filas_por_celda, hojas_extra=()):
+def _libro(ruta, filas_por_celda, hojas_extra=(), hoja="Hoja1"):
     """filas_por_celda: {(fila, letra): valor}."""
 
     libro = Workbook()
     ws = libro.active
-    ws.title = "Hoja1"
+    ws.title = hoja
     for (fila, letra), valor in filas_por_celda.items():
         ws.cell(row=fila, column=column_index_from_string(letra), value=valor)
     for nombre in hojas_extra:
@@ -49,18 +49,47 @@ def _energia(ruta, anio=2026, mes=8):
 
 
 def _reporte_cra(ruta):
-    celdas = {}
-    encabezado = "ABCDEFGHIJKLMNO"
-    for letra in encabezado:
-        celdas[(1, letra)] = f"enc {letra}"
-    fila = {
-        "A": 202608, "B": "CO", "C": dt.datetime(2026, 8, 5), "E": 17,
-        "H": "RAPEL_U1", "I": 1234.5,
-        "J": 0.25, "K": 0.25, "L": 0.5, "M": 0, "N": 0, "O": 0,
-    }
-    for letra, valor in fila.items():
-        celdas[(2, letra)] = valor
-    return _libro(ruta, celdas)
+    """CSV con ";" y coma decimal, fecha como texto dia-mes-año."""
+
+    lineas = [
+        ";".join(f"enc {letra}" for letra in "ABCDEFGHIJKLMNO"),
+        "202608;CO;05-08-2026 00:00;x;17;x;x;RAPEL_U1;1234,5;"
+        "0,25;0,25;0,5;0;0;0",
+    ]
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ruta.write_text("\n".join(lineas) + "\n", encoding="latin-1")
+    return ruta
+
+
+def _sscc_desempeno(ruta):
+    libro = Workbook()
+    libro.remove(libro.active)
+    for hoja, ultima in (("CPF Horario", "J"), ("CSF Horario", "H"),
+                         ("CTF Horario", "I")):
+        ws = libro.create_sheet(hoja)
+        ws["B1"] = "titulo"
+        letras = "BCDEFGHIJ"[: "BCDEFGHIJ".index(ultima) + 1]
+        for letra in letras:
+            ws[f"{letra}11"] = f"Col {letra}"
+        ws["B11"], ws["C11"], ws["D11"] = "Fecha", "Hora", "Unidad"
+        ws["B12"], ws["C12"], ws["D12"] = dt.datetime(2026, 8, 1), 0, "RAPEL_U1"
+        ws[f"{ultima}12"] = 0.9
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    libro.save(ruta)
+    return ruta
+
+
+def _prorrata(ruta, periodos=31 * 96):
+    libro = Workbook()
+    ws = libro.active
+    ws.title = "Prorrata 15min"
+    ws.append(["Cuarto de Hora", "Suministrador", "Prorrata"])
+    for cuarto in range(1, periodos + 1):
+        ws.append([cuarto, "ENGIE", 0.75])
+        ws.append([cuarto, "COLBUN", 0.25])
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    libro.save(ruta)
+    return ruta
 
 
 def _sobrecostos(ruta):
@@ -75,7 +104,7 @@ def _sobrecostos(ruta):
     }
     for letra, valor in fila.items():
         celdas[(7, letra)] = valor
-    return _libro(ruta, celdas)
+    return _libro(ruta, celdas, hoja="SOBRECOSTOS", hojas_extra=["Otra"])
 
 
 class PruebaCargaEntradas(unittest.TestCase):
@@ -126,7 +155,7 @@ class PruebaCargaEntradas(unittest.TestCase):
         self.assertEqual(df_co.values.tolist(), [["RALCO_CONF", 12, 7, 55.5]])
 
     def test_sc_co_apila_co_y_sc(self):
-        reporte = _reporte_cra(self.base / "r.xlsx")
+        reporte = _reporte_cra(self.base / "r.csv")
         sobrecostos = _sobrecostos(self.base / "s.xlsx")
 
         df = cra.construir_sc_co(reporte, sobrecostos)
@@ -145,6 +174,44 @@ class PruebaCargaEntradas(unittest.TestCase):
         servicios = cra.participacion_por_servicio(df)
         self.assertEqual(servicios.iloc[0].tolist(), [0.5, 0.5, 0.0])
         self.assertEqual(servicios.iloc[1].tolist(), [5.0, 1.0, 4.0])
+
+    def test_sc_co_avisa_fechas_de_otro_mes(self):
+        avisos = []
+        cra.construir_sc_co(
+            _reporte_cra(self.base / "r.csv"),
+            _sobrecostos(self.base / "s.xlsx"),
+            registrar=avisos.append, periodo=(2026, 9),
+        )
+        self.assertEqual(sum("fuera de 2026-09" in a for a in avisos), 2)
+
+    def test_fd_copia_la_hoja_con_sus_encabezados(self):
+        ruta = _sscc_desempeno(self.base / "SSCC_Desempeño_Agosto_2026.xlsx")
+
+        cpf = cra.construir_fd(ruta, "fd_cpf")
+        csf = cra.construir_fd(ruta, "fd_csf")
+
+        self.assertEqual(list(cpf.columns)[:3], ["Fecha", "Hora", "Unidad"])
+        self.assertEqual(len(cpf.columns), 9)            # B:J
+        self.assertEqual(len(csf.columns), 7)            # B:H
+        self.assertEqual(cpf.iloc[0]["Unidad"], "RAPEL_U1")
+        self.assertEqual(cpf.iloc[0]["Col J"], 0.9)
+
+    def test_prorrata_como_matriz(self):
+        avisos = []
+        ruta = _prorrata(self.base / "Prorrata_Retiros_2608_def.xlsx")
+
+        df = cra.construir_matriz_prorrata(ruta, 2026, 8, avisos.append)
+
+        self.assertEqual(list(df.columns),
+                         [p.COLUMNA_PERIODO_PRORRATA, "COLBUN", "ENGIE"])
+        self.assertEqual(len(df), 31 * 96)
+        self.assertEqual(df.iloc[0].tolist(), [1, 0.25, 0.75])
+        self.assertFalse(any("AVISO" in a for a in avisos))
+
+        # Septiembre tiene 30 dias: 31*96 periodos sobran y se avisa.
+        avisos.clear()
+        cra.construir_matriz_prorrata(ruta, 2026, 9, avisos.append)
+        self.assertTrue(any("sobran 96" in a for a in avisos))
 
     def test_hoja_no_confirmada_con_varias_hojas_se_detiene(self):
         ruta = _libro(
@@ -169,9 +236,13 @@ class PruebaProceso(unittest.TestCase):
                {(2, "A"): "B1", (2, "B"): 1, (2, "C"): 1.0, (2, "D"): 1})
         _libro(self.base / p.CARPETA_CO / "cvar_cra_2608_def.xlsx",
                {(2, "A"): "C1", (2, "B"): 1, (2, "C"): 2.0, (2, "D"): 1})
-        _reporte_cra(self.base / p.CARPETA_SC_CO / "Reporte_CRA_2608.xlsx")
+        _reporte_cra(self.base / p.CARPETA_SC_CO / "Reporte_CRA_15min_2608.csv")
         _sobrecostos(self.base / p.CARPETA_SC_CO
                      / "Cálculo_SobrecostosSSCC_2608.xlsm")
+        _sscc_desempeno(self.base / p.CARPETA_FD
+                        / "SSCC_Desempeño_Agosto_2026_V2.xlsx")
+        _prorrata(self.base / p.CARPETA_PRORRATA
+                  / "Prorrata_Retiros_2608_def.xlsx")
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -197,7 +268,7 @@ class PruebaProceso(unittest.TestCase):
         libro.close()
 
     def test_dos_archivos_del_mismo_tipo_se_detiene(self):
-        _libro(self.base / p.CARPETA_FP / "fp_2607_def.xlsx", {(2, "A"): "x"})
+        _libro(self.base / p.CARPETA_FP / "fp_2608_pre.xlsx", {(2, "A"): "x"})
 
         with self.assertRaises(cra.ErrorEntrada):
             cra.generar_balance_cra(self.base, "2608", secciones=["fp"])
@@ -206,9 +277,23 @@ class PruebaProceso(unittest.TestCase):
         filas = cra.revisar_estructura(self.base, "2608")
         por_id = {f["id"]: f for f in filas}
 
-        for id_ in ("energia", "fp", "co", "reporte_cra", "sobrecostos"):
+        for id_ in ("energia", "fp", "co", "reporte_cra", "sobrecostos",
+                    "sscc_desempeno", "prorrata"):
             self.assertEqual(por_id[id_]["estado"], "ok", id_)
         self.assertEqual(por_id["salida"]["estado"], "pendiente")
+
+    def test_fp_y_energia_de_otro_periodo_no_se_toman(self):
+        # Otro mes en el nombre: no es el archivo del periodo.
+        (self.base / p.CARPETA_FP / "fp_2608_def.xlsx").rename(
+            self.base / p.CARPETA_FP / "fp_2607_def.xlsx")
+        (self.base / p.CARPETA_ENERGIA
+         / "Formato_Solicitud_SSAA_SSCC_Hidro_Agosto2026.xlsx").rename(
+            self.base / p.CARPETA_ENERGIA
+            / "Formato_Solicitud_SSAA_SSCC_Hidro_Julio2026.xlsx")
+
+        rutas = cra.resolver_rutas(self.base)
+        self.assertIsNone(cra.buscar_entrada(rutas, "fp", "2608"))
+        self.assertIsNone(cra.buscar_entrada(rutas, "energia", "2608"))
 
     def test_aamm_invalido(self):
         for malo in ("", "26", "2613", "abcd"):

@@ -60,6 +60,7 @@ Script/
         lectura.py             <- busqueda por prefijo y lectura por letra/fila
         rutas.py               <- rutas del caso y validar_aamm
         hojas_entrada.py       <- ENERGIA, FP, CO, SC y CO
+        fuentes_bess.py        <- FD_CPF/CSF/CTF y matriz de PRORRATA_RETIROS
         escritura.py           <- Balance_CRA.xlsx (conserva lo que no toca)
         proceso.py             <- SECCIONES y generar_balance_cra()
         estructura.py          <- el arbol que dibuja Balance_CRA.py
@@ -1024,31 +1025,42 @@ importable como cualquier módulo.
 - **Qué hace:** replica, hoja por hoja, `5_REMUNERACIÓN_CRA_<AAMM>_
   Definitivo.xlsx`. Dominio: `docs/Trazabilidad_CRA_Periodo_Generico_v3.md`
   (se busca la sección puntual, no se lee entero). Hoy están **solo las
-  hojas de entrada con carga definida**: `ENERGIA`, `FP`, `CO` y `SC y CO`.
+  hojas de entrada con carga definida**: `ENERGIA`, `FP`, `CO`, `SC y CO`,
+  `FD_CPF`/`FD_CSF`/`FD_CTF` y el bloque 1 de `PRORRATA_RETIROS` (estas
+  cuatro, con las mismas fuentes y lectores del BESS: `fuentes_bess.py`).
 - **Ventana (`Balance_CRA.py`):** mismo patrón que la del BESS, más
   acotada: carpeta base + AAMM + árbol (`cra.revisar_estructura()`) con un
   botón **Actualizar** en la fila de `Balance_CRA.xlsx` (todas las hojas) y
-  en cada hoja; registro, barra y tiempo. Recuerda carpeta y AAMM en su
+  en cada hoja, y **Traer** en la fila del `SSCC_Desempeño_*` (misma
+  función del BESS, destino `FD/`); registro, barra y tiempo. Recuerda carpeta y AAMM en su
   propia sección de `config.json` (`<host>_<usuario>_CRA`), para no pisar
   la del BESS. Todavía **no** tiene la regla "un período, una carpeta" ni
   "Ejecutar todo" del BESS.
-- **Caso (PROPUESTA, sin confirmar):**
-  `Energia/Formato_Solicitud_SSAA_SSCC_Hidro_*`, `FP/fp_*`,
-  `CO/cvar_cra_<AAMM>_*`, `SC y CO/Reporte_CRA*` y
-  `SC y CO/Cálculo_SobrecostosSSCC_*`, y la salida `Balance_CRA.xlsx`.
-  Los archivos se buscan por prefijo normalizado; si hay dos del mismo
-  tipo, se para (no se elige por fecha).
+- **Caso (confirmado):**
+  `Energia/Formato_Solicitud_SSAA_SSCC_Hidro_<Mes><AAAA>.xlsx`,
+  `FP/fp_<AAMM>*`, `CO/cvar_cra_<AAMM>_*`, `SC y CO/Reporte_CRA*.csv`,
+  `SC y CO/Cálculo_SobrecostosSSCC_*.xlsm` (hoja `SOBRECOSTOS`),
+  `FD/SSCC_Desempeño_*`, `Prorrata retiros/Prorrata_Retiros_<AAMM>_pre|def`,
+  y la salida `Balance_CRA.xlsx`. Los archivos propios del CRA se buscan
+  por prefijo normalizado y si hay dos del mismo tipo se para; los de
+  fuente BESS usan el buscador del BESS (el `SSCC_Desempeño_*` más
+  reciente, como la macro original).
 - **Lectura:** por letra de columna y fila real de Excel
-  (`lectura.leer_columnas`, openpyxl `data_only`), como define cada carga
-  la trazabilidad. La hoja de cada origen no está confirmada
-  (`HOJA_ORIGEN_* = None`): se usa la única hoja, y si hay varias se para.
+  (`lectura.leer_columnas`, openpyxl `data_only`; un `.csv` con la misma
+  regla), como define cada carga la trazabilidad. Hoja de cada origen en
+  `HOJA_ORIGEN_*`: nombre, `0` (la primera) o `None` (no confirmada: la
+  única, o se para si hay varias).
 - **Expone:** `generar_balance_cra(carpeta_base, aamm, secciones=None,
-  registrar, progreso)`, `SECCIONES` (`energia`, `fp`, `co`, `sc_co`),
+  registrar, progreso)`, `traer_fd(carpeta_base, aamm, ...)`, `SECCIONES`
+  (`energia`, `fp`, `co`, `sc_co`, `fd_cpf`, `fd_csf`, `fd_ctf`,
+  `prorrata`), `construir_fd`, `construir_matriz_prorrata`,
   `construir_energia/fp/co/sc_co`, `participacion_por_servicio` (CPF, CSF,
   CTF en memoria), `revisar_estructura`, `crear_carpetas_caso`,
   `validar_aamm`.
 - **Depende de:** `nucleo.utiles` (`normalizar`, `ErrorEntrada`),
-  `nucleo.formato` (`formatear_hoja`), `Script/config.py`,
+  `nucleo.formato` (`formatear_hoja`), `nucleo.prorrata_retiros`
+  (buscador y lector), `nucleo.rutas.buscar_archivo_sscc_desempeno`,
+  `nucleo.externos.indicadores_dco` (Traer FD), `Script/config.py`,
   `Script/arbol.py`. `nucleo` no importa nada de `cra`.
 - **Pendiente:** ver `BITACORA.md` → "Pendientes abiertos → CRA".
 

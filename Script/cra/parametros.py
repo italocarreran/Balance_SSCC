@@ -20,29 +20,43 @@ HOJA_ENERGIA = "ENERGIA"
 HOJA_FP = "FP"
 HOJA_CO = "CO"
 HOJA_SC_CO = "SC y CO"
+HOJA_FD_CPF = "FD_CPF"
+HOJA_FD_CSF = "FD_CSF"
+HOJA_FD_CTF = "FD_CTF"
+HOJA_PRORRATA = "PRORRATA_RETIROS"
 
 # Orden de las hojas en el libro, de fin a inicio (mismo criterio que
 # Balance_BESS.xlsx: arriba lo ultimo del calculo, abajo las entradas).
-# Por ahora solo estan las entradas con su carga ya definida; las de
-# calculo (CÁLCULO_CRA, PRORRATA_RETIROS, RESUMEN) y las entradas
-# pendientes (TC, COTAS, RENDIMIENTOS, CONDICION_EMBALSE, FD_*,
-# EMPRESAS) se agregan arriba cuando se cierren.
-ORDEN_HOJAS_SALIDA = [HOJA_SC_CO, HOJA_CO, HOJA_FP, HOJA_ENERGIA]
+# Por ahora solo estan las entradas con su carga ya definida (de
+# PRORRATA_RETIROS, solo el bloque 1: la matriz de prorratas); el
+# calculo (CÁLCULO_CRA, cuadros 2 y 3 de PRORRATA_RETIROS, RESUMEN) y
+# las entradas pendientes (TC, COTAS, RENDIMIENTOS, CONDICION_EMBALSE,
+# EMPRESAS) se agregan cuando se cierren.
+ORDEN_HOJAS_SALIDA = [
+    HOJA_PRORRATA,
+    HOJA_FD_CTF, HOJA_FD_CSF, HOJA_FD_CPF,
+    HOJA_SC_CO, HOJA_CO, HOJA_FP, HOJA_ENERGIA,
+]
 
 
 # ============================================================
-# CARPETAS DEL CASO -- PROPUESTA, sin confirmar con el usuario.
-#
-# Una subcarpeta por hoja de entrada, con el nombre de la hoja. Si se
-# decide otra estructura, se cambia aca.
+# CARPETAS DEL CASO -- una subcarpeta por hoja de entrada (confirmado
+# por el usuario el 2026-09-30). FD y prorrata de retiros son las MISMAS
+# fuentes que usa el BESS; "Prorrata retiros" lleva el mismo nombre que
+# en el caso BESS.
 # ============================================================
 
 CARPETA_ENERGIA = "Energia"
 CARPETA_FP = "FP"
 CARPETA_CO = "CO"
 CARPETA_SC_CO = "SC y CO"
+CARPETA_FD = "FD"
+CARPETA_PRORRATA = "Prorrata retiros"
 
-SUBCARPETAS_CASO = (CARPETA_ENERGIA, CARPETA_FP, CARPETA_CO, CARPETA_SC_CO)
+SUBCARPETAS_CASO = (
+    CARPETA_ENERGIA, CARPETA_FP, CARPETA_CO, CARPETA_SC_CO,
+    CARPETA_FD, CARPETA_PRORRATA,
+)
 
 
 # ============================================================
@@ -60,14 +74,26 @@ SUBCARPETAS_CASO = (CARPETA_ENERGIA, CARPETA_FP, CARPETA_CO, CARPETA_SC_CO)
 
 EXTENSIONES_EXCEL = (".xlsx", ".xlsm")
 
-# Traz. 6.1: Formato_Solicitud_SSAA_SSCC_Hidro_MesAAAA.xlsx. "MesAAAA"
-# no se usa para buscar (no se sabe si el mes va con nombre o numero):
-# el periodo se valida contra las columnas Año/Mes del propio archivo.
-PREFIJO_ENERGIA = "formato_solicitud_ssaa_sscc_hidro"
+# Reporte_CRA viene en .csv (confirmado por el usuario); se acepta
+# tambien en Excel por si alguna vez llega guardado asi.
+EXTENSIONES_REPORTE_CRA = (".csv",) + EXTENSIONES_EXCEL
 
-# Traz. 6.4.1: el ejemplo es fp_2603*.xlsx. PENDIENTE confirmar si el
-# nombre siempre lleva el AAMM; mientras tanto se busca solo "fp_".
-PREFIJO_FP = "fp_"
+# Traz. 6.1: Formato_Solicitud_SSAA_SSCC_Hidro_MesAAAA.xlsx, con el mes
+# en palabras: ..._Agosto2026 (confirmado por el usuario). {mes} es el
+# nombre del mes en minusculas y sin tildes; ademas se valida el
+# periodo contra las columnas Año/Mes del propio archivo.
+PREFIJO_ENERGIA = "formato_solicitud_ssaa_sscc_hidro_{mes}{anio}"
+
+MESES = (
+    "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+    "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+)
+# "Setiembre" tambien se usa en Chile: se acepta cualquiera de las dos.
+MESES_ALTERNATIVOS = {9: ("setiembre",)}
+
+# Traz. 6.4.1: fp_AAMM*.xlsx (el usuario confirmo que siempre lleva el
+# AAMM).
+PREFIJO_FP = "fp_{aamm}"
 
 # Traz. 6.4.2: cvar_cra_AAMM_*.xlsx.
 PREFIJO_CO = "cvar_cra_{aamm}"
@@ -78,18 +104,23 @@ PREFIJO_SOBRECOSTOS = "calculo_sobrecostossscc"
 
 
 # ============================================================
-# HOJA DE CADA ARCHIVO -- PENDIENTE: la trazabilidad no la dice.
+# HOJA DE CADA ARCHIVO
 #
-# None = "no se sabe": si el libro tiene una sola hoja se usa esa; si
-# tiene varias, el programa se detiene y las lista, en vez de adivinar
-# cual es. Cuando el usuario confirme el nombre, se escribe aca.
+#   "NOMBRE" = esa hoja (se para si no esta).
+#   0        = la primera hoja, sea cual sea (confirmado por el usuario
+#              para Reporte_CRA, que en Excel se llama
+#              Reporte_CRA_15min_AAMM y es la unica).
+#   None     = no confirmada: si el libro tiene una sola hoja se usa
+#              esa; si tiene varias, se para y las lista.
+#
+# Un .csv no tiene hojas: este valor no se usa.
 # ============================================================
 
 HOJA_ORIGEN_ENERGIA = None
 HOJA_ORIGEN_FP = None
 HOJA_ORIGEN_CO = None
-HOJA_ORIGEN_REPORTE_CRA = None
-HOJA_ORIGEN_SOBRECOSTOS = None
+HOJA_ORIGEN_REPORTE_CRA = 0
+HOJA_ORIGEN_SOBRECOSTOS = "SOBRECOSTOS"
 
 
 # ============================================================
@@ -234,3 +265,30 @@ LETRA_PERIODO_SOBRECOSTOS = "R"
 # Excel; la traz. 6.6.3 advierte que no sirve para dias de 92/100
 # periodos (cambio de hora) y que eso se revisa aparte.
 PERIODOS_POR_DIA_FORMULA_SC = 96
+
+
+# ============================================================
+# FD_CPF, FD_CSF, FD_CTF -- del SSCC_Desempeño_* del DCO, la misma
+# fuente del BESS (confirmado por el usuario). Se copian las tres hojas
+# horarias con los rangos que ya usa Script/Fd/Desempeno_Horario.py:
+# encabezados en la fila 11, datos desde la 12.
+# ============================================================
+
+FILA_ENCABEZADO_FD = 11
+
+HOJAS_FD = {
+    # seccion: (hoja de salida, hoja del SSCC_Desempeño, columnas)
+    "fd_cpf": (HOJA_FD_CPF, "CPF Horario", "BCDEFGHIJ"),
+    "fd_csf": (HOJA_FD_CSF, "CSF Horario", "BCDEFGH"),
+    "fd_ctf": (HOJA_FD_CTF, "CTF Horario", "BCDEFGHI"),
+}
+
+
+# ============================================================
+# PRORRATA_RETIROS, bloque 1 (traz. 8.1): la matriz periodo x empresa
+# pagadora. Sale de Prorrata_Retiros_<AAMM>_pre/def.xlsx, hoja
+# "Prorrata 15min", la misma fuente del BESS (se usa su lector).
+# ============================================================
+
+COLUMNA_PERIODO_PRORRATA = "Cuarto de Hora"
+PERIODOS_POR_DIA = 96

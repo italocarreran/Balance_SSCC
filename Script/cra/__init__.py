@@ -11,6 +11,7 @@ nunca importa nada de aca. La ventana es Balance_CRA.py.
     lectura.py        Busqueda de archivos y lectura por letra/fila de Excel.
     rutas.py          Rutas del caso y validacion del AAMM.
     hojas_entrada.py  ENERGIA, FP, CO y SC y CO.
+    fuentes_bess.py   FD_CPF/CSF/CTF y la matriz de PRORRATA_RETIROS (fuentes del BESS).
     escritura.py      Balance_CRA.xlsx conservando las hojas que no se tocan.
     proceso.py        Las secciones y generar_balance_cra().
     estructura.py     El arbol que dibuja la ventana.
@@ -30,7 +31,8 @@ from .hojas_entrada import (
     construir_sc_co_desde_sobrecostos,
     participacion_por_servicio,
 )
-from .proceso import SECCIONES, generar_balance_cra
+from .fuentes_bess import construir_fd, construir_matriz_prorrata
+from .proceso import SECCIONES, generar_balance_cra, traer_fd
 from .rutas import (
     buscar_entrada,
     crear_carpetas_caso,
@@ -43,5 +45,6 @@ __all__ = [
     "construir_co", "construir_energia", "construir_fp", "construir_sc_co",
     "construir_sc_co_desde_reporte", "construir_sc_co_desde_sobrecostos",
     "participacion_por_servicio", "SECCIONES", "generar_balance_cra",
+    "construir_fd", "construir_matriz_prorrata", "traer_fd",
     "buscar_entrada", "crear_carpetas_caso", "resolver_rutas", "validar_aamm",
 ]

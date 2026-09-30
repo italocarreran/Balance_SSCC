@@ -17,13 +17,13 @@ from .rutas import ENTRADAS, buscar_entrada, resolver_rutas
 # Hojas del libro original que todavia no tienen su carga definida
 # (traz. 3.1 y 17): se muestran para que se vea lo que falta.
 HOJAS_PENDIENTES = [
-    ("TC", "origen CMg: falta definir archivo y columna"),
+    ("TC", "origen CMg: pendiente"),
     ("COTAS", "origen/formato pendiente"),
-    ("RENDIMIENTOS", "maestro existente: falta definir de donde se lee"),
+    ("RENDIMIENTOS", "maestro: falta definir de donde se lee"),
     ("CONDICION_EMBALSE", "regla/origen pendiente"),
-    ("FD_CPF / FD_CSF / FD_CTF", "origen pendiente"),
     ("EMPRESAS y unidades candidatas", "maestros: falta definir de donde se leen"),
-    ("CÁLCULO_CRA / PRORRATA_RETIROS / RESUMEN", "calculo: espera las entradas"),
+    ("CÁLCULO_CRA", "calculo: espera las entradas"),
+    ("RESUMEN", "calculo: espera CÁLCULO_CRA"),
 ]
 
 
@@ -46,8 +46,8 @@ def revisar_estructura(carpeta_base, aamm):
     filas = []
 
     carpetas = {}
-    for id_, carpeta, prefijo, descripcion in ENTRADAS:
-        carpetas.setdefault(carpeta, []).append((id_, prefijo, descripcion))
+    for id_, carpeta, patron, _ in ENTRADAS:
+        carpetas.setdefault(carpeta, []).append((id_, patron))
 
     for carpeta, entradas in carpetas.items():
         ruta_carpeta = rutas[carpeta]
@@ -57,8 +57,8 @@ def revisar_estructura(carpeta_base, aamm):
             "ok" if existe else "falta", ruta=ruta_carpeta, es_carpeta=True,
         ))
 
-        for id_, prefijo, descripcion in entradas:
-            patron = f"{prefijo.format(aamm=aamm or 'AAMM')}*"
+        for id_, patron in entradas:
+            patron = patron.replace("<AAMM>", aamm or "<AAMM>")
             try:
                 ruta = buscar_entrada(rutas, id_, aamm or "")
             except ErrorEntrada as error:
@@ -87,10 +87,12 @@ def revisar_estructura(carpeta_base, aamm):
     por_hoja = {hoja: seccion for seccion, (hoja, _) in SECCIONES.items()}
     for hoja in p.ORDEN_HOJAS_SALIDA:
         escrita = hoja in hojas_escritas
+        detalle = "" if escrita else "sin generar"
+        if hoja == p.HOJA_PRORRATA:
+            detalle = "solo el bloque 1 (matriz de prorratas)"
         filas.append(_fila(
             1, f"hoja_{por_hoja[hoja]}", f"hoja '{hoja}'",
-            "ok" if escrita else "pendiente",
-            "" if escrita else "sin generar", ruta=salida,
+            "ok" if escrita else "pendiente", detalle, ruta=salida,
         ))
 
     for hoja, motivo in HOJAS_PENDIENTES:

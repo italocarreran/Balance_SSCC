@@ -4,7 +4,8 @@
 > (`Balance_BESS.py`, todo lo de abajo) y, en construcción, la
 > remuneración CRA (`Balance_CRA.py`, paquete `Script/cra/`, dominio en
 > `docs/Trazabilidad_CRA_Periodo_Generico_v3.md`). Del CRA están hoy solo
-> las hojas de entrada `ENERGIA`, `FP`, `CO` y `SC y CO`; ver `MAPA.md` y
+> las hojas de entrada `ENERGIA`, `FP`, `CO`, `SC y CO`, `FD_*` y la matriz
+> de `PRORRATA_RETIROS`; ver `MAPA.md` y
 > `BITACORA.md` → "Pendientes abiertos → CRA".
 
 Herramienta en Python que reemplaza, hoja por hoja, el cálculo hecho hoy en

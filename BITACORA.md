@@ -14,37 +14,40 @@ Referencia: `docs/Trazabilidad_CRA_Periodo_Generico_v3.md`. Nada de esto
 se adivinó: lo que depende de una respuesta quedó como constante en
 `Script/cra/parametros.py` o como hoja PENDIENTE en el árbol.
 
-- **Hoja de cada archivo origen.** La trazabilidad da letras y fila de
-  inicio pero no el nombre de la hoja. Hoy (`HOJA_ORIGEN_* = None`) se lee
-  la única hoja si hay una, y si hay varias el programa se detiene y las
-  lista. El `Cálculo_SobrecostosSSCC_*.xlsm` casi seguro tiene varias:
-  falta su nombre para poder generar `SC y CO`.
-- **Estructura de carpetas del caso.** Se propuso una subcarpeta por hoja
-  (`Energia/`, `FP/`, `CO/`, `SC y CO/`); confirmar o cambiar.
-- **Nombres de archivo.** `fp_*`: ¿lleva siempre el AAMM (traz. 17)?
-  `Formato_Solicitud_SSAA_SSCC_Hidro_MesAAAA`: ¿el mes va con nombre
-  (`Agosto2026`) o número? Hoy se busca solo por el prefijo y se valida el
-  período con las columnas Año/Mes del archivo.
-- **ENERGIA: de `kWhD`/`kWhR` a `Neto` (M)**, que es lo que usa
-  `CÁLCULO_CRA` (traz. 6.1, pendiente de cierre). No se calculó `Neto`.
-- **CO: de `CO!N:R` + `FP!U:X` a `CO_Barra_Propia`** (traz. 6.4,
-  pendiente de cierre): incluye el maestro configuración → barra/embalse
-  (`CO!AA:AB`).
-- **TC:** "origen CMg", pero ¿qué archivo y qué columna? (¿el mismo CSV
-  15-minutal que usa el BESS, o otro?).
-- **RENDIMIENTOS, EMPRESAS, unidades candidatas (`AQ:AS`), diccionario
-  SC/CO → Nombre CRA:** son maestros; ¿de qué archivo se leen (algo tipo
-  `Auxiliares/Centrales.xlsx` del BESS)?
-- **FD_CPF/CSF/CTF y prorrata de retiros:** ¿son las mismas fuentes que ya
-  trae el BESS (`SSCC_Desempeño_*` del DCO y `Prorrata_Retiros_<AAMM>`
-  hoja `Prorrata 15min`)? Si sí, se reutiliza ese código.
-- **COTAS y CONDICION_EMBALSE:** siguen pendientes en la trazabilidad.
+- **ENERGIA `K`, `L` y `M` (`Neto`).** El usuario confirmó que son
+  fórmulas (K y L, una corrección sobre kWhD/kWhR; M, el `Neto` que usa
+  `CÁLCULO_CRA`). No están en la trazabilidad (6.1 lo deja "pendiente de
+  cierre"): hace falta el texto de las fórmulas de `K10`, `L10` y `M10`,
+  y de cualquier tabla o celda que consulten.
+- **CO: de dónde sale `CO!L`.** `CÁLCULO_CRA!Q` (`CO_Barra_Propia`) es
+  `SUMIFS(CO!L:L; CO!B mes; C día; D hora; G embalse; H configuración)`.
+  Solo está definida la carga de `CO!N:R` (cvar) y `FP!U:X` (fp); las
+  columnas `CO!B:L` (y `CO!AA:AB`, unidad → embalse) son fórmulas que
+  hay que conocer: la fila 9 de `CO!B:L` y `CO!AA:AB`, y las columnas con
+  fórmula de `FP` si `CO` las usa.
+- **TC:** pendiente (usuario, 2026-09-30).
+- **RENDIMIENTOS, EMPRESAS, unidades candidatas, COTAS,
+  CONDICION_EMBALSE:** fuera de foco por ahora (usuario: "enfocarnos en lo
+  que tenemos").
+- **Sobrecostos, `Clave Año_Mes`:** ¿el archivo trae un solo mes o
+  varios? Hoy se cargan todas las filas y solo se avisa si hay fechas de
+  otro mes.
+- **Reporte_CRA en CSV:** se detecta el separador (`;`, `,` o tab); con
+  `;` la coma es el decimal, y las fechas en texto se leen año-mes-día o
+  día-mes-año (nunca mes-día-año). Confirmar con el CSV real.
+- **FD_CPF/CSF/CTF:** se copian enteras (todas las unidades, encabezados
+  de la fila 11). Confirmar contra las hojas `FD_*` del Excel del CRA si
+  tienen otra forma; el filtro por unidad candidata queda para
+  `CÁLCULO_CRA`.
+- **PRORRATA_RETIROS:** solo el bloque 1 (matriz período × empresa, en
+  orden alfabético). Los cuadros 2 y 3 esperan a `CÁLCULO_CRA`.
 - **Cambio de hora (92/100 períodos):** la `Clave_Bloque` de SC replica
-  el `*96` del Excel; revisar con un mes con cambio de hora.
-- Validar las cuatro hojas contra los archivos reales de un período (hoy
-  solo hay pruebas sintéticas armadas con la forma de la trazabilidad).
-- Abrir `Balance_CRA.py` en Windows (en el entorno de esta sesión no hay
-  tkinter: la ventana solo se compiló y pasó `pyflakes`).
+  el `*96` del Excel y la cobertura de la prorrata avisa si no son
+  `días × 96`; revisar con un mes con cambio de hora.
+- Validar todas las hojas contra los archivos reales de un período (hoy
+  solo hay pruebas sintéticas).
+- Abrir `Balance_CRA.py` en Windows (acá no hay tkinter: solo se compiló
+  y pasó `pyflakes`).
 
 ### BESS
 
@@ -4135,4 +4138,44 @@ abiertos → CRA".
 `tests/test_cra_entradas.py`, con archivos sintéticos armados con la forma
 de la trazabilidad). La ventana no se pudo abrir: el entorno no tiene
 tkinter.
+
+---
+
+## 2026-09-30 (2) — CRA: respuestas del usuario, FD_* y matriz de PRORRATA_RETIROS
+
+**Respuestas del usuario** a las preguntas de la entrada anterior:
+
+1. La hoja de `Cálculo_SobrecostosSSCC_*.xlsm` es `SOBRECOSTOS`.
+   `Reporte_CRA` es un **.csv** (`Reporte_CRA_15min_AAMM`): se toma tal
+   cual (si llegara en Excel, la primera hoja).
+2. La estructura de carpetas (una por hoja) queda.
+3. `fp_` lleva siempre el AAMM → se busca `fp_<AAMM>*`. El de energía es
+   `..._Hidro_Agosto2026` → se busca con el mes en palabras (también
+   `Setiembre`).
+4. ENERGIA `K`, `L`, `M` son fórmulas que no están en la trazabilidad →
+   pregunta abierta (ver pendientes).
+5. No quedó claro qué se preguntaba sobre `CO_Barra_Propia` → se
+   reformuló en pendientes.
+6. TC pendiente. 7. Enfocarse en lo que hay.
+8. FD y prorrata de retiros son las mismas fuentes del BESS → se
+   reutiliza su código.
+
+**Qué se hizo:**
+
+- `lectura.py` lee **CSV** con la misma regla de letra/fila (separador
+  detectado, coma decimal con `;`, fechas en texto sin mes-día-año), la
+  hoja por posición (`0` = primera) y encuentra la hoja aunque cambien
+  mayúsculas/tildes.
+- `SC y CO` avisa (no corta) si hay fechas fuera del período.
+- Hojas nuevas en `Balance_CRA.xlsx`, en `fuentes_bess.py`:
+  - `FD_CPF`, `FD_CSF`, `FD_CTF`: copia de `CPF/CSF/CTF Horario` del
+    `SSCC_Desempeño_*` (rangos de `Script/Fd/Desempeno_Horario.py`), con
+    sus encabezados reales. Carpeta `FD/` del caso, con botón **Traer**
+    que usa la misma función del BESS (`Indicadores_DCO.traer_fd`).
+  - `PRORRATA_RETIROS`, bloque 1: la matriz período × empresa desde
+    `Prorrata 15min`, leída con `nucleo.prorrata_retiros`. Avisa si los
+    períodos no son exactamente `1..días×96`.
+
+**Verificación:** `py_compile`, `pyflakes` del CRA, 164 pruebas (13 del
+CRA). La ventana sigue sin poder abrirse acá (sin tkinter).
 
