@@ -1,0 +1,17 @@
+# Configuracion local por PC/usuario (ver METODOLOGIA.md #5)
+config.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Salidas y archivos de debug generados por caso (no son parte del repo)
+Balance_BESS.xlsx
+Control_corrida.xlsx
+# nombres anteriores de la salida, por si quedo alguno dando vueltas
+Consolidado_entradas.xlsx
+Pagos_BESS.xlsx
+debug_*.xlsx
