@@ -319,7 +319,7 @@ CAMPO_FECHA_HORA_FD = "Fecha Hora"
 LETRA_FECHA_FD = "B"
 LETRA_HORA_FD = "C"
 # La unidad (InfoTecnica): por esta columna se filtra contra la hoja
-# "diccionario" de centrales_cra.xlsx (FD_CPF / FD_CSF / FD_CTF).
+# "diccionario" de centrales_cra.xlsx (columna FD, la misma para las tres).
 LETRA_UNIDAD_FD = "D"
 
 HOJAS_FD = {

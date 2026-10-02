@@ -574,8 +574,9 @@ Dominio: `docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md`. Mape
 ### D.2 `Auxiliares/centrales_cra.xlsx` — maestros del CRA ✅
 
 - **Archivo real de referencia**: `docs/centrales_cra_real.xlsx` (entregado
-  como `centrales_cra_homologado_SSCC_equivalencias.xlsx`; en el caso se
-  llama `centrales_cra.xlsx`). Pruebas: `PruebaMaestroReal`.
+  como `centrales_cra_homologado_SSCC_equivalencias.xlsx` y reemplazado por
+  `centrales_cra_diccionario_FD_ordenado.xlsx`; en el caso se llama
+  `centrales_cra.xlsx`). Pruebas: `PruebaMaestroReal`.
 - **Tres hojas**, cada una con un título en `B5` ("Cuadro N° ...") y los
   encabezados en la **fila 8**, datos desde la 9, desde la columna **B**.
   El programa busca la fila de encabezados por su texto, no por posición,
@@ -585,13 +586,15 @@ Dominio: `docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md`. Mape
   |---|---|---|---|
   | `centrales_cra` | `Configuracion` | 56 | filtra el costo variable → `cvar_cra_<AAMM>` |
   | `empresas` | `UNIDAD/CONFIGURACION`, `EMPRESA` | 81 | maestro EMPRESAS (para `CÁLCULO_CRA`) |
-  | `diccionario` | `UNIDAD/CONFIGURACION`, `FD_CPF`, `FD_CSF`, `FD_CTF` | 81 | qué unidades del `SSCC_Desempeño` entran a cada `FD_*` |
+  | `diccionario` | `UNIDAD/CONFIGURACION`, `FD` | 81 | qué unidades del `SSCC_Desempeño` entran a las `FD_*` (una sola columna: era igual para CPF, CSF y CTF) |
 
 - **Diccionario:** una celda puede listar varias unidades separadas por
   `;` (`HE CIPRESES U1; HE CIPRESES U2; HE CIPRESES U3`); las
-  configuraciones repiten las unidades de su central. Únicas: 27 CPF,
-  25 CSF (ANTUCO no tiene), 27 CTF. Se comparan normalizadas contra la
-  columna `Unidad` (D) de las hojas horarias.
+  configuraciones repiten las unidades de su central. 27 unidades
+  únicas, las mismas para las tres hojas. Se comparan normalizadas contra
+  la columna `Unidad` (D) de las hojas horarias. (Una versión anterior
+  tenía `FD_CPF`/`FD_CSF`/`FD_CTF` por separado; el usuario las unificó
+  porque eran iguales — salvo ANTUCO, que no tenía CSF.)
 - **Trampa:** el `styles.xml` del archivo mide **~11 MB** (estilos
   arrastrados del libro de origen) y openpyxl tarda ~9 s en abrirlo. Por
   eso `maestros.py` lee los valores directo del XML (con openpyxl de

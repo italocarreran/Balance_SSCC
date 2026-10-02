@@ -1058,9 +1058,9 @@ importable como cualquier módulo.
 - **`ENERGIA`:** B:J del origen + `kWhD corregido`, `kWhR corregido` y
   `Neto` (`corregir_energia()`, fórmulas K/L/M de la traz. 6.1).
 - **`FD_*`:** `Fecha Hora` (clave horaria, con `Unidad`) + la hoja horaria
-  del `SSCC_Desempeño`, **solo** con las unidades de esa columna de la hoja
-  `diccionario` de `centrales_cra.xlsx` (avisa las del diccionario sin
-  filas).
+  del `SSCC_Desempeño`, **solo** con las unidades de la columna `FD` de la
+  hoja `diccionario` de `centrales_cra.xlsx` (la misma lista para las tres;
+  avisa las del diccionario sin filas).
 - **Maestros (`maestros.py`):** `Auxiliares/centrales_cra.xlsx` con tres
   hojas (`centrales_cra`, `empresas`, `diccionario`; ver
   `docs/Estructura_Archivos_Reales.md` §D.2). Encabezados buscados por

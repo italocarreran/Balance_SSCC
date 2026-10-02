@@ -4,9 +4,11 @@ Auxiliares/centrales_cra.xlsx: los maestros del CRA, en un solo libro.
 
     hoja "centrales_cra"  Configuracion                 -> filtra cvar_cra
     hoja "empresas"       UNIDAD/CONFIGURACION, EMPRESA -> (CÁLCULO_CRA)
-    hoja "diccionario"    UNIDAD/CONFIGURACION, FD_CPF, FD_CSF, FD_CTF
+    hoja "diccionario"    UNIDAD/CONFIGURACION, FD
                           -> que unidades del SSCC_Desempeño entran a
-                             cada hoja FD_*
+                             las hojas FD_* (la misma lista para CPF, CSF
+                             y CTF: el usuario dejo una sola columna
+                             porque eran iguales)
 
 Cada hoja trae un titulo ("Cuadro N° ...") arriba de los encabezados: la
 fila de encabezados se busca por su texto, nunca por posicion (mismo
@@ -35,7 +37,7 @@ HOJA_DICCIONARIO = "diccionario"
 COL_CONFIGURACION = "Configuracion"
 COL_UNIDAD = "UNIDAD/CONFIGURACION"
 COL_EMPRESA = "EMPRESA"
-COLS_FD = {"fd_cpf": "FD_CPF", "fd_csf": "FD_CSF", "fd_ctf": "FD_CTF"}
+COL_FD = "FD"
 
 SEPARADOR_UNIDADES = ";"
 
@@ -230,19 +232,18 @@ def leer_empresas(ruta):
     }
 
 
-def leer_unidades_fd(ruta, seccion):
+def leer_unidades_fd(ruta):
     """
-    Las unidades del SSCC_Desempeño que entran a la hoja FD de esa
-    seccion ("fd_cpf", "fd_csf", "fd_ctf"): todas las de la columna,
-    separando las listas por ";" y sin repetir. En el orden del maestro.
+    Las unidades del SSCC_Desempeño que entran a las hojas FD_* (columna
+    FD del diccionario): separando las listas por ";" y sin repetir, en
+    el orden del maestro. Es la misma lista para CPF, CSF y CTF.
     """
 
-    columna = COLS_FD[seccion]
-    tabla = leer_tabla(ruta, HOJA_DICCIONARIO, [COL_UNIDAD, columna])
+    tabla = leer_tabla(ruta, HOJA_DICCIONARIO, [COL_UNIDAD, COL_FD])
 
     unidades = []
     for fila in tabla:
-        celda = fila[columna]
+        celda = fila[COL_FD]
         if celda is None:
             continue
         for unidad in str(celda).split(SEPARADOR_UNIDADES):

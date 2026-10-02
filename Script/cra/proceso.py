@@ -58,7 +58,7 @@ def _hoja_sc_co(rutas, aamm, registrar):
 def _hoja_fd(seccion):
     def construir(rutas, aamm, registrar):
         maestro = exigir_entrada(rutas, "centrales_cra", aamm)
-        unidades = leer_unidades_fd(maestro, seccion)
+        unidades = leer_unidades_fd(maestro)
         ruta = exigir_entrada(rutas, "sscc_desempeno", aamm)
         registrar(
             f"  Leyendo {ruta.name} ({len(unidades)} unidad(es) del "

@@ -341,7 +341,7 @@ class PruebaProceso(unittest.TestCase):
         maestro_cra(
             self.base / p.CARPETA_AUXILIARES / p.ARCHIVO_CENTRALES_CRA,
             ["RAPEL"],
-            diccionario=[("RAPEL", "HE RAPEL U1", "HE RAPEL U1", "HE RAPEL U1")],
+            diccionario=[("RAPEL", "HE RAPEL U1")],
         )
 
     def tearDown(self):
@@ -423,15 +423,14 @@ class PruebaMaestroReal(unittest.TestCase):
         self.assertEqual(empresas["CANUTILLAR_U1"], "COLBUN")
 
     def test_unidades_fd_separadas_y_sin_repetir(self):
-        cpf = cra.leer_unidades_fd(MAESTRO_REAL, "fd_cpf")
-        csf = cra.leer_unidades_fd(MAESTRO_REAL, "fd_csf")
+        unidades = cra.leer_unidades_fd(MAESTRO_REAL)
 
-        self.assertEqual(len(cpf), 27)
-        self.assertIn("HE ANGOSTURA U3", cpf)   # venia en una lista con ";"
-        self.assertEqual(len(cpf), len(set(cpf)))
-        # ANTUCO no tiene CSF.
-        self.assertNotIn("HE ANTUCO U1", csf)
-
+        # Una sola columna FD para las tres hojas: 27 unidades unicas
+        # (las configuraciones repiten las de su central).
+        self.assertEqual(len(unidades), 27)
+        self.assertEqual(len(unidades), len(set(unidades)))
+        self.assertIn("HE ANGOSTURA U3", unidades)  # venia en una lista ";"
+        self.assertIn("HE ANTUCO U1", unidades)
 
 if __name__ == "__main__":
     unittest.main()

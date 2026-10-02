@@ -4359,3 +4359,16 @@ maestro real (56 configuraciones, 81 empresas, 27/25/27 unidades FD) y
 del filtro de FD (incluida una unidad escrita con otro formato que igual
 entra, y una del diccionario sin filas que se avisa).
 
+---
+
+## 2026-10-02 (4) — Diccionario de FD con una sola columna
+
+El usuario cambió la hoja `diccionario` de `centrales_cra.xlsx`: en vez de
+`FD_CPF`/`FD_CSF`/`FD_CTF` deja una sola columna `FD`, porque eran
+iguales para los tres. `leer_unidades_fd(ruta)` ya no recibe la sección:
+la misma lista (27 unidades) filtra las tres hojas `FD_*`. Se reemplazó
+`docs/centrales_cra_real.xlsx` por el archivo nuevo
+(`centrales_cra_diccionario_FD_ordenado.xlsx`). Único efecto visible: en
+el archivo anterior ANTUCO no tenía CSF; ahora entra a las tres y, si no
+tiene filas en `CSF Horario`, `FD_CSF` lo avisa. Suite en verde.
+

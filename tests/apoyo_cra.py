@@ -10,7 +10,7 @@ def maestro_cra(ruta, configuraciones, empresas=None, diccionario=None):
     tres hojas, titulo en B5, encabezados en la fila 8, datos desde la 9
     en la columna B.
 
-    diccionario: [(unidad/configuracion, fd_cpf, fd_csf, fd_ctf), ...]
+    diccionario: [(unidad/configuracion, fd), ...]
     """
 
     libro = Workbook()
@@ -19,7 +19,7 @@ def maestro_cra(ruta, configuraciones, empresas=None, diccionario=None):
         "centrales_cra": (["Configuracion"], [[c] for c in configuraciones]),
         "empresas": (["UNIDAD/CONFIGURACION", "EMPRESA"],
                      [list(f) for f in (empresas or [])]),
-        "diccionario": (["UNIDAD/CONFIGURACION", "FD_CPF", "FD_CSF", "FD_CTF"],
+        "diccionario": (["UNIDAD/CONFIGURACION", "FD"],
                         [list(f) for f in (diccionario or [])]),
     }
     for hoja, (encabezados, filas) in tablas.items():
