@@ -33,6 +33,13 @@ se adivinó: lo que depende de una respuesta quedó como constante en
 - **CO: de dónde sale `CO!L`** — resuelto en la v5 (6.4): `L = I × K`,
   CO base × FP por barra + día + hora. Falta solo lo de los maestros.
 - **TC:** pendiente (usuario, 2026-09-30).
+- **`fp_` / `cvar_cra_` desde la red** (`Script/Politicas`): confirmar en
+  Windows que las rutas de `entradas_sscc.py` siguen vigentes — sobre todo
+  que la carpeta de `progdiar_SEN` es el año de **dos** dígitos (`.../26/`),
+  como arma el script original — y que `centrales_cra.xlsx` va en
+  `Auxiliares/` del caso. Hoy, si falta la política de un día, se corta
+  (no arma un mes incompleto): confirmar que así sirve también para el
+  "Pre".
 - **RENDIMIENTOS, EMPRESAS, unidades candidatas, COTAS,
   CONDICION_EMBALSE:** fuera de foco por ahora (usuario: "enfocarnos en lo
   que tenemos").
@@ -4271,4 +4278,41 @@ entradas viejas de esta bitácora, que no se editan).
   con una copia recalculada.
 
 **Verificación:** 18 pruebas del CRA, suite completa en verde.
+
+---
+
+## 2026-10-02 — CRA: `fp_<AAMM>` y `cvar_cra_<AAMM>` los arma el programa
+
+**Pedido del usuario:** con `entradas_sscc.py` + `archivo_de_configuracion.yaml`
+(el script que se usa hoy para preparar las entradas del CRA y de otros
+cálculos) como base solo para rutas y lógica, armar `fp_AAMM` y
+`cvar_cra_AAMM` integrado al proyecto.
+
+**Qué se tomó del script (solo el paso `costo_variable`):** las rutas
+(`progdiar_SEN/<AA>/PO*.csv|xlsx`, `DPID/.../PID_CDC_<HH>/PO*_<HH>.csv`,
+`CMgReales/<AAMM>/Politicas/PRG*_<HH>.xlsx`), la lectura de cada archivo
+(despivoteo, tercera hoja B:Z para FP), la regla de reemplazo PID
+(horas ≥ HH, de la 1 a la 23) y el filtro con `centrales_cra.xlsx`.
+Nombres de salida iguales: `fp_<AAMM>_1_<N>.xlsx`,
+`cvar_cra_<AAMM>_1_<N>.xlsx`. **No** se tomó: el YAML (el período sale de
+la ventana; las rutas son constantes del módulo), las carpetas
+`input/output` por versión, el hack `dia == 41`, ni el resto de los pasos.
+
+**Cambios respecto del original:** la columna de configuración y la de
+barra se toman por posición (el encabezado de la primera es la fecha, el
+de la segunda trae espacios); si falta la política de un día se corta
+con la lista completa (el original fallaba en el primero y lo tapaba con
+un `except` general); se avisan PID con programa pero sin política y
+configuraciones de `centrales_cra` sin datos.
+
+**Integración:** paquete hermano `Script/Politicas/` (sin `nucleo`,
+`ErrorPoliticas`), envuelto por `cra.generar_politicas`; carpeta nueva
+`Auxiliares/` en el caso CRA con `centrales_cra.xlsx`; botones
+**Generar** en las filas de `FP/` y `CO/`. Se comprobó que la hoja `FP` y
+la hoja `CO` leen tal cual lo que se genera.
+
+**Verificación:** 175 pruebas (6 nuevas en `tests/test_cra_politicas.py`,
+con un árbol de red falso: mes completo, una reprogramación PID, un PID
+sin política, un día faltante, dos archivos del período). Las rutas
+reales de `nas-cen1` no se pudieron probar desde acá.
 

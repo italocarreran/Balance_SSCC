@@ -61,9 +61,13 @@ Script/
         rutas.py               <- rutas del caso y validar_aamm
         hojas_entrada.py       <- ENERGIA, FP, CO, SC y CO
         fuentes_bess.py        <- FD_CPF/CSF/CTF y matriz de PRORRATA_RETIROS
+        politicas.py           <- botones Generar de fp_ y cvar_cra_
         escritura.py           <- Balance_CRA.xlsx (conserva lo que no toca)
         proceso.py             <- SECCIONES y generar_balance_cra()
         estructura.py          <- el arbol que dibuja Balance_CRA.py
+    Politicas/
+        __init__.py
+        Costos_Variables.py    <- fp_<AAMM> y cvar_cra_<AAMM> desde las PO/PID
     Cmg/
         __init__.py
         Extrae_CMG_barras.py   <- arma cmg.xlsx desde el CSV 15-minutal
@@ -1069,6 +1073,34 @@ importable como cualquier módulo.
   `nucleo.externos.indicadores_dco` (Traer FD), `Script/config.py`,
   `Script/arbol.py`. `nucleo` no importa nada de `cra`.
 - **Pendiente:** ver `BITACORA.md` → "Pendientes abiertos → CRA".
+
+## `Script/Politicas/Costos_Variables.py`
+
+- **Qué hace:** arma `fp_<AAMM>_1_<N>.xlsx` y `cvar_cra_<AAMM>_1_<N>.xlsx`
+  (las entradas de las hojas `FP` y `CO` del CRA) desde las políticas de
+  operación. Es el paso `costo_variable` de `entradas_sscc.py` (autor
+  original: Gerardo.Vieyra), reescrito: se tomaron rutas, nombres y
+  lógica, nada más.
+- **Lee, por cada día del mes:**
+  - `RAIZ_POLITICAS/<AA>/PO<AAMMDD>.csv` — costo variable por
+    configuración y hora (se despivotea; celdas vacías fuera);
+  - reprogramaciones PID, horas 1..23: si existe
+    `RAIZ_PRG/<AAMM>/Politicas/PRG<AAMMDD>_<HH>.xlsx`, la política
+    `RAIZ_PID/20AA/PID_20AAMM/PID_20AAMMDD/Publicacion/PID_CDC_<HH>/PO<AAMMDD>_<HH>.csv`
+    reemplaza las horas ≥ HH (gana la última que cubre cada hora);
+  - `RAIZ_POLITICAS/<AA>/PO<AAMMDD>.xlsx`, tercera hoja, B:Z — FP por
+    barra y hora (sin PID, igual que el original).
+- **Filtra** el costo variable a las configuraciones de
+  `Auxiliares/centrales_cra.xlsx` (columna `Configuracion`) → `cvar_cra`.
+- **Corta** si falta la política de algún día (lista todas las que
+  faltan): no arma un mes incompleto. Avisa PID sin política y
+  configuraciones de `centrales_cra` sin costo variable.
+- **Expone:** `construir(aamm, que, ruta_centrales_cra, raiz_*,
+  registrar, progreso)`, las `ruta_*` y `nombre_salida()`. Las tres raíces
+  de red son constantes del módulo (UNC de `nas-cen1`).
+- **Lo usa:** `Script/cra/politicas.py` (`cra.generar_politicas`), que
+  escribe en `FP/` y `CO/` y se niega a dejar dos archivos del período.
+- **Depende de:** solo pandas/openpyxl. Error propio: `ErrorPoliticas`.
 
 ## `Script/arbol.py`
 

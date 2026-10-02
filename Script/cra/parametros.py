@@ -52,11 +52,17 @@ CARPETA_CO = "CO"
 CARPETA_SC_CO = "SC y CO"
 CARPETA_FD = "FD"
 CARPETA_PRORRATA = "Prorrata retiros"
+CARPETA_AUXILIARES = "Auxiliares"
 
 SUBCARPETAS_CASO = (
     CARPETA_ENERGIA, CARPETA_FP, CARPETA_CO, CARPETA_SC_CO,
-    CARPETA_FD, CARPETA_PRORRATA,
+    CARPETA_FD, CARPETA_PRORRATA, CARPETA_AUXILIARES,
 )
+
+# Las configuraciones del CRA (columna "Configuracion"): con esto se
+# filtra el costo variable para armar cvar_cra (entradas_sscc.py). Es un
+# maestro: va en Auxiliares/ con nombre fijo.
+ARCHIVO_CENTRALES_CRA = "centrales_cra.xlsx"
 
 
 # ============================================================

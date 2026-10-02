@@ -40,6 +40,7 @@ def resolver_rutas(carpeta_base):
         "sc_co": base / p.CARPETA_SC_CO,
         "fd": base / p.CARPETA_FD,
         "prorrata": base / p.CARPETA_PRORRATA,
+        "auxiliares": base / p.CARPETA_AUXILIARES,
         "salida": base / p.ARCHIVO_SALIDA,
     }
 
@@ -104,7 +105,14 @@ def _buscar_prorrata(carpeta, aamm):
     return buscar_archivo_prorrata(carpeta, aamm)
 
 
+def _buscar_centrales_cra(carpeta, aamm):
+    ruta = Path(carpeta) / p.ARCHIVO_CENTRALES_CRA
+    return ruta if ruta.is_file() else None
+
+
 ENTRADAS = [
+    ("centrales_cra", "auxiliares", p.ARCHIVO_CENTRALES_CRA,
+     _buscar_centrales_cra),
     ("energia", "energia",
      "Formato_Solicitud_SSAA_SSCC_Hidro_<Mes><AAAA>.xlsx", _buscar_energia),
     ("fp", "fp", "fp_<AAMM>*.xlsx", _buscar_fp),

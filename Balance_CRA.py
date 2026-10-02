@@ -8,12 +8,14 @@ el arbol del caso con el estado de cada entrada (OK/FALTA/PENDIENTE) y
 un boton en cada fila que se puede generar.
 
     <CARPETA_BASE>/
+        Auxiliares/
+            centrales_cra.xlsx             (configuraciones del CRA)
         Energia/
             Formato_Solicitud_SSAA_SSCC_Hidro_*.xlsx
         FP/
-            fp_*.xlsx
+            fp_<AAMM>_1_<N>.xlsx           [Generar]
         CO/
-            cvar_cra_<AAMM>_*.xlsx
+            cvar_cra_<AAMM>_1_<N>.xlsx     [Generar]
         SC y CO/
             Reporte_CRA*.csv
             Cálculo_SobrecostosSSCC_*.xlsm (hoja SOBRECOSTOS)
@@ -270,6 +272,12 @@ def main():
 
         if fila["id"] == "sscc_desempeno":
             return "Traer", lambda: lanzar(cra.traer_fd)
+
+        if fila["id"] == "fp":
+            return "Generar", lambda: lanzar(cra.generar_politicas, que=["fp"])
+
+        if fila["id"] == "co":
+            return "Generar", lambda: lanzar(cra.generar_politicas, que=["cvar"])
 
         if fila["id"].startswith("hoja_"):
             seccion = fila["id"][len("hoja_"):]

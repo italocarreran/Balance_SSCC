@@ -5,7 +5,8 @@
 > remuneración CRA (`Balance_CRA.py`, paquete `Script/cra/`, dominio en
 > `docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md`). Del CRA están hoy solo
 > las hojas de entrada `ENERGIA`, `FP`, `CO`, `SC y CO`, `FD_*` y la matriz
-> de `PRORRATA_RETIROS`; ver `MAPA.md` y
+> de `PRORRATA_RETIROS`; `fp_` y `cvar_cra_` los arma el programa desde las
+> políticas de operación (`Script/Politicas/`). Ver `MAPA.md` y
 > `BITACORA.md` → "Pendientes abiertos → CRA".
 
 Herramienta en Python que reemplaza, hoja por hoja, el cálculo hecho hoy en
