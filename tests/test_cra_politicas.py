@@ -16,6 +16,7 @@ from openpyxl import Workbook
 from Script import cra
 from Script.Politicas import Costos_Variables as cv
 from Script.cra import parametros as p
+from tests.apoyo_cra import maestro_cra
 
 AAMM = "2602"          # febrero 2026: 28 dias
 DIAS = 28
@@ -78,10 +79,9 @@ class PruebaPoliticas(unittest.TestCase):
 
         self.base = raiz / "CRA 2602"
         cra.crear_carpetas_caso(self.base)
-        pd.DataFrame({"Configuracion": ["CONF_A", "CONF_B", "CONF_NUEVA"],
-                      "Central": ["A", "B", "N"]}).to_excel(
+        maestro_cra(
             self.base / p.CARPETA_AUXILIARES / p.ARCHIVO_CENTRALES_CRA,
-            index=False,
+            ["CONF_A", "CONF_B", "CONF_NUEVA"],
         )
 
         self._parches = [
@@ -113,8 +113,7 @@ class PruebaPoliticas(unittest.TestCase):
         avisos = []
         cvar = cv.construir(
             AAMM, que=["cvar"],
-            ruta_centrales_cra=(self.base / p.CARPETA_AUXILIARES
-                                / p.ARCHIVO_CENTRALES_CRA),
+            configuraciones=["CONF_A", "CONF_B", "CONF_NUEVA"],
             registrar=avisos.append,
         )["cvar"]
 
@@ -146,8 +145,7 @@ class PruebaPoliticas(unittest.TestCase):
         (self.politicas / "26" / f"PO{AAMM}15.csv").unlink()
 
         with self.assertRaises(cv.ErrorPoliticas) as ctx:
-            cv.construir(AAMM, que=["cvar"], ruta_centrales_cra=(
-                self.base / p.CARPETA_AUXILIARES / p.ARCHIVO_CENTRALES_CRA))
+            cv.construir(AAMM, que=["cvar"], configuraciones=["CONF_A"])
         self.assertIn(f"PO{AAMM}15.csv", str(ctx.exception))
 
     def test_generar_y_leer_las_hojas_del_caso(self):
@@ -163,6 +161,12 @@ class PruebaPoliticas(unittest.TestCase):
         co = cra.construir_co(cra.buscar_entrada(rutas, "co", AAMM))
         self.assertEqual(len(fp), DIAS * 24)
         self.assertEqual(co.iloc[0].tolist(), ["CONF_A", 1, 1, 11])
+
+    def test_cvar_sin_maestro_se_detiene(self):
+        (self.base / p.CARPETA_AUXILIARES / p.ARCHIVO_CENTRALES_CRA).unlink()
+
+        with self.assertRaises(cra.ErrorEntrada):
+            cra.generar_politicas(self.base, AAMM, que=["cvar"])
 
     def test_no_deja_dos_archivos_del_periodo(self):
         pd.DataFrame({"x": [1]}).to_excel(

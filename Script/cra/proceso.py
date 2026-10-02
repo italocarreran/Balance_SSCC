@@ -19,6 +19,7 @@ from .hojas_entrada import (
     construir_fp,
     construir_sc_co,
 )
+from .maestros import leer_unidades_fd
 from .rutas import exigir_entrada, resolver_rutas, validar_aamm
 
 
@@ -56,9 +57,14 @@ def _hoja_sc_co(rutas, aamm, registrar):
 
 def _hoja_fd(seccion):
     def construir(rutas, aamm, registrar):
+        maestro = exigir_entrada(rutas, "centrales_cra", aamm)
+        unidades = leer_unidades_fd(maestro, seccion)
         ruta = exigir_entrada(rutas, "sscc_desempeno", aamm)
-        registrar(f"  Leyendo {ruta.name}")
-        return construir_fd(ruta, seccion, registrar)
+        registrar(
+            f"  Leyendo {ruta.name} ({len(unidades)} unidad(es) del "
+            f"diccionario de {maestro.name})"
+        )
+        return construir_fd(ruta, seccion, unidades, registrar)
     return construir
 
 

@@ -571,6 +571,35 @@ Dominio: `docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md`. Mape
 
 ---
 
+### D.2 `Auxiliares/centrales_cra.xlsx` — maestros del CRA ✅
+
+- **Archivo real de referencia**: `docs/centrales_cra_real.xlsx` (entregado
+  como `centrales_cra_homologado_SSCC_equivalencias.xlsx`; en el caso se
+  llama `centrales_cra.xlsx`). Pruebas: `PruebaMaestroReal`.
+- **Tres hojas**, cada una con un título en `B5` ("Cuadro N° ...") y los
+  encabezados en la **fila 8**, datos desde la 9, desde la columna **B**.
+  El programa busca la fila de encabezados por su texto, no por posición,
+  y corta en la primera fila con la primera columna vacía:
+
+  | Hoja | Columnas | Filas | Uso |
+  |---|---|---|---|
+  | `centrales_cra` | `Configuracion` | 56 | filtra el costo variable → `cvar_cra_<AAMM>` |
+  | `empresas` | `UNIDAD/CONFIGURACION`, `EMPRESA` | 81 | maestro EMPRESAS (para `CÁLCULO_CRA`) |
+  | `diccionario` | `UNIDAD/CONFIGURACION`, `FD_CPF`, `FD_CSF`, `FD_CTF` | 81 | qué unidades del `SSCC_Desempeño` entran a cada `FD_*` |
+
+- **Diccionario:** una celda puede listar varias unidades separadas por
+  `;` (`HE CIPRESES U1; HE CIPRESES U2; HE CIPRESES U3`); las
+  configuraciones repiten las unidades de su central. Únicas: 27 CPF,
+  25 CSF (ANTUCO no tiene), 27 CTF. Se comparan normalizadas contra la
+  columna `Unidad` (D) de las hojas horarias.
+- **Trampa:** el `styles.xml` del archivo mide **~11 MB** (estilos
+  arrastrados del libro de origen) y openpyxl tarda ~9 s en abrirlo. Por
+  eso `maestros.py` lee los valores directo del XML (con openpyxl de
+  respaldo). Si el archivo se rehace copiando solo valores a un libro
+  nuevo, el problema desaparece.
+
+---
+
 ## C. Qué hacer con un Excel nuevo que te manden
 
 1. Si el nombre/estructura coincide con alguno de los 7 de la sección A → es una entrada real del

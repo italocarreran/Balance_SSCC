@@ -25,6 +25,7 @@ from ..nucleo.prorrata_retiros import (
     COL_SUMINISTRADOR,
     leer_prorrata_retiros,
 )
+from ..nucleo.utiles import normalizar
 from . import parametros as p
 from .lectura import (
     a_fecha_hora,
@@ -42,10 +43,12 @@ def _nada(*_args, **_kwargs):
 # FD_CPF, FD_CSF, FD_CTF
 # ============================================================
 
-def construir_fd(ruta_sscc, seccion, registrar=_nada):
+def construir_fd(ruta_sscc, seccion, unidades, registrar=_nada):
     """
-    Una de las tres hojas horarias del SSCC_Desempeño_* tal cual: los
-    encabezados de la fila 11 y los datos desde la 12.
+    Una de las tres hojas horarias del SSCC_Desempeño_*, solo con las
+    filas de `unidades` (las de esa columna del diccionario de
+    centrales_cra.xlsx; se comparan normalizadas): los encabezados de la
+    fila 11 y los datos desde la 12.
     """
 
     _, hoja_origen, columnas = p.HOJAS_FD[seccion]
@@ -56,6 +59,13 @@ def construir_fd(ruta_sscc, seccion, registrar=_nada):
     )
     datos = leer_columnas(
         ruta_sscc, hoja_origen, p.FILA_ENCABEZADO_FD + 1, letras
+    )
+
+    leidas = len(datos)
+    datos = _filtrar_unidades(datos, unidades, hoja_origen, registrar)
+    registrar(
+        f"  {hoja_origen}: {len(datos):,} de {leidas:,} fila(s) son de "
+        f"unidades del CRA."
     )
 
     fechas_horas = [
@@ -71,9 +81,23 @@ def construir_fd(ruta_sscc, seccion, registrar=_nada):
             f"  AVISO {hoja_origen}: {sin_clave} fila(s) sin Fecha/Hora "
             f"valida: quedan sin '{p.CAMPO_FECHA_HORA_FD}'."
         )
-    registrar(f"  {hoja_origen}: {len(datos):,} fila(s).")
-
     return datos.reset_index(drop=True)
+
+
+def _filtrar_unidades(datos, unidades, hoja_origen, registrar):
+    """Solo las filas cuya Unidad (columna D) esta en `unidades`."""
+
+    buscadas = {normalizar(u): u for u in unidades}
+    claves = datos[p.LETRA_UNIDAD_FD].map(normalizar)
+
+    sin_filas = [u for k, u in buscadas.items() if k not in set(claves)]
+    if sin_filas:
+        registrar(
+            f"  AVISO {hoja_origen}: {len(sin_filas)} unidad(es) del "
+            f"diccionario sin ninguna fila: {', '.join(sin_filas)}."
+        )
+
+    return datos[claves.isin(buscadas)].reset_index(drop=True)
 
 
 def _fecha_hora(fecha, hora):

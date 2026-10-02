@@ -27,7 +27,8 @@ se adivinó: lo que depende de una respuesta quedó como constante en
   - `dict_SCCO` (`SC y CO!AT8:AV49`) — Central → Config. InfoTécnica →
     Nombre CRA; en agosto le falta `ANGOSTURA-3` (está en la lista de
     embalses) y todos los `PE-*`;
-  - `EMPRESAS`, unidades candidatas (`CÁLCULO_CRA!AQ:AS`), `RENDIMIENTOS`.
+  - unidades candidatas (`CÁLCULO_CRA!AQ:AS`), `RENDIMIENTOS`.
+  - (`EMPRESAS` ya está: hoja `empresas` de `centrales_cra.xlsx`.)
   Hay que decidir de dónde los lee Python (¿un `Maestros_CRA.xlsx` en el
   caso, como el `Centrales.xlsx` del BESS?).
 - **CO: de dónde sale `CO!L`** — resuelto en la v5 (6.4): `L = I × K`,
@@ -38,7 +39,7 @@ se adivinó: lo que depende de una respuesta quedó como constante en
   la carpeta de `progdiar_SEN` es el año de dos dígitos y que, por ahora,
   si falta la política de un día se corta. Falta solo correrlo una vez en
   Windows contra `nas-cen1`.
-- **RENDIMIENTOS, EMPRESAS, unidades candidatas, COTAS,
+- **RENDIMIENTOS, unidades candidatas, COTAS,
   CONDICION_EMBALSE:** fuera de foco por ahora (usuario: "enfocarnos en lo
   que tenemos").
 - **FD_CPF/CSF/CTF:** la v5 (6.7) confirma la forma: clave en `A`
@@ -4321,4 +4322,40 @@ reales de `nas-cen1` no se pudieron probar desde acá.
 El usuario confirmó las tres decisiones de la entrada anterior
 (`Auxiliares/centrales_cra.xlsx`; año de dos dígitos en `progdiar_SEN`;
 cortar si falta un día) y pidió fusionar a `main`. Sin cambios de código.
+
+---
+
+## 2026-10-02 (3) — `centrales_cra.xlsx` con formato nuevo; FD solo de las unidades del CRA
+
+**Pedido del usuario:** `centrales_cra.xlsx` pasa a un formato nuevo, que
+además trae la homologación con los FD; adaptar el script y que al traer
+los FD se queden solo los de esas centrales "y no todo el mamarracho".
+
+**Formato nuevo** (archivo real en `docs/centrales_cra_real.xlsx`,
+documentado en `docs/Estructura_Archivos_Reales.md` §D.2): tres hojas
+`centrales_cra`, `empresas`, `diccionario`, con título arriba y
+encabezados en la fila 8, columna B.
+
+**Qué se hizo:**
+
+- `Script/cra/maestros.py`: un solo lector para las tres hojas (busca el
+  encabezado por texto; separa las listas `;` del diccionario).
+- `cvar_cra`: `Costos_Variables.construir()` ya no lee el Excel; recibe
+  la lista `configuraciones` que lee `cra.maestros` (hoja
+  `centrales_cra`). Sin el maestro, `Generar` de `CO/` se detiene.
+- `FD_CPF/CSF/CTF`: solo las filas cuya `Unidad` está en esa columna del
+  diccionario (comparación normalizada); avisa las unidades del
+  diccionario sin filas. El maestro pasa a ser obligatorio para esas
+  hojas.
+- `EMPRESAS` queda resuelto como maestro (`leer_empresas`), todavía sin
+  uso hasta `CÁLCULO_CRA`.
+- **Rendimiento:** el archivo real tiene un `styles.xml` de ~11 MB y
+  openpyxl tardaba ~9 s por apertura. `maestros.py` lee los valores
+  directo del XML del zip (sin estilos; openpyxl de respaldo): < 1 s, y
+  se comprobó que da exactamente lo mismo que openpyxl en las tres hojas.
+
+**Verificación:** suite completa en verde; pruebas nuevas contra el
+maestro real (56 configuraciones, 81 empresas, 27/25/27 unidades FD) y
+del filtro de FD (incluida una unidad escrita con otro formato que igual
+entra, y una del diccionario sin filas que se avisa).
 

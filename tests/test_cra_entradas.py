@@ -15,6 +15,7 @@ from openpyxl.utils import column_index_from_string
 
 from Script import cra
 from Script.cra import parametros as p
+from tests.apoyo_cra import maestro_cra
 
 
 def _libro(ruta, filas_por_celda, hojas_extra=(), hoja="Hoja1"):
@@ -74,8 +75,12 @@ def _sscc_desempeno(ruta):
         for letra in letras:
             ws[f"{letra}11"] = f"Col {letra}"
         ws["B11"], ws["C11"], ws["D11"] = "Fecha", "Hora", "Unidad"
-        ws["B12"], ws["C12"], ws["D12"] = dt.datetime(2026, 8, 1), 0, "RAPEL_U1"
-        ws[f"{ultima}12"] = 0.9
+        filas = [("HE RAPEL U1", 0.9), ("HE PFV OTRA", 0.5),
+                 ("he rapel u1 ", 0.8)]
+        for i, (unidad, fd) in enumerate(filas, start=12):
+            ws[f"B{i}"], ws[f"C{i}"], ws[f"D{i}"] = (
+                dt.datetime(2026, 8, 1), i - 12, unidad)
+            ws[f"{ultima}{i}"] = fd
     ruta.parent.mkdir(parents=True, exist_ok=True)
     libro.save(ruta)
     return ruta
@@ -219,8 +224,16 @@ class PruebaCargaEntradas(unittest.TestCase):
     def test_fd_copia_la_hoja_con_sus_encabezados(self):
         ruta = _sscc_desempeno(self.base / "SSCC_Desempeño_Agosto_2026.xlsx")
 
-        cpf = cra.construir_fd(ruta, "fd_cpf")
-        csf = cra.construir_fd(ruta, "fd_csf")
+        avisos = []
+        cpf = cra.construir_fd(
+            ruta, "fd_cpf", ["HE RAPEL U1", "HE RALCO U1"], avisos.append)
+        csf = cra.construir_fd(ruta, "fd_csf", ["HE RAPEL U1"])
+
+        # Solo las del diccionario (normalizado: la tercera fila tambien);
+        # HE PFV OTRA fuera, y HE RALCO U1 avisada por no tener filas.
+        self.assertEqual(len(cpf), 2)
+        self.assertEqual(cpf["Col J"].tolist(), [0.9, 0.8])
+        self.assertTrue(any("HE RALCO U1" in a for a in avisos))
 
         # "Fecha Hora" (la clave horaria del libro) + B:J / B:H.
         self.assertEqual(list(cpf.columns)[:4],
@@ -229,7 +242,7 @@ class PruebaCargaEntradas(unittest.TestCase):
         self.assertEqual(len(csf.columns), 1 + 7)
         self.assertEqual(cpf.iloc[0][p.CAMPO_FECHA_HORA_FD],
                          dt.datetime(2026, 8, 1, 0))
-        self.assertEqual(cpf.iloc[0]["Unidad"], "RAPEL_U1")
+        self.assertEqual(cpf.iloc[0]["Unidad"], "HE RAPEL U1")
         self.assertEqual(cpf.iloc[0]["Col J"], 0.9)
 
     def test_prorrata_como_matriz(self):
@@ -325,6 +338,11 @@ class PruebaProceso(unittest.TestCase):
                         / "SSCC_Desempeño_Agosto_2026_V2.xlsx")
         _prorrata(self.base / p.CARPETA_PRORRATA
                   / "Prorrata_Retiros_2608_def.xlsx")
+        maestro_cra(
+            self.base / p.CARPETA_AUXILIARES / p.ARCHIVO_CENTRALES_CRA,
+            ["RAPEL"],
+            diccionario=[("RAPEL", "HE RAPEL U1", "HE RAPEL U1", "HE RAPEL U1")],
+        )
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -360,7 +378,7 @@ class PruebaProceso(unittest.TestCase):
         por_id = {f["id"]: f for f in filas}
 
         for id_ in ("energia", "fp", "co", "reporte_cra", "sobrecostos",
-                    "sscc_desempeno", "prorrata"):
+                    "sscc_desempeno", "prorrata", "centrales_cra"):
             self.assertEqual(por_id[id_]["estado"], "ok", id_)
         self.assertEqual(por_id["salida"]["estado"], "pendiente")
 
@@ -382,6 +400,37 @@ class PruebaProceso(unittest.TestCase):
             with self.assertRaises(cra.ErrorEntrada):
                 cra.validar_aamm(malo)
         self.assertEqual(cra.validar_aamm("2608"), (2026, 8))
+
+
+
+MAESTRO_REAL = (
+    Path(__file__).resolve().parent.parent / "docs" / "centrales_cra_real.xlsx"
+)
+
+
+@unittest.skipUnless(MAESTRO_REAL.exists(), "falta centrales_cra_real.xlsx")
+class PruebaMaestroReal(unittest.TestCase):
+    """Contra el centrales_cra.xlsx real que entrego el usuario."""
+
+    def test_lee_las_tres_hojas(self):
+        configuraciones = cra.leer_configuraciones(MAESTRO_REAL)
+        self.assertEqual(len(configuraciones), 56)
+        self.assertEqual(configuraciones[0], "CANUTILLAR")
+        self.assertEqual(configuraciones[-1], "RAPEL")
+
+        empresas = cra.leer_empresas(MAESTRO_REAL)
+        self.assertEqual(empresas["PEHUENCHE_U1"], "PEHUENCHE")
+        self.assertEqual(empresas["CANUTILLAR_U1"], "COLBUN")
+
+    def test_unidades_fd_separadas_y_sin_repetir(self):
+        cpf = cra.leer_unidades_fd(MAESTRO_REAL, "fd_cpf")
+        csf = cra.leer_unidades_fd(MAESTRO_REAL, "fd_csf")
+
+        self.assertEqual(len(cpf), 27)
+        self.assertIn("HE ANGOSTURA U3", cpf)   # venia en una lista con ";"
+        self.assertEqual(len(cpf), len(set(cpf)))
+        # ANTUCO no tiene CSF.
+        self.assertNotIn("HE ANTUCO U1", csf)
 
 
 if __name__ == "__main__":

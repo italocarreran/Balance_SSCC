@@ -62,6 +62,7 @@ Script/
         hojas_entrada.py       <- ENERGIA, FP, CO, SC y CO
         fuentes_bess.py        <- FD_CPF/CSF/CTF y matriz de PRORRATA_RETIROS
         politicas.py           <- botones Generar de fp_ y cvar_cra_
+        maestros.py            <- Auxiliares/centrales_cra.xlsx (3 hojas)
         escritura.py           <- Balance_CRA.xlsx (conserva lo que no toca)
         proceso.py             <- SECCIONES y generar_balance_cra()
         estructura.py          <- el arbol que dibuja Balance_CRA.py
@@ -1057,7 +1058,14 @@ importable como cualquier módulo.
 - **`ENERGIA`:** B:J del origen + `kWhD corregido`, `kWhR corregido` y
   `Neto` (`corregir_energia()`, fórmulas K/L/M de la traz. 6.1).
 - **`FD_*`:** `Fecha Hora` (clave horaria, con `Unidad`) + la hoja horaria
-  del `SSCC_Desempeño` tal cual.
+  del `SSCC_Desempeño`, **solo** con las unidades de esa columna de la hoja
+  `diccionario` de `centrales_cra.xlsx` (avisa las del diccionario sin
+  filas).
+- **Maestros (`maestros.py`):** `Auxiliares/centrales_cra.xlsx` con tres
+  hojas (`centrales_cra`, `empresas`, `diccionario`; ver
+  `docs/Estructura_Archivos_Reales.md` §D.2). Encabezados buscados por
+  texto; valores leídos directo del XML porque el archivo real trae ~11 MB
+  de estilos.
 - **`SC y CO`:** SC (Sobrecostos) arriba y CO (Reporte_CRA) abajo, solo
   centrales de embalse (`CENTRALES_EMBALSE`, `filtrar_embalses()`).
 - **Expone:** `generar_balance_cra(carpeta_base, aamm, secciones=None,
@@ -1090,8 +1098,9 @@ importable como cualquier módulo.
     reemplaza las horas ≥ HH (gana la última que cubre cada hora);
   - `RAIZ_POLITICAS/<AA>/PO<AAMMDD>.xlsx`, tercera hoja, B:Z — FP por
     barra y hora (sin PID, igual que el original).
-- **Filtra** el costo variable a las configuraciones de
-  `Auxiliares/centrales_cra.xlsx` (columna `Configuracion`) → `cvar_cra`.
+- **Filtra** el costo variable a la lista de configuraciones que recibe
+  (`configuraciones=`; la lee `cra.maestros` de la hoja `centrales_cra`)
+  → `cvar_cra`.
 - **Corta** si falta la política de algún día (lista todas las que
   faltan): no arma un mes incompleto. Avisa PID sin política y
   configuraciones de `centrales_cra` sin costo variable.

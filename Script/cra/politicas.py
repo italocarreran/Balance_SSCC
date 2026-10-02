@@ -10,8 +10,8 @@ from pathlib import Path
 
 from ..Politicas import Costos_Variables as costos_variables
 from ..nucleo.utiles import ErrorEntrada
-from . import parametros as p
-from .rutas import buscar_entrada, resolver_rutas, validar_aamm
+from .maestros import leer_configuraciones
+from .rutas import buscar_entrada, exigir_entrada, resolver_rutas, validar_aamm
 
 # que -> (id de la entrada, carpeta de resolver_rutas, prefijo del archivo)
 SALIDAS = {
@@ -56,11 +56,19 @@ def generar_politicas(carpeta_base, aamm, que=("fp", "cvar"),
             )
         destinos[cual] = destino
 
+    configuraciones = None
+    if "cvar" in que:
+        maestro = exigir_entrada(rutas, "centrales_cra", aamm)
+        configuraciones = leer_configuraciones(maestro)
+        registrar(
+            f"{len(configuraciones)} configuracion(es) del CRA en "
+            f"{maestro.name}"
+        )
+
     registrar(f"Leyendo las politicas del periodo {aamm}...")
     try:
         tablas = costos_variables.construir(
-            aamm, que=que,
-            ruta_centrales_cra=rutas["auxiliares"] / p.ARCHIVO_CENTRALES_CRA,
+            aamm, que=que, configuraciones=configuraciones,
             registrar=registrar, progreso=progreso,
         )
     except costos_variables.ErrorPoliticas as error:

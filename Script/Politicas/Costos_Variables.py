@@ -31,8 +31,9 @@ Por cada dia del mes:
      columna por hora) -> (BarNom, Hora, FP, dia). Los FP salen siempre
      de la politica del dia, sin PID (igual que el script original).
 
-Al final, el costo variable se filtra a las configuraciones de
-centrales_cra.xlsx (columna 'Configuracion') -> cvar_cra.
+Al final, el costo variable se filtra a las configuraciones del CRA
+(hoja "centrales_cra" del maestro Auxiliares/centrales_cra.xlsx, que lee
+Script/cra/maestros.py y llega aca como lista) -> cvar_cra.
 
 No importa nada de nucleo (solo pandas). Los errores previsibles salen
 como ErrorPoliticas.
@@ -203,33 +204,17 @@ def aplicar_pid(cvar_dia, aamm, dia, raiz_pid=None, raiz_prg=None,
     return cvar_dia, usadas
 
 
-def leer_configuraciones_cra(ruta):
-    """centrales_cra.xlsx -> tabla con la columna 'Configuracion'."""
-
-    try:
-        tabla = pd.read_excel(ruta, engine="openpyxl")
-    except Exception as error:
-        raise ErrorPoliticas(f"No se pudo leer {ruta}: {error}") from error
-
-    if COLUMNA_CONFIGURACION not in tabla.columns:
-        raise ErrorPoliticas(
-            f"{Path(ruta).name} no tiene la columna "
-            f"'{COLUMNA_CONFIGURACION}'. Columnas: {list(tabla.columns)}"
-        )
-
-    return tabla
-
-
 # ============================================================
 # EL PROCESO
 # ============================================================
 
-def construir(aamm, que=("cvar", "fp"), ruta_centrales_cra=None,
+def construir(aamm, que=("cvar", "fp"), configuraciones=None,
               raiz_politicas=None, raiz_pid=None, raiz_prg=None,
               registrar=print, progreso=None):
     """
     Lee el mes completo y devuelve {"cvar": DataFrame, "fp": DataFrame}
-    con lo pedido en `que`. "cvar" ya viene filtrado a centrales_cra.
+    con lo pedido en `que`. "cvar" ya viene filtrado a `configuraciones`
+    (la lista de configuraciones del CRA; obligatoria para "cvar").
 
     Si falta el archivo de la politica de algun dia, se para y lista
     todos los que faltan (no arma un mes incompleto).
@@ -252,14 +237,15 @@ def construir(aamm, que=("cvar", "fp"), ruta_centrales_cra=None,
             + ("\n  ..." if len(faltan) > 10 else "")
         )
 
-    configuraciones = None
     if "cvar" in que:
-        if ruta_centrales_cra is None or not Path(ruta_centrales_cra).is_file():
+        if not configuraciones:
             raise ErrorPoliticas(
-                f"Falta centrales_cra.xlsx (las configuraciones del CRA): "
-                f"{ruta_centrales_cra}"
+                "Faltan las configuraciones del CRA para filtrar el costo "
+                "variable."
             )
-        configuraciones = leer_configuraciones_cra(ruta_centrales_cra)
+        configuraciones = pd.DataFrame(
+            {COLUMNA_CONFIGURACION: list(dict.fromkeys(configuraciones))}
+        )
 
     partes = {"cvar": [], "fp": []}
 

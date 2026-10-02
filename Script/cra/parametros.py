@@ -59,9 +59,10 @@ SUBCARPETAS_CASO = (
     CARPETA_FD, CARPETA_PRORRATA, CARPETA_AUXILIARES,
 )
 
-# Las configuraciones del CRA (columna "Configuracion"): con esto se
-# filtra el costo variable para armar cvar_cra (entradas_sscc.py). Es un
-# maestro: va en Auxiliares/ con nombre fijo.
+# Los maestros del CRA, en un libro con tres hojas (ver maestros.py):
+# "centrales_cra" (filtra cvar_cra), "empresas" y "diccionario" (que
+# unidades del SSCC_Desempeño entran a cada FD_*). Nombre fijo, en
+# Auxiliares/.
 ARCHIVO_CENTRALES_CRA = "centrales_cra.xlsx"
 
 
@@ -317,6 +318,9 @@ FILA_ENCABEZADO_FD = 11
 CAMPO_FECHA_HORA_FD = "Fecha Hora"
 LETRA_FECHA_FD = "B"
 LETRA_HORA_FD = "C"
+# La unidad (InfoTecnica): por esta columna se filtra contra la hoja
+# "diccionario" de centrales_cra.xlsx (FD_CPF / FD_CSF / FD_CTF).
+LETRA_UNIDAD_FD = "D"
 
 HOJAS_FD = {
     # seccion: (hoja de salida, hoja del SSCC_Desempeño, columnas)
