@@ -33,13 +33,11 @@ se adivinó: lo que depende de una respuesta quedó como constante en
 - **CO: de dónde sale `CO!L`** — resuelto en la v5 (6.4): `L = I × K`,
   CO base × FP por barra + día + hora. Falta solo lo de los maestros.
 - **TC:** pendiente (usuario, 2026-09-30).
-- **`fp_` / `cvar_cra_` desde la red** (`Script/Politicas`): confirmar en
-  Windows que las rutas de `entradas_sscc.py` siguen vigentes — sobre todo
-  que la carpeta de `progdiar_SEN` es el año de **dos** dígitos (`.../26/`),
-  como arma el script original — y que `centrales_cra.xlsx` va en
-  `Auxiliares/` del caso. Hoy, si falta la política de un día, se corta
-  (no arma un mes incompleto): confirmar que así sirve también para el
-  "Pre".
+- **`fp_` / `cvar_cra_` desde la red** (`Script/Politicas`): confirmado por
+  el usuario (2026-10-02) que `centrales_cra.xlsx` va en `Auxiliares/`, que
+  la carpeta de `progdiar_SEN` es el año de dos dígitos y que, por ahora,
+  si falta la política de un día se corta. Falta solo correrlo una vez en
+  Windows contra `nas-cen1`.
 - **RENDIMIENTOS, EMPRESAS, unidades candidatas, COTAS,
   CONDICION_EMBALSE:** fuera de foco por ahora (usuario: "enfocarnos en lo
   que tenemos").
@@ -4315,4 +4313,12 @@ la hoja `CO` leen tal cual lo que se genera.
 con un árbol de red falso: mes completo, una reprogramación PID, un PID
 sin política, un día faltante, dos archivos del período). Las rutas
 reales de `nas-cen1` no se pudieron probar desde acá.
+
+---
+
+## 2026-10-02 (2) — Confirmaciones de `fp_`/`cvar_cra_` y fusión a `main`
+
+El usuario confirmó las tres decisiones de la entrada anterior
+(`Auxiliares/centrales_cra.xlsx`; año de dos dígitos en `progdiar_SEN`;
+cortar si falta un día) y pidió fusionar a `main`. Sin cambios de código.
 
