@@ -28,10 +28,6 @@ from .comun import ErrorMedidas
 COL_INTERVALO_LOCAL = "intervalo"
 COL_INTERVALO_UTC = "intervaloUtc"
 
-# Zona horaria del SEN: sirve para reconocer las filas de la hora que
-# no existe el dia del cambio de hora de septiembre.
-ZONA_HORARIA = "America/Santiago"
-
 # Las 9 columnas de Medidas_SAE.xlsx, en su orden exacto (es el mismo
 # de nucleo.COLUMNAS_AI: esta hoja alimenta Medidores!A:I).
 COLUMNAS_SAE = [
@@ -123,18 +119,23 @@ def normalizar_fechas(df):
 
 def descartar_hora_inexistente(df):
     """
-    El dia del cambio de hora de septiembre la hora local 00:00-00:59
-    no existe (se salta a la 01:00), pero la API igual entrega esos 4
+    El dia en que se adelanta la hora (hoy, en septiembre) la hora
+    local que se salta no existe, pero la API igual entrega esos 4
     cuartos de hora, con un `intervaloUtc` repetido con el de la hora
     real. Eso deja cada punto de medida con 4 filas mas que los
     cuartos de hora distintos del mes, y TODOS quedaban marcados como
     incompletos.
 
-    Se descarta una fila solo si (a) su hora local no calza con su
-    `intervaloUtc` pasado a hora de Chile y (b) el mismo punto de
-    medida tiene otra fila con ese `intervaloUtc` que si calza. Asi no
-    se toca nada en los meses sin cambio de hora ni si la API cambia
-    de convencion. Tambien se sacan las filas sin `intervaloUtc`.
+    No se usa ninguna fecha fija ni tabla de zonas horarias: el cambio
+    se deduce de la propia descarga. El ofset de cada fila es
+    `intervalo - intervaloUtc`; cuando un mismo `intervaloUtc` aparece
+    con mas de una hora local, la buena es la que trae el ofset que
+    rige desde ese instante en adelante (el del siguiente
+    `intervaloUtc` sin repetir), y las otras sobran. Si eso no se
+    puede decidir para un instante, sus filas no se tocan. En los
+    meses sin cambio de hora, o en abril (donde se repite la hora
+    LOCAL pero no la UTC), no se descarta nada. Tambien se sacan las
+    filas sin `intervaloUtc`.
 
     Devuelve (df_depurado, filas_descartadas).
     """
@@ -143,29 +144,49 @@ def descartar_hora_inexistente(df):
     descartadas = df[sin_utc]
     df = df[~sin_utc]
 
-    try:
-        local_esperada = (
-            df[COL_INTERVALO_UTC]
-            .dt.tz_localize("UTC")
-            .dt.tz_convert(ZONA_HORARIA)
-            .dt.tz_localize(None)
-        )
-    except Exception:
-        # Sin base de zonas horarias no se puede decidir: no se toca.
+    pares = (
+        df[[COL_INTERVALO_LOCAL, COL_INTERVALO_UTC]]
+        .dropna()
+        .drop_duplicates()
+    )
+    pares["ofset"] = pares[COL_INTERVALO_LOCAL] - pares[COL_INTERVALO_UTC]
+
+    repetido = pares.duplicated(COL_INTERVALO_UTC, keep=False)
+
+    if not repetido.any():
         return df, descartadas
 
-    calza = df[COL_INTERVALO_LOCAL] == local_esperada
-
-    if calza.all():
-        return df, descartadas
-
-    con_gemela = (
-        calza
-        .groupby([df["idPuntoMedida"], df[COL_INTERVALO_UTC]])
-        .transform("any")
+    unicos = (
+        pares.loc[~repetido, [COL_INTERVALO_UTC, "ofset"]]
+        .rename(columns={"ofset": "ofset_siguiente"})
+        .sort_values(COL_INTERVALO_UTC)
     )
 
-    sobra = ~calza & con_gemela
+    dudosos = pd.merge_asof(
+        pares[repetido].sort_values(COL_INTERVALO_UTC),
+        unicos,
+        on=COL_INTERVALO_UTC,
+        direction="forward",
+        allow_exact_matches=False,
+    )
+
+    dudosos["valido"] = dudosos["ofset"] == dudosos["ofset_siguiente"]
+    validos_por_instante = (
+        dudosos.groupby(COL_INTERVALO_UTC)["valido"].transform("sum")
+    )
+
+    # Solo se decide donde hay exactamente una hora local buena.
+    sobran = dudosos[~dudosos["valido"] & (validos_por_instante == 1)]
+
+    if sobran.empty:
+        return df, descartadas
+
+    claves = pd.MultiIndex.from_frame(
+        sobran[[COL_INTERVALO_LOCAL, COL_INTERVALO_UTC]]
+    )
+    sobra = pd.MultiIndex.from_frame(
+        df[[COL_INTERVALO_LOCAL, COL_INTERVALO_UTC]]
+    ).isin(claves)
 
     return df[~sobra], pd.concat([descartadas, df[sobra]])
 

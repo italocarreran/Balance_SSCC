@@ -1,11 +1,14 @@
 """
-Claves_Balance con meses de cambio de hora:
+Claves_Balance con meses de cambio de hora. El dia y la hora del
+cambio NO estan fijos en el codigo: se deducen de la descarga. Por
+eso las pruebas arman los datos con ofsets manuales (sin tabla de
+zonas horarias) y ponen el cambio en dias y horas arbitrarios.
 
-  - septiembre: la API entrega los 4 cuartos de hora de la hora local
-    que no existe (00:00-00:59 del dia del cambio) con un intervaloUtc
-    repetido; se descartan y el mes queda en 2876 cuartos de hora en
-    vez de dar todos los puntos de medida por incompletos;
-  - abril (2884) y un mes normal (2976) no cambian;
+  - adelanto de hora: la API entrega los 4 cuartos de hora de la hora
+    local que no existe con un intervaloUtc repetido; se descartan y
+    el mes queda con 4 cuartos de hora menos en vez de dar todos los
+    puntos de medida por incompletos;
+  - atraso de hora (+4) y un mes normal no cambian;
   - las fechas ISO no se leen con dayfirst (2026-09-06 no es 9 de
     junio).
 """
@@ -17,31 +20,44 @@ import pandas as pd
 from Script.Medidas import Claves_Balance as cb
 
 
-ZONA = "America/Santiago"
+HORA = pd.Timedelta(hours=1)
 
 
-def descarga(inicio, fin, hora_fantasma=None):
-    utc = pd.date_range(
-        pd.Timestamp(inicio, tz=ZONA).tz_convert("UTC"),
-        pd.Timestamp(fin, tz=ZONA).tz_convert("UTC"),
-        freq="15min", inclusive="left",
-    )
-    local = utc.tz_convert(ZONA).tz_localize(None)
+def descarga(inicio, fin, cambio=None, ofset_antes=-4, ofset_despues=-3,
+             con_fantasma=True):
+    """
+    Mes [inicio, fin) en hora local. `cambio` es la hora local (con el
+    ofset de antes) en que cambia la hora; ofset_despues > ofset_antes
+    adelanta la hora (septiembre) y < la atrasa (abril). Con
+    con_fantasma, la API entrega ademas la hora local que se salta,
+    con el intervaloUtc repetido, que es lo que se ve en la realidad.
+    """
+
+    a = pd.Timedelta(hours=ofset_antes)
+    d = pd.Timedelta(hours=ofset_despues)
+    cambio_utc = pd.Timestamp(cambio) - a if cambio else None
+
+    def ofset(utc):
+        return a if cambio_utc is None or utc < cambio_utc else d
+
+    ini_utc = pd.Timestamp(inicio) - a
+    fin_utc = pd.Timestamp(fin) - (d if cambio else a)
+    utc = pd.date_range(ini_utc, fin_utc, freq="15min", inclusive="left")
+    local = [u + ofset(u) for u in utc]
+
+    if cambio and con_fantasma and d > a:
+        fantasma = pd.date_range(
+            pd.Timestamp(cambio), periods=4, freq="15min"
+        )
+        utc = list(utc) + [f - a for f in fantasma]
+        local = local + list(fantasma)
+
     base = pd.DataFrame({
-        "intervalo": local.strftime("%Y-%m-%d %H:%M:%S"),
-        "intervaloUtc": utc.tz_localize(None).strftime(
+        "intervalo": pd.DatetimeIndex(local).strftime("%Y-%m-%d %H:%M:%S"),
+        "intervaloUtc": pd.DatetimeIndex(utc).strftime(
             "%Y-%m-%dT%H:%M:%S.000Z"
         ),
     })
-
-    if hora_fantasma:
-        dia, utc_real = hora_fantasma
-        base = pd.concat([base, pd.DataFrame({
-            "intervalo": [f"{dia} 00:{m:02d}:00" for m in (0, 15, 30, 45)],
-            "intervaloUtc": [
-                f"{utc_real}:{m:02d}:00.000Z" for m in (0, 15, 30, 45)
-            ],
-        })])
 
     partes = []
     for punto in ("P1", "P2"):
@@ -74,33 +90,56 @@ class TestCambioDeHora(unittest.TestCase):
         )
         return salida, diagnostico, log
 
-    def test_septiembre_descarta_hora_inexistente(self):
-        df = descarga(
-            "2026-09-01", "2026-10-01",
-            hora_fantasma=("2026-09-06", "2026-09-06T04"),
-        )
-        self.assertEqual(len(df) // 4, 2880)
-
-        salida, diagnostico, log = self.correr(df)
-
-        self.assertEqual(diagnostico["cuartos_esperados"], 2876)
-        self.assertTrue(diagnostico["incompletos"].empty)
-        self.assertEqual(salida["Cuarto de Hora"].max(), 2876)
-        self.assertFalse(
-            ((salida["intervalo"] >= "2026-09-06 00:00")
-             & (salida["intervalo"] < "2026-09-06 01:00")).any()
-        )
-        self.assertTrue(any("hora inexistente" in linea for linea in log))
-
-    def test_abril_y_mes_normal_sin_cambios(self):
-        for inicio, fin, cuartos in (
-            ("2026-04-01", "2026-05-01", 2884),
-            ("2026-08-01", "2026-09-01", 2976),
+    def test_adelanto_en_cualquier_dia_y_hora(self):
+        for inicio, fin, cambio in (
+            ("2026-09-01", "2026-10-01", "2026-09-06 00:00"),
+            ("2027-09-01", "2027-10-01", "2027-09-05 00:00"),
+            ("2026-09-01", "2026-10-01", "2026-09-13 00:00"),
+            ("2026-10-01", "2026-11-01", "2026-10-18 02:00"),
         ):
-            salida, diagnostico, log = self.correr(descarga(inicio, fin))
-            self.assertEqual(diagnostico["cuartos_esperados"], cuartos)
-            self.assertEqual(salida["Cuarto de Hora"].max(), cuartos)
-            self.assertFalse(any("hora inexistente" in l for l in log))
+            with self.subTest(cambio=cambio):
+                df = descarga(inicio, fin, cambio)
+                dias = (pd.Timestamp(fin) - pd.Timestamp(inicio)).days
+                esperados = dias * 96 - 4
+                self.assertEqual(len(df) // 4, dias * 96)
+
+                salida, diagnostico, log = self.correr(df)
+
+                self.assertEqual(diagnostico["cuartos_esperados"], esperados)
+                self.assertTrue(diagnostico["incompletos"].empty)
+                self.assertEqual(salida["Cuarto de Hora"].max(), esperados)
+                hueco = pd.Timestamp(cambio)
+                self.assertFalse(
+                    ((salida["intervalo"] >= hueco)
+                     & (salida["intervalo"] < hueco + HORA)).any()
+                )
+                self.assertTrue(
+                    any("hora inexistente" in linea for linea in log)
+                )
+
+    def test_atraso_y_mes_normal_sin_cambios(self):
+        for inicio, fin, cambio, cuartos in (
+            ("2026-04-01", "2026-05-01", "2026-04-05 00:00", 2884),
+            ("2026-04-01", "2026-05-01", "2026-04-19 03:00", 2884),
+            ("2026-08-01", "2026-09-01", None, 2976),
+        ):
+            with self.subTest(cambio=cambio):
+                df = descarga(
+                    inicio, fin, cambio, ofset_antes=-3, ofset_despues=-4
+                ) if cambio else descarga(inicio, fin)
+                salida, diagnostico, log = self.correr(df)
+                self.assertEqual(diagnostico["cuartos_esperados"], cuartos)
+                self.assertEqual(salida["Cuarto de Hora"].max(), cuartos)
+                self.assertFalse(any("hora inexistente" in l for l in log))
+
+    def test_adelanto_sin_fantasma_no_descarta(self):
+        df = descarga(
+            "2026-09-01", "2026-10-01", "2026-09-06 00:00",
+            con_fantasma=False,
+        )
+        salida, diagnostico, log = self.correr(df)
+        self.assertEqual(diagnostico["cuartos_esperados"], 2876)
+        self.assertFalse(any("hora inexistente" in l for l in log))
 
 
 class TestParseFecha(unittest.TestCase):
