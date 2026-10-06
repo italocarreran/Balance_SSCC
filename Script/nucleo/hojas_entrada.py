@@ -303,7 +303,7 @@ def construir_fd(ruta_sscc, registrar=print):
 # Encabezados reales de Subastas!B:Q -- CORREGIDOS con el archivo
 # Libro1.xlsx que trae la macro Cargar_Remuneracion_Subastas_Rapido y
 # formulas reales cruzadas contra encabezados reales (sesion de
-# correccion, ver BITACORA). La version anterior de este diccionario
+# correccion, ver BITACORA_BESS). La version anterior de este diccionario
 # tenia TODO corrido una posicion: le faltaba la columna "Concepto"
 # (B), la primera de las 11 que copia DB!B:L, que hasta esta sesion
 # se asumia (mal) que era "A" y que la macro no tocaba.

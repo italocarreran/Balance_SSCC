@@ -86,7 +86,7 @@ Ninguno se selecciona a mano — el programa los encuentra por carpeta + patrón
   El siguiente bloque (central siguiente) empieza pegado después del último dato del bloque
   anterior, con el mismo patrón fila-nombre / fila-ruta / blanco / encabezados.
 
-- **Trampas confirmadas (con datos reales, ver `BITACORA.md` sesión "SOC" y "17"):**
+- **Trampas confirmadas (con datos reales, ver `BITACORA_BESS.md` sesión "SOC" y "17"):**
   - El nombre de central que hay que usar es el de la fila de **más arriba** del bloque de dos
     filas de metadata (la limpia), NO la fila pegada justo arriba de "Status/Time Stamp" (esa es
     la ruta SCADA completa). `detectar_fila_nombres()` sube desde los encabezados mientras haya
@@ -133,7 +133,7 @@ Maestro externo, nombre literal. Dos hojas.
   | 8 | `Ciclos max diarios` | — | sin uso confirmado todavía |
   | 9 | `Eficiencia` | 9 | `V` de RE545 |
 
-- **Trampa confirmada (sesión de corrección, ver `BITACORA.md`):** el índice 4 del VLOOKUP real
+- **Trampa confirmada (sesión de corrección, ver `BITACORA_BESS.md`):** el índice 4 del VLOOKUP real
   (`Resumen!$B$8:$J$26,4,0)`) es **`Capacidad (MWh)`**, NO `Pmax (MW)` como se asumió al
   principio — `Pmax` es el índice **2**. Si en algún momento hay que agregar un VLOOKUP nuevo
   contra esta hoja, mirar la tabla de arriba, no adivinar por el nombre de la variable.
@@ -199,7 +199,7 @@ Maestro externo, nombre literal. Dos hojas.
   `construir_dic_mapeo_diccionario()` (columnas A:B, usado por el FD homologado de E Costos) y
   `_mapas_homologacion_fge()` (columnas E:F:G, usado por `Medidores!V`) usan posiciones fijas —
   funcionan bien hoy porque coinciden con los bloques reales, pero no se generalizaron a
-  `_bloques_columnas_diccionario()` (ver "Pendientes abiertos" en `BITACORA.md`).
+  `_bloques_columnas_diccionario()` (ver "Pendientes abiertos" en `BITACORA_BESS.md`).
 - **Trampa adicional**: cada fila puede tener 2 o 3 columnas de sinónimo (no siempre todo el
   bloque), y una celda vacía dentro del bloque significa "no hay sinónimo ahí" — el primer valor
   no vacío de la fila es el nombre "canónico" al que homologan los demás.

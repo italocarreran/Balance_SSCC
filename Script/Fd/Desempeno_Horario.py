@@ -149,7 +149,7 @@ def calcular_hora_mes(fechas, horas, dia_cambio_hora=None, ajuste=1):
     Subastas de 1 a 24. El ajuste por cambio de hora es el mismo que en
     Subastas (`=...+SI(DIA(Fecha)>SUBASTAS!F2;1;0)`), y por ahora viene
     apagado por omision: falta definir de donde sale ese dia (ver
-    BITACORA.md, "Pendientes abiertos"). Las DOS puntas tienen que usar
+    BITACORA_BESS.md, "Pendientes abiertos"). Las DOS puntas tienen que usar
     el mismo criterio o el cruce se corre entero.
     """
 

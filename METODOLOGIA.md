@@ -99,7 +99,7 @@ y dentro del paquete los imports son relativos (`from .Cmg import ...`).
 |---|---|---|
 | `REGLAS.md` | Checklist obligatorio de inicio/cierre de sesión. Se lee **entero, primero**, antes que nada. | Se edita poco; es la red de seguridad, no debe crecer sin necesidad. |
 | `METODOLOGIA.md` | Cómo se trabaja: regla de expansión, convenciones de código, trampas conocidas, decisiones ya tomadas. | Documento vivo — se actualiza cuando cambia algo estructural o se toma una decisión de diseño. |
-| `BITACORA.md` | Registro de qué se hizo en cada sesión y qué quedó pendiente — lo que un `git log` no cuenta. | **Solo se agrega.** Nunca se edita ni borra una entrada vieja. La única excepción es la sección "Pendientes abiertos", que sí se edita porque es un estado, no un historial. |
+| `BITACORA_BESS.md` / `BITACORA_CRA.md` | Registro de qué se hizo en cada sesión y qué quedó pendiente — lo que un `git log` no cuenta. Una por herramienta: `Balance_BESS.py` en la del BESS, `Balance_CRA.py` / `Script/cra/` en la del CRA; lo que toca a las dos (reglas, estructura común, `Script/nucleo` compartido) se anota en ambas. | **Solo se agrega.** Nunca se edita ni borra una entrada vieja. La única excepción es la sección "Pendientes abiertos", que sí se edita porque es un estado, no un historial. |
 | `MAPA.md` | Un bloque corto por script: qué hace · consume · produce · expone · depende de. Es la primera lectura de cualquier sesión. | Se actualiza cuando cambia la estructura o el rol de un script. |
 | `README.md` | Puerta de entrada: instalación/uso y tabla de "querés X → leé Y". | Se actualiza si cambia la estructura de carpetas o el flujo de instalación. |
 | `docs/Plan_Traspaso_Python_Balance_BESS.md` | Reglas de negocio del cálculo: fórmulas, de dónde sale cada dato, qué queda pendiente. Es largo a propósito y no se reescribe por comodidad. | Se corrige ahí mismo cuando el dominio cambia (p. ej. se confirma la lógica de una columna pendiente); nunca se duplica en otro archivo. |
@@ -134,7 +134,7 @@ reevaluar (ver §10 de la plantilla original de esta metodología).
 Por ahora este repositorio lo trabaja un asistente de IA con revisión
 humana (no hay más de un asistente con push directo todavía). Si eso
 cambia, esta sección debe actualizarse para documentar cómo se coordinan
-entre sí (rama base compartida, `BITACORA.md` como único canal entre
+entre sí (rama base compartida, las bitácoras (`BITACORA_BESS.md`, `BITACORA_CRA.md`) como único canal entre
 sesiones que no se ven en tiempo real, prefijo de autor en los commits si
 alguno autentica con el nombre de otra persona).
 

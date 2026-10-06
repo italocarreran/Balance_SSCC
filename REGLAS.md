@@ -9,14 +9,18 @@ resto (regla de expansión de contexto, convenciones, trampas conocidas).
 
 1. `git log` reciente — ver de quién es el último commit y leerlo completo
    si no es propio.
-2. Leer `BITACORA.md` entero, empezando por "Pendientes abiertos".
+2. Leer entera la bitácora de la herramienta que se va a tocar
+   (`BITACORA_BESS.md` para `Balance_BESS.py`, `BITACORA_CRA.md` para
+   `Balance_CRA.py` / `Script/cra/`), empezando por "Pendientes abiertos".
+   Si el cambio toca código compartido (`Script/nucleo`, `Script/Medidas`,
+   `Script/Fd`, etc.), leer las dos.
 3. Sincronizar la rama de trabajo con la rama principal antes del primer
    cambio.
 
 ## Mientras se trabaja
 
 4. No dejar un cambio a medias — si toca varios archivos, terminarlo y
-   verificarlo en la misma sesión, o dejar explícito en `BITACORA.md` qué
+   verificarlo en la misma sesión, o dejar explícito en la bitácora qué
    falta y por qué se cortó.
 5. Antes de dar un cambio por terminado: correr
    `python -m py_compile Balance_BESS.py Balance_CRA.py Script/*.py
@@ -38,7 +42,9 @@ resto (regla de expansión de contexto, convenciones, trampas conocidas).
 
 ## Al cerrar, si se cambió algo
 
-7. Agregar una entrada en `BITACORA.md`.
+7. Agregar una entrada en la bitácora que corresponda (`BITACORA_BESS.md`
+   o `BITACORA_CRA.md`; en las dos si el cambio toca a ambas) y actualizar
+   su "Pendientes abiertos".
 8. Actualizar `MAPA.md` y/o `METODOLOGIA.md` si cambió algo estructural o se
    tomó una decisión de diseño (p. ej. se confirmó la lógica de una columna
    pendiente, o se definió la ubicación de OfertasSSCC).

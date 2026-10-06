@@ -34,7 +34,7 @@ from .utiles import (
 #                    columna DISTINTA -- solo tiene el tipo SIN
 #                    direccion, CSF/CTF/CPF, no sirve para esto)
 #
-# CONFIRMADO (ver BITACORA, sesion de correccion con Libro1.xlsx):
+# CONFIRMADO (ver BITACORA_BESS, sesion de correccion con Libro1.xlsx):
 # la formula real del libro (seccion 5.3 del documento de
 # trazabilidad) usa Subastas!$B:$B como rango de coincidencia contra
 # el encabezado de columna de RE545 (ej. AC$3="CPF(-)") -- y

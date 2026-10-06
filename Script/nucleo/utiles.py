@@ -135,10 +135,10 @@ def _entero_a_texto(valor):
 # umbral de subida/bajada por central+ventana (en el .xlsm original
 # vive en Subastas!R:V o U:W segun la fuente -- la posicion exacta
 # todavia no esta clara ni siquiera con el archivo de encabezados
-# real, ver BITACORA) y de una categoria "CTF" en FD que no existe en
+# real, ver BITACORA_BESS) y de una categoria "CTF" en FD que no existe en
 # nuestra hoja FD (que solo tiene CSF/CPF).
 #
-# ADVERTENCIA sobre L (parcialmente resuelta, ver BITACORA): el VBA
+# ADVERTENCIA sobre L (parcialmente resuelta, ver BITACORA_BESS): el VBA
 # original arma la clave de match contra Subastas usando columnas por
 # posicion que, en el archivo de trazabilidad, no coincidian con los
 # encabezados reales. El usuario confirmo que el "tipo" (BAJADA/
