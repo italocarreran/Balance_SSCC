@@ -1,6 +1,9 @@
 # Configuracion local por PC/usuario (ver METODOLOGIA.md #5)
 config.json
 
+# CSV que deja probar_api_medidas.py
+probar_api_*.csv
+
 # Python
 __pycache__/
 *.pyc

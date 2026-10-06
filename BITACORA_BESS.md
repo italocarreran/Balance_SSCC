@@ -4194,3 +4194,26 @@ descarga cortada → se reanuda. Las 2 de descarga se saltean si no hay
 Suite: 188 pruebas (184 + 4), 5 salteadas (ventana). Reproducido el
 log del usuario en sintético (1.240 / 1.240 con valores
 hasta el 13-09).
+
+## 2026-10-06 (3) — `probar_api_medidas.py`: diagnóstico aparte de la API de medidas
+
+Con el arreglo de la entrada (2), "Traer Medidas_SAE.xlsx" volvió a
+descargar y el error dijo que los valores llegan solo hasta el 13-09. El
+usuario pidió un código aparte para comprobar si eso es de la API o de la
+descarga. `probar_api_medidas.py` (raíz, junto a `Balance_BESS.py`)
+consulta la API en vivo para un punto (por defecto `ARENA_220_JT1_ARE`),
+una llamada por canal sin reintentos (para ver el HTTP real), y muestra
+`fechaUltimaLectura`, filas / con valor / vacías, hasta qué hora hay
+valores, los tramos vacíos y los `intervaloUtc` repetidos del cambio de
+hora; opcionalmente compara contra los lotes de `_trabajo`. Deja un CSV
+con lo que devolvió la API (`probar_api_*.csv`, en `.gitignore`).
+
+**Verificación:** corrido contra una API simulada (`requests.Session`
+reemplazada) con valores hasta el 13-09 y un lote guardado: muestra
+`hasta 2026-09-13 22:45`, el tramo vacío y los 4 pares 23:xx / 00:xx del
+6-09. No se probó contra la API real (sin clave en el contenedor).
+Compila; suite sin cambios (188).
+
+**Pendiente:** que el usuario lo corra y confirme si la API tiene
+septiembre solo hasta el 13-09.
+

@@ -11,6 +11,7 @@ de.
 ```
 Balance_BESS.py            <- la ventana del BESS
 Balance_CRA.py             <- la ventana del CRA (ver su bloque abajo)
+probar_api_medidas.py      <- diagnostico aparte: la API de medidas en vivo, 1 punto
 config.ejemplo.json        <- el formato de "claves_api" para copiar
 config.json                <- local, NO se versiona (claves + por usuario)
 Script/
@@ -103,6 +104,21 @@ etapas hacia `proceso`): no hay ciclos.
 
 El nombre del módulo de CMg usa guiones bajos, no espacios, para que sea
 importable como cualquier módulo.
+
+---
+
+## `probar_api_medidas.py`
+
+- **Qué hace:** diagnóstico aparte, sin ventana, de la API de medidas (la
+  de "Traer Medidas_SAE.xlsx"). Consulta **en vivo** un punto de medida
+  (canales 1 y 3, una llamada por canal, sin reintentos) y muestra el HTTP,
+  `fechaUltimaLectura`, hasta qué hora hay valores, los tramos vacíos y los
+  `intervaloUtc` con dos horas locales (cambio de hora). Con la carpeta
+  `_trabajo` como 3er argumento compara contra la descarga guardada. Deja
+  un `probar_api_<punto>_<periodo>.csv` (ignorado por git). No toca el caso.
+- **Uso:** `python probar_api_medidas.py 2609 [idPuntoMedida] [carpeta _trabajo]`.
+- **Depende de:** `Script.Medidas` (URL, canales, clave API de
+  `config.json`, `normalizar_fechas`).
 
 ---
 
