@@ -4217,3 +4217,14 @@ Compila; suite sin cambios (188).
 **Pendiente:** que el usuario lo corra y confirme si la API tiene
 septiembre solo hasta el 13-09.
 
+## 2026-10-06 (4) — `probar_api_medidas.py` sale del repo
+
+El usuario aclaró que la prueba de la entrada (3) es de una sola vez y la
+quiere para "apretar play y que me diga". Se sacó `probar_api_medidas.py`
+del repo (y su sección de `MAPA.md` y la línea de `.gitignore`); en el
+chat se le dejó un script suelto, sin argumentos, que consulta la API para
+`ARENA_220_JT1_ARE` / 202609 y termina con un veredicto: "LA API TIENE EL
+MES COMPLETO" (→ la descarga guardada era vieja) o "ES LA API: tiene
+valores solo hasta …". Probado con la API simulada en los dos casos.
+El pendiente de la entrada (3) sigue: confirmar con ese resultado.
+
