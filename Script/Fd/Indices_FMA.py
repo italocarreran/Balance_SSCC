@@ -737,27 +737,37 @@ def _sacar_zona_horaria(serie):
     corre todas las horas del CTF (se detecto en la prueba).
 
     Se contempla el caso de ofsets mezclados en la misma columna -el
-    dia del cambio de hora-, donde pandas ya no devuelve una columna
-    tz-aware sino objetos sueltos.
+    dia del cambio de hora, p. ej. septiembre-, donde pandas ya no
+    devuelve una columna tz-aware: segun la version entrega objetos
+    `datetime.datetime` sueltos (sin `tz_localize`) o lanza
+    ValueError. En ese caso se convierte valor por valor.
     """
 
     try:
         fechas = pd.to_datetime(serie, errors="coerce", format="mixed")
     except (TypeError, ValueError):
-        # format="mixed" existe recien desde pandas 2.0.
-        fechas = pd.to_datetime(serie, errors="coerce")
+        fechas = None
 
-    if getattr(fechas.dtype, "tz", None) is not None:
-        return fechas.dt.tz_localize(None)
+    if fechas is not None:
+        if getattr(fechas.dtype, "tz", None) is not None:
+            return fechas.dt.tz_localize(None)
+        if pd.api.types.is_datetime64_dtype(fechas.dtype):
+            return fechas
 
     def sin_zona(valor):
-        if valor is None or pd.isna(valor):
+        if valor is None or (not isinstance(valor, str) and pd.isna(valor)):
             return pd.NaT
-        if getattr(valor, "tzinfo", None) is not None:
-            return valor.tz_localize(None)
-        return valor
+        try:
+            marca = pd.Timestamp(valor)
+        except (TypeError, ValueError):
+            return pd.NaT
+        if marca is pd.NaT:
+            return pd.NaT
+        if marca.tzinfo is not None:
+            marca = marca.tz_localize(None)
+        return marca
 
-    return fechas.map(sin_zona)
+    return pd.to_datetime(serie.map(sin_zona))
 
 
 def _dias_del_mes(anio, mes):
