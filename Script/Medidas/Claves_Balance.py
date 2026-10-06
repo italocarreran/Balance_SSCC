@@ -44,14 +44,54 @@ COLUMNAS_SAE = [
 
 
 def parse_fecha_mixta(serie):
-    """Fechas que pueden venir en formatos distintos en el mismo lote."""
+    """
+    Fechas que pueden venir en formatos distintos en el mismo lote.
+    Siempre devuelve datetime64 sin zona horaria: si el texto trae
+    ofset se le saca dejando la hora tal como esta escrita. Con ofsets
+    mezclados (cambio de hora) pandas no arma una columna tz-aware
+    -devuelve objetos sueltos o lanza ValueError-, asi que en ese caso
+    se convierte valor por valor.
+
+    `dayfirst` solo vale para textos tipo dd-mm-aaaa: aplicado a una
+    fecha ISO ('2026-09-06...') la lee como 9 de junio, lo que parte
+    el mes en varios "periodos" y desordena el calendario.
+    """
+
+    textos = serie.dropna().astype(str).str.strip()
+    dayfirst = not (
+        len(textos) > 0 and textos.str.match(r"^\d{4}-").all()
+    )
 
     try:
-        return pd.to_datetime(
-            serie, dayfirst=True, errors="coerce", format="mixed"
+        fechas = pd.to_datetime(
+            serie, dayfirst=dayfirst, errors="coerce", format="mixed"
         )
     except (TypeError, ValueError):
-        return pd.to_datetime(serie, dayfirst=True, errors="coerce")
+        fechas = None
+
+    if fechas is not None:
+        if getattr(fechas.dtype, "tz", None) is not None:
+            return fechas.dt.tz_localize(None)
+        if pd.api.types.is_datetime64_dtype(fechas.dtype):
+            return fechas
+
+    def una(valor):
+        if valor is None or (not isinstance(valor, str) and pd.isna(valor)):
+            return pd.NaT
+        try:
+            marca = pd.Timestamp(valor)
+        except (TypeError, ValueError):
+            try:
+                marca = pd.to_datetime(valor, dayfirst=dayfirst)
+            except (TypeError, ValueError):
+                return pd.NaT
+        if marca is pd.NaT:
+            return pd.NaT
+        if marca.tzinfo is not None:
+            marca = marca.tz_localize(None)
+        return marca
+
+    return pd.to_datetime(serie.map(una))
 
 
 def _exigir_columnas(df, columnas, origen):
@@ -75,6 +115,80 @@ def normalizar_fechas(df):
     df[COL_INTERVALO_UTC] = parse_fecha_mixta(df[COL_INTERVALO_UTC])
 
     return df
+
+
+def descartar_hora_inexistente(df):
+    """
+    El dia en que se adelanta la hora (hoy, en septiembre) la hora
+    local que se salta no existe, pero la API igual entrega esos 4
+    cuartos de hora, con un `intervaloUtc` repetido con el de la hora
+    real. Eso deja cada punto de medida con 4 filas mas que los
+    cuartos de hora distintos del mes, y TODOS quedaban marcados como
+    incompletos.
+
+    No se usa ninguna fecha fija ni tabla de zonas horarias: el cambio
+    se deduce de la propia descarga. El ofset de cada fila es
+    `intervalo - intervaloUtc`; cuando un mismo `intervaloUtc` aparece
+    con mas de una hora local, la buena es la que trae el ofset que
+    rige desde ese instante en adelante (el del siguiente
+    `intervaloUtc` sin repetir), y las otras sobran. Si eso no se
+    puede decidir para un instante, sus filas no se tocan. En los
+    meses sin cambio de hora, o en abril (donde se repite la hora
+    LOCAL pero no la UTC), no se descarta nada. Tambien se sacan las
+    filas sin `intervaloUtc`.
+
+    Devuelve (df_depurado, filas_descartadas).
+    """
+
+    sin_utc = df[COL_INTERVALO_UTC].isna()
+    descartadas = df[sin_utc]
+    df = df[~sin_utc]
+
+    pares = (
+        df[[COL_INTERVALO_LOCAL, COL_INTERVALO_UTC]]
+        .dropna()
+        .drop_duplicates()
+    )
+    pares["ofset"] = pares[COL_INTERVALO_LOCAL] - pares[COL_INTERVALO_UTC]
+
+    repetido = pares.duplicated(COL_INTERVALO_UTC, keep=False)
+
+    if not repetido.any():
+        return df, descartadas
+
+    unicos = (
+        pares.loc[~repetido, [COL_INTERVALO_UTC, "ofset"]]
+        .rename(columns={"ofset": "ofset_siguiente"})
+        .sort_values(COL_INTERVALO_UTC)
+    )
+
+    dudosos = pd.merge_asof(
+        pares[repetido].sort_values(COL_INTERVALO_UTC),
+        unicos,
+        on=COL_INTERVALO_UTC,
+        direction="forward",
+        allow_exact_matches=False,
+    )
+
+    dudosos["valido"] = dudosos["ofset"] == dudosos["ofset_siguiente"]
+    validos_por_instante = (
+        dudosos.groupby(COL_INTERVALO_UTC)["valido"].transform("sum")
+    )
+
+    # Solo se decide donde hay exactamente una hora local buena.
+    sobran = dudosos[~dudosos["valido"] & (validos_por_instante == 1)]
+
+    if sobran.empty:
+        return df, descartadas
+
+    claves = pd.MultiIndex.from_frame(
+        sobran[[COL_INTERVALO_LOCAL, COL_INTERVALO_UTC]]
+    )
+    sobra = pd.MultiIndex.from_frame(
+        df[[COL_INTERVALO_LOCAL, COL_INTERVALO_UTC]]
+    ).isin(claves)
+
+    return df[~sobra], pd.concat([descartadas, df[sobra]])
 
 
 def cuartos_de_hora_del_mes(df):
@@ -190,6 +304,20 @@ def construir_por_clave(df, df_homol, registrar=print):
 
     df = normalizar_fechas(df)
 
+    df, descartadas = descartar_hora_inexistente(df)
+    if not descartadas.empty:
+        horas = sorted(
+            descartadas[COL_INTERVALO_LOCAL].dropna().unique()
+        )
+        ejemplo = ", ".join(
+            pd.Timestamp(h).strftime("%d-%m %H:%M") for h in horas[:4]
+        )
+        registrar(
+            f"  filas descartadas por la hora inexistente del cambio de "
+            f"hora o sin intervaloUtc: {len(descartadas):,}"
+            + (f" (hora local {ejemplo})" if ejemplo else "")
+        )
+
     esperados = cuartos_de_hora_del_mes(df)
     registrar(f"  cuartos de hora del mes: {esperados:,}")
 
@@ -201,10 +329,17 @@ def construir_por_clave(df, df_homol, registrar=print):
     df = df[df["principal"] == True].copy()  # noqa: E712
 
     if df.empty:
+        muestra = "\n".join(
+            f"  {fila['idPuntoMedida']}: canalVal1={int(fila['canalVal1']):,} "
+            f"canalVal3={int(fila['canalVal3']):,}"
+            for _, fila in incompletos.head(5).iterrows()
+        )
         raise ErrorMedidas(
             "Despues de descartar los puntos de medida incompletos no "
             "quedo ningun registro principal. Revisa el periodo y la "
-            "cobertura de la descarga."
+            "cobertura de la descarga.\n\n"
+            f"Cuartos de hora esperados: {esperados:,}. Primeros puntos "
+            f"descartados:\n{muestra}"
         )
 
     df["canalVal"] = df["canalVal1"].fillna(0) + df["canalVal3"].fillna(0)
