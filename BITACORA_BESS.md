@@ -241,11 +241,12 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 - Evaluar si `guardar_config()` necesita escritura atómica (ver
   `METODOLOGIA.md` §7).
 - **Septiembre 2026 con datos reales (cambio de hora):** volver a correr
-  "Traer Medidas_SAE.xlsx" (los 47 puntos ya están descargados) y
+  "Traer Medidas_SAE.xlsx" (ahora vuelve a descargar los 47 puntos) y
   confirmar que el log diga "filas descartadas por la hora inexistente…
-  (hora local 06-09 00:00…)" y "cuartos de hora del mes: 2,876"; y
-  regenerar `fma_ctf_2609.xlsx`. Los dos arreglos (sesión 2026-10-06) se
-  probaron solo con datos sintéticos.
+  (hora local 06-09 00:00…)", "cuartos de hora del mes: 2,876" y 0
+  incompletos. Si sigue con incompletos, el error dice hasta qué hora
+  trae valores la API: si es antes de fin de mes, la API todavía no lo
+  publicó (no es un bug). Regenerar también `fma_ctf_2609.xlsx`.
 - **¿`Medidas_SAE.xlsx` de agosto mal numerado?** Si la API de medidas
   entrega `intervalo`/`intervaloUtc` en ISO (`2026-08-05...`), el
   `dayfirst=True` que había en `parse_fecha_mixta()` leía los días 1-12
@@ -4138,3 +4139,58 @@ manuales (sin tabla de zonas) y el cambio en días/horas arbitrarios
 normal (2.976) sin descartes; parseo ISO / día primero / ofsets
 mezclados. `py_compile` y suite completa en verde: 184 pruebas (178 + 6), 5 salteadas (ventana, sin tkinter). Falta la
 corrida con datos reales (pendiente arriba).
+
+## 2026-10-06 (2) — Medidas_SAE de septiembre: se descartaba la hora equivocada y la descarga vieja quedaba pegada
+
+Sesión leída con `REGLAS.md` y esta bitácora. El usuario volvió a correr
+"Traer Medidas_SAE.xlsx" con el arreglo de la entrada anterior y obtuvo
+otro error:
+
+```
+filas descartadas por la hora inexistente ...: 376 (hora local 05-09 23:00, ...)
+cuartos de hora del mes: 2,876
+puntos de medida incompletos: 47
+  ARENA_220_JT1_ARE: canalVal1=1,240 canalVal3=1,240
+```
+
+**Dos problemas distintos:**
+
+1. **Se descartaba la hora que sí existió.** El supuesto de la entrada
+   anterior (la hora falsa repite el UTC de la hora *siguiente*) era
+   incorrecto: la API le pone a la hora inexistente (00:00-00:45 del 6-09)
+   el UTC de la hora *anterior* al salto (23:00-23:45 del 5-09). 376 =
+   47 puntos × 2 canales × 4. Con las fechas solas las dos lecturas son
+   igual de coherentes (un salto de 1 h está en los dos lados), así que la
+   regla del ofset del siguiente UTC elegía al revés. Regla nueva en
+   `descartar_hora_inexistente()`: por cada UTC repetido gana la hora local
+   con más valores medidos (sumando todos los puntos) y, si empatan, la más
+   temprana. Sigue sin fechas fijas ni tabla de zonas horarias.
+
+2. **1.240 cuartos con valor por punto = datos hasta el 13-09 22:45.**
+   No era el cambio de hora: la descarga guardada en
+   `Medidas/_trabajo/` traía valores nulos desde el 13-09 (con los dos
+   problemas juntos el cálculo da exactamente 1.240; reproducido en
+   sintético). `Descarga_PRMTE.descargar()` reusaba para siempre una
+   descarga terminada ("reanudando: 47 punto(s) ya descargados ...,
+   quedan 0"), así que una bajada hecha con el mes a medio publicar no se
+   volvía a consultar nunca. Ahora solo reanuda una descarga **cortada**
+   (quedan puntos pendientes); si la anterior estaba completa, borra sus
+   lotes y la marca y baja todo de nuevo (son 2 llamadas por punto). Los
+   puntos fallidos no se anotan como procesados, así que un reintento
+   sigue pidiendo solo esos. Además, si el mes queda con puntos
+   incompletos, el error dice hasta qué hora local llegan los valores.
+
+**Sin confirmar:** no se sabe si la API hoy ya tiene septiembre completo.
+Si después de volver a descargar el error dice "valores solo hasta el
+…", es la API y no el programa.
+
+**Verificación:** `tests/test_claves_balance.py` pasa a 10 pruebas: el
+generador arma la hora falsa como la API real (UTC de la hora anterior)
+y la prueba exige que la hora anterior al salto se conserve; gana la hora
+con valores en los dos sentidos; mes a medio publicar → el error trae la
+fecha; descarga completa → se vuelve a bajar sin los lotes viejos;
+descarga cortada → se reanuda. Las 2 de descarga se saltean si no hay
+`pyarrow` (en el contenedor no estaba; se instaló para correrlas).
+Suite: 188 pruebas (184 + 4), 5 salteadas (ventana). Reproducido el
+log del usuario en sintético (1.240 / 1.240 con valores
+hasta el 13-09).

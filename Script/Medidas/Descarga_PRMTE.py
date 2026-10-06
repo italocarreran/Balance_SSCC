@@ -134,9 +134,14 @@ def descargar(
     Descarga todos los puntos y devuelve
     (df_consolidado, puntos_fallidos).
 
-    Reanudable: los puntos ya anotados en
-    puntos_procesados_<periodo>.txt no se vuelven a pedir, y sus lotes
-    ya guardados se releen del disco.
+    Reanudable: si una corrida anterior se corto a la mitad, los
+    puntos ya anotados en puntos_procesados_<periodo>.txt no se vuelven
+    a pedir, y sus lotes ya guardados se releen del disco. Si la
+    corrida anterior habia terminado (todos los puntos anotados), NO se
+    reanuda: se borran sus lotes y se descarga todo de nuevo. Antes se
+    reusaba para siempre, y una descarga hecha cuando la API tenia el
+    mes a medio publicar quedaba pegada (los puntos salian incompletos
+    en cada corrida sin que se volviera a consultar).
 
     desde/hasta: rango de la barra de progreso de la ventana que le
     toca a esta etapa (la descarga es lo que se lleva casi todo el
@@ -159,6 +164,19 @@ def descargar(
 
     procesados = _leer_procesados(carpeta_trabajo, periodo)
     pendientes = [p for p in puntos if str(p) not in procesados]
+
+    if procesados and not pendientes:
+        registrar(
+            "  la descarga anterior de este periodo estaba completa: se "
+            "vuelve a descargar para traer los datos al dia"
+        )
+        for archivo in carpeta_trabajo.glob(
+            f"medidas_batch_{periodo}_*.parquet"
+        ):
+            archivo.unlink()
+        _archivo_procesados(carpeta_trabajo, periodo).unlink()
+        procesados = set()
+        pendientes = list(puntos)
 
     if procesados:
         registrar(

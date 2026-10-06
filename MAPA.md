@@ -345,13 +345,19 @@ importable como cualquier módulo.
     mes de 30 días o menos, y para los meses con cambio de hora;
   - **(2026-10-06, bug)** el día en que se adelanta la hora, la API entrega
     igual los 4 cuartos de hora de la hora local que no existe, con un
-    `intervaloUtc` repetido: cada punto quedaba con 4 filas más que los
-    cuartos de hora del mes y **todos** se daban por incompletos.
-    `descartar_hora_inexistente()` los saca **deduciendo el cambio de la
-    propia descarga** (ofset `intervalo - intervaloUtc`: de las horas
-    locales de un UTC repetido queda la que trae el ofset del siguiente UTC
-    sin repetir). No hay fecha fija ni tabla de zonas horarias, así que
-    sirve aunque el decreto mueva el día;
+    `intervaloUtc` de la hora **anterior** al salto (00:00-00:45 del 6-09
+    con el UTC de las 23:00-23:45 del 5-09): cada punto quedaba con 4 filas
+    más que los cuartos de hora del mes y **todos** se daban por
+    incompletos. `descartar_hora_inexistente()` reconoce el cambio en la
+    propia descarga (un UTC con dos horas locales) y se queda con la hora
+    que trae valores medidos o, si empatan, con la más temprana. No hay
+    fecha fija ni tabla de zonas horarias, así que sirve aunque el decreto
+    mueva el día;
+  - **(2026-10-06, bug)** `Descarga_PRMTE` reanuda solo una descarga
+    **cortada**: si la anterior había terminado, borra sus lotes y baja
+    todo de nuevo. Antes una descarga hecha con el mes a medio publicar
+    quedaba pegada para siempre. Si aun así faltan datos, el error dice
+    hasta qué hora llegan los valores;
   - **(2026-10-06, bug)** `parse_fecha_mixta()` ya no usa `dayfirst` con
     fechas ISO (`2026-09-06` se leía como 9 de junio y partía el calendario
     en varios "períodos") y tolera ofsets mezclados;
