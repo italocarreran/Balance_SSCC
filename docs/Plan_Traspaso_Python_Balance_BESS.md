@@ -555,7 +555,7 @@ En Python no se debe asumir que el mismo nombre aparece idéntico en todas las f
 
 **Regla de migración:** durante la primera réplica no se corregirán ni reinterpretarán homologaciones aunque parezcan desplazadas o poco intuitivas. Se usarán exactamente como estén en `Centrales.xlsx` y cualquier inconsistencia se reportará para validación manual.
 
-**Corrección (sesión de validación con datos reales, ver `BITACORA.md`):** los "bloques asociados a FD/Subastas/ofertas" mencionados arriba son, literalmente, **columnas separadas por columnas en blanco** (ej. `A:B`=FD, `C:D` vacías, `E:F:G`=Subastas/ofertas) — **no** garantizan que la fila de una tabla corresponda a la misma central que la fila de la tabla de al lado. `construir_homologacion()` (usada para el SoC) originalmente trataba cada fila completa como un solo grupo de sinónimos, mezclando así columnas de bloques distintos cuando el orden de una tabla se corría respecto del de la otra (confirmado con un `Diccionario` real: para 6 de 9 centrales las dos tablas coincidían fila a fila por casualidad, pero para las últimas 3 no, y esa fila mezclada homologaba una central hacia la central del bloque vecino). Corregido para detectar los bloques de columnas automáticamente (separador = columna vacía en TODAS las filas) y homologar cada bloque por separado — ver `_bloques_columnas_diccionario()`. `construir_dic_mapeo_diccionario()` (columnas A:B) y `_mapas_homologacion_fge()` (columnas E:F:G) ya usaban posiciones fijas y nunca tuvieron este problema.
+**Corrección (sesión de validación con datos reales, ver `BITACORA_BESS.md`):** los "bloques asociados a FD/Subastas/ofertas" mencionados arriba son, literalmente, **columnas separadas por columnas en blanco** (ej. `A:B`=FD, `C:D` vacías, `E:F:G`=Subastas/ofertas) — **no** garantizan que la fila de una tabla corresponda a la misma central que la fila de la tabla de al lado. `construir_homologacion()` (usada para el SoC) originalmente trataba cada fila completa como un solo grupo de sinónimos, mezclando así columnas de bloques distintos cuando el orden de una tabla se corría respecto del de la otra (confirmado con un `Diccionario` real: para 6 de 9 centrales las dos tablas coincidían fila a fila por casualidad, pero para las últimas 3 no, y esa fila mezclada homologaba una central hacia la central del bloque vecino). Corregido para detectar los bloques de columnas automáticamente (separador = columna vacía en TODAS las filas) y homologar cada bloque por separado — ver `_bloques_columnas_diccionario()`. `construir_dic_mapeo_diccionario()` (columnas A:B) y `_mapas_homologacion_fge()` (columnas E:F:G) ya usaban posiciones fijas y nunca tuvieron este problema.
 
 ## 4.2. Rol de `Centrales.xlsx`
 
@@ -1708,7 +1708,7 @@ datos que en ese momento **no existían en ningún archivo ya mapeado** en la mi
   fila 8) y un umbral único en `H8`, usada por `M` (umbral) y `AE`/`AF` (factor). **Resuelto en
   25.8**: es la misma tabla que `Centrales.xlsx!Resumen BESS`, no una hoja aparte.
 - Un umbral de subida/bajada por `Configuración+P`, usado en `AU`/`AV`/`AW`/`AZ`. **Sigue sin
-  resolverse** (ver 25.8 y "Pendientes abiertos" en `BITACORA.md`).
+  resolverse** (ver 25.8 y "Pendientes abiertos" en `BITACORA_BESS.md`).
 
 En ese momento se implementó únicamente lo que no dependía de la hoja `Resumen`: `L`, `N`, `O`,
 `R`, `S`, `T`, `U`, `W`, `X`, `Y`, `AB`, `AC`, `AD`. `M`, `AE` y `AF` se agregaron después (25.8);
@@ -1873,7 +1873,7 @@ Replicando el VBA (`salidaAGAX(i,1)=valorAG; salidaAGAX(i,4)=valorAG` — **AG y
 valor**, igual `AH`/`AK`): `AJ = AG`, `AK = AH` (Prorratas "+" duplica literalmente las
 Prorratas "-"; no es un error, así está en el original). `AI = AL = 0` (`CTF`, ver arriba).
 
-**Corrección (sesión de validación con datos reales, ver `BITACORA.md`): "Cuenta de Sub_Baj" es
+**Corrección (sesión de validación con datos reales, ver `BITACORA_BESS.md`): "Cuenta de Sub_Baj" es
 el `aggfunc` de la tabla dinámica, pero el valor final NO es esa cuenta cruda.** El nombre
 "Prorrata" lo dice literalmente: cada celda se divide por la suma de su propia fila (entre TODOS
 los valores de `Control` que aparecen para esa `Configuración`+`Hora_mes`), así que cada fila
@@ -2273,5 +2273,5 @@ dirección) esto sigue siendo exactamente lo que el pivot necesita — coincide 
 original duplique literalmente `AJ=AG`/`AK=AH` sin distinguir dirección en absoluto (algo que
 ahora tiene una explicación clara: la fuente de datos del pivot tampoco la distingue).
 
-Ver `BITACORA.md`, entrada "Corrección grande: `NOMBRES_SUBASTAS` estaba mal desde el principio",
+Ver `BITACORA_BESS.md`, entrada "Corrección grande: `NOMBRES_SUBASTAS` estaba mal desde el principio",
 para el detalle de verificación (test con los valores exactos de dos filas del archivo real).

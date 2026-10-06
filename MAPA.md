@@ -343,6 +343,18 @@ importable como cualquier módulo.
     es la constante `2976` (= 31 × 96) sino la cantidad de cuartos de hora
     que el mes descargado realmente trae. `2976` estaba mal para cualquier
     mes de 30 días o menos, y para los meses con cambio de hora;
+  - **(2026-10-06, bug)** el día en que se adelanta la hora, la API entrega
+    igual los 4 cuartos de hora de la hora local que no existe, con un
+    `intervaloUtc` repetido: cada punto quedaba con 4 filas más que los
+    cuartos de hora del mes y **todos** se daban por incompletos.
+    `descartar_hora_inexistente()` los saca **deduciendo el cambio de la
+    propia descarga** (ofset `intervalo - intervaloUtc`: de las horas
+    locales de un UTC repetido queda la que trae el ofset del siguiente UTC
+    sin repetir). No hay fecha fija ni tabla de zonas horarias, así que
+    sirve aunque el decreto mueva el día;
+  - **(2026-10-06, bug)** `parse_fecha_mixta()` ya no usa `dayfirst` con
+    fechas ISO (`2026-09-06` se leía como 9 de junio y partía el calendario
+    en varios "períodos") y tolera ofsets mezclados;
   - se dejó de generar `log_inconsistencias_medidas.xlsx`, que comparaba el
     criterio de desempate viejo contra el de mayor `idMeasure`: esa
     comparación era una investigación ya cerrada (el propio script la titula
@@ -510,7 +522,9 @@ importable como cualquier módulo.
   - al CTF se le saca la zona horaria **conservando la hora tal como está
     escrita** (`_sacar_zona_horaria`): `04:00-03:00` queda en las 04:00, **no**
     en las 07:00. Convertir a UTC corría todas las horas del CTF — se detectó
-    justamente en la prueba.
+    justamente en la prueba. Con ofsets mezclados en la columna (mes con
+    cambio de hora) se convierte valor por valor: pandas no arma una
+    columna tz-aware y entrega `datetime.datetime` sueltos o un error.
   - un día sin archivo se saltea con aviso (el original revienta), y si falta el
     origen de una, las otras se arman igual.
   - **el CSF no necesita el DCO publicado** (su origen es otro servidor), así que
@@ -1080,7 +1094,7 @@ importable como cualquier módulo.
   (buscador y lector), `nucleo.rutas.buscar_archivo_sscc_desempeno`,
   `nucleo.externos.indicadores_dco` (Traer FD), `Script/config.py`,
   `Script/arbol.py`. `nucleo` no importa nada de `cra`.
-- **Pendiente:** ver `BITACORA.md` → "Pendientes abiertos → CRA".
+- **Pendiente:** ver `BITACORA_CRA.md` → "Pendientes abiertos".
 
 ## `Script/Politicas/Costos_Variables.py`
 

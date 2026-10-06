@@ -7,7 +7,7 @@
 > las hojas de entrada `ENERGIA`, `FP`, `CO`, `SC y CO`, `FD_*` y la matriz
 > de `PRORRATA_RETIROS`; `fp_` y `cvar_cra_` los arma el programa desde las
 > políticas de operación (`Script/Politicas/`). Ver `MAPA.md` y
-> `BITACORA.md` → "Pendientes abiertos → CRA".
+> `BITACORA_CRA.md` → "Pendientes abiertos".
 
 Herramienta en Python que reemplaza, hoja por hoja, el cálculo hecho hoy en
 `11_PAGOS_BESS_2607_Definitivo.xlsm` (Balance BESS / SSCC). La planilla se
@@ -351,7 +351,7 @@ resultado, siempre que la carpeta base seleccionada sea la misma.
 | Entender cómo se trabaja en este repo (para un asistente de IA o alguien nuevo) | `METODOLOGIA.md` |
 | El checklist obligatorio de inicio/cierre de sesión | `REGLAS.md` |
 | Qué hace cada script, en dos líneas | `MAPA.md` |
-| Historial de sesiones y pendientes abiertos | `BITACORA.md` |
+| Historial de sesiones y pendientes abiertos | `BITACORA_BESS.md` (BESS) y `BITACORA_CRA.md` (CRA) |
 | Reglas de negocio del cálculo y el plan completo de migración | `docs/Plan_Traspaso_Python_Balance_BESS.md` |
 | CRA: de dónde sale cada hoja de `5_REMUNERACIÓN_CRA_*`, fórmulas y pendientes | `docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md` |
 | El código VBA original, las fórmulas del `.xlsm` y de dónde sale cada dato | `docs/Trazabilidad_11_PAGOS_BESS_2607_Definitivo.md` |
@@ -480,5 +480,5 @@ Las macros de Ofertas SSCC, CMg, FD y Subastas replicadas son solo las de
 **carga** de esas hojas.
 
 Validado con casos sintéticos (no con datos reales todavía): ver
-`BITACORA.md` → "Pendientes abiertos" para lo que falta antes de dar por
+`BITACORA_BESS.md` → "Pendientes abiertos" para lo que falta antes de dar por
 cerrada cada etapa (validación contra un caso real y contra la planilla 11).

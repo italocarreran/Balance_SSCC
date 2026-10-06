@@ -135,7 +135,7 @@ def calcular_hora_mes_subastas(dias, horas, dia_cambio_hora=None, ajuste=1):
     es lo correcto en los 10 meses del año en que no hay cambio de
     hora. Queda como parametro y no hardcodeado porque de donde sale
     ese dia cada mes es justamente lo que falta confirmar (ver
-    BITACORA.md, "Pendientes abiertos").
+    BITACORA_BESS.md, "Pendientes abiertos").
     """
 
     dias = pd.to_numeric(dias, errors="coerce")
