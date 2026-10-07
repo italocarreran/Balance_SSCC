@@ -3,7 +3,10 @@
   - el boton "Actualizar" (junto a "Examinar") vuelve a mirar las
     carpetas: un archivo pegado a mano aparece sin cambiar de mes;
   - el boton de Medidas_SAE.xlsx arranca sin la advertencia previa
-    ("Es el proceso mas lento... ¿Seguir?").
+    ("Es el proceso mas lento... ¿Seguir?");
+  - si Puntos_fallidos.xlsx tiene renglones, la fila de Medidas_SAE.xlsx
+    muestra un aviso que abre un cuadro con "Ver detalle" (abre el
+    Excel) y "Cerrar".
 
 Necesita tkinter Y un display (en Linux: `xvfb-run -a python -m
 unittest discover`); sin ellos se saltea, igual que la prueba de la
@@ -166,6 +169,67 @@ class TestVentanaActualizar(unittest.TestCase):
         self.assertEqual(preguntas, [])
 
         self.assertEqual(llamadas, ["2609"])
+
+    def test_aviso_de_medidas_incompletas(self):
+        import pandas as pd
+
+        rutas = self.nucleo.resolver_rutas(self.caso)
+        pd.DataFrame({"clave": ["A"]}).to_excel(rutas["medidas_sae"],
+                                                index=False)
+        pd.DataFrame([{
+            "Punto de Medida": "ARENA_220_JT1_ARE", "Clave": "A",
+            "Problema": "Sin informacion", "Canal": "Canal 1",
+            "Desde": pd.Timestamp("2026-09-13 23:00"),
+            "Hasta": pd.Timestamp("2026-09-30 23:45"),
+            "Cuartos de hora": 1636,
+        }]).to_excel(rutas["puntos_fallidos"], index=False)
+
+        abiertos = []
+        try:
+            self._boton("Actualizar", self._marco_carpeta()).invoke()
+            self.root.update()
+
+            fila = self._fila(self.nucleo.ARCHIVO_MEDIDAS_SAE)
+            simbolo = next(
+                w for w in self._todos(fila)
+                if w.winfo_class() == "Label"
+                and w.cget("text") == self.app.SIMBOLO_AVISO
+            )
+            simbolo.event_generate("<Button-1>")
+            self.root.update()
+
+            cuadro = next(
+                w for w in self.root.winfo_children()
+                if w.winfo_class() == "Toplevel"
+            )
+            textos = [w.cget("text") for w in self._todos(cuadro)
+                      if w.winfo_class() == "Label"]
+            self.assertTrue(any("incompletos" in t and "ARENA_220_JT1_ARE" in t
+                                and "13-09-2026 23:00" in t for t in textos))
+            self._boton("Cerrar", cuadro)
+
+            with mock.patch.object(
+                self.app, "abrir_archivo",
+                lambda ruta: abiertos.append(ruta) or True,
+            ):
+                self._boton("Ver detalle", cuadro).invoke()
+                self.root.update()
+
+            self.assertEqual(abiertos, [str(rutas["puntos_fallidos"])])
+            self.assertFalse(cuadro.winfo_exists())
+        finally:
+            rutas["medidas_sae"].unlink()
+            rutas["puntos_fallidos"].unlink()
+            self._boton("Actualizar", self._marco_carpeta()).invoke()
+            self.root.update()
+
+        # Sin Puntos_fallidos con renglones, no hay aviso.
+        fila = self._fila(self.nucleo.ARCHIVO_MEDIDAS_SAE)
+        self.assertFalse(any(
+            w.winfo_class() == "Label"
+            and w.cget("text") == self.app.SIMBOLO_AVISO
+            for w in self._todos(fila)
+        ))
 
 
 if __name__ == "__main__":

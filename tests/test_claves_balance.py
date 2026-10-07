@@ -13,7 +13,8 @@ zonas horarias) y ponen el cambio en dias y horas arbitrarios.
   - si una de las dos horas trae valores y la otra no, gana la que
     trae valores;
   - una descarga completa no se reusa: se vuelve a bajar;
-  - si los datos llegan solo hasta media mes, el error lo dice;
+  - si los datos llegan solo hasta media mes, se genera igual y el
+    hueco queda detallado por punto y canal (detallar_huecos);
   - atraso de hora (+4) y un mes normal no cambian;
   - las fechas ISO no se leen con dayfirst (2026-09-06 no es 9 de
     junio).
@@ -184,15 +185,55 @@ class TestCambioDeHora(unittest.TestCase):
         self.assertTrue(diagnostico["incompletos"].empty)
         self.assertEqual(diagnostico["cuartos_esperados"], 2876)
 
-    def test_mes_a_medio_publicar_lo_dice(self):
+    def test_mes_a_medio_publicar_se_genera_igual(self):
+        # Antes: error "no quedo ningun registro principal". Ahora los
+        # puntos incompletos entran con lo que traen, y el hueco queda
+        # detallado por punto y canal.
         df = descarga(
             "2026-09-01", "2026-10-01", "2026-09-06 00:00",
             valores_hasta="2026-09-13 23:00",
         )
-        with self.assertRaises(cb.ErrorMedidas) as error:
-            self.correr(df)
-        self.assertIn("valores solo hasta el 13-09-2026 22:45",
-                      str(error.exception))
+        salida, diagnostico, log = self.correr(df)
+
+        self.assertEqual(len(diagnostico["incompletos"]), 2)
+        self.assertEqual(sorted(salida["clave"].unique()), ["A", "B"])
+        self.assertEqual(salida["Cuarto de Hora"].max(), 2876)
+        self.assertTrue(any("valores solo hasta el 13-09-2026 22:45" in l
+                            for l in log))
+
+        huecos = diagnostico["huecos"]
+        self.assertEqual(len(huecos), 4)          # 2 puntos x 2 canales
+        self.assertEqual(set(huecos["Desde"]),
+                         {pd.Timestamp("2026-09-13 23:00")})
+        self.assertEqual(set(huecos["Hasta"]),
+                         {pd.Timestamp("2026-09-30 23:45")})
+
+    def test_huecos_en_medio_y_canal_que_falta(self):
+        df = descarga("2026-08-01", "2026-09-01")
+        local = pd.to_datetime(df["intervalo"])
+        # P1: canal 1 sin valor el 10-08 de 10:00 a 11:45 (8 cuartos).
+        tramo = ((df["idPuntoMedida"] == "P1") & df["canalVal1"].notna()
+                 & (local >= "2026-08-10 10:00")
+                 & (local < "2026-08-10 12:00"))
+        df.loc[tramo, "canalVal1"] = None
+        # P2: la API no devolvio el canal 3.
+        df = df[~((df["idPuntoMedida"] == "P2") & df["canalVal3"].notna())]
+
+        huecos = cb.detallar_huecos(cb.normalizar_fechas(df))
+
+        self.assertEqual(len(huecos), 2)
+        p1 = huecos[huecos["Punto de Medida"] == "P1"].iloc[0]
+        self.assertEqual(p1["Canal"], "Canal 1")
+        self.assertEqual(p1["Desde"], pd.Timestamp("2026-08-10 10:00"))
+        self.assertEqual(p1["Hasta"], pd.Timestamp("2026-08-10 11:45"))
+        self.assertEqual(p1["Cuartos de hora"], 8)
+        p2 = huecos[huecos["Punto de Medida"] == "P2"].iloc[0]
+        self.assertEqual(p2["Canal"], "Canal 3")
+        self.assertEqual(p2["Cuartos de hora"], 2976)
+
+    def test_mes_completo_sin_huecos(self):
+        _, diagnostico, _ = self.correr(descarga("2026-08-01", "2026-09-01"))
+        self.assertTrue(diagnostico["huecos"].empty)
 
     def test_adelanto_sin_fantasma_no_descarta(self):
         df = descarga(

@@ -12,13 +12,14 @@ from .externos import (
 )
 from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, ARCHIVO_CONTROL, ARCHIVO_MEDIDAS_SAE,
-    ARCHIVO_SALIDA, CARPETA_AUXILIARES, CARPETA_CMG,
+    ARCHIVO_PUNTOS_FALLIDOS, ARCHIVO_SALIDA, CARPETA_AUXILIARES, CARPETA_CMG,
     CARPETA_DB_SUBASTAS, CARPETA_FD_FMA, CARPETA_MEDIDAS,
     CARPETA_OFERTAS, CARPETA_PRORRATA_RETIROS, CARPETA_SUBASTAS,
     HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545, HOJA_CMG,
     HOJA_COMPENSACION_CENTRAL, HOJA_DICCIONARIO, HOJA_FD,
     HOJA_MEDIDORES, HOJA_OFERTAS_SSCC, HOJA_PRORRATA_RETIROS,
     HOJA_RESUMEN, HOJA_RESUMEN_BESS, HOJA_SUBASTAS, ORDEN_HOJAS_SALIDA,
+    PROBLEMA_NO_ENCONTRADO, PROBLEMA_SIN_INFORMACION,
 )
 from .origenes import origen as origen_de
 from .prorrata_retiros import buscar_archivo_prorrata
@@ -107,7 +108,7 @@ def hojas_de(ruta):
 
 
 def _fila(id_fila, etiqueta, nivel, estado, detalle="", ruta=None,
-          es_carpeta=False, origen=None):
+          es_carpeta=False, origen=None, aviso=None):
     """
     Una fila del diagrama de la ventana.
 
@@ -127,6 +128,10 @@ def _fila(id_fila, etiqueta, nivel, estado, detalle="", ruta=None,
     fila viene de afuera del caso (o se arma con insumos que vienen de
     afuera). La ventana lo muestra como "Origen: <etiqueta>" en el
     detalle, con la etiqueta como link.
+    aviso: {"titulo", "mensaje", "ruta"} cuando la fila tiene algo que
+    avisar (hoy: Medidas_SAE.xlsx generado con informacion incompleta).
+    La ventana pone un simbolo al lado que abre el mensaje, con un
+    boton para abrir 'ruta' (el archivo con el detalle).
     """
 
     return {
@@ -138,7 +143,85 @@ def _fila(id_fila, etiqueta, nivel, estado, detalle="", ruta=None,
         "ruta": str(ruta) if ruta else "",
         "es_carpeta": bool(es_carpeta),
         "origen": origen_de(origen) if origen else None,
+        "aviso": aviso,
     }
+
+
+def _fecha_corta(valor):
+    try:
+        return pd.Timestamp(valor).strftime("%d-%m-%Y %H:%M")
+    except (TypeError, ValueError):
+        return str(valor)
+
+
+def aviso_puntos_fallidos(ruta):
+    """
+    El aviso de la fila de Medidas_SAE.xlsx a partir de
+    Puntos_fallidos.xlsx: None si el archivo no esta, no se puede leer
+    o esta vacio (la corrida no tuvo problemas). El estado sale del
+    disco, asi que el aviso sigue ahi al cerrar y abrir la ventana.
+
+    Se cachea por version del archivo (ver _con_cache).
+    """
+
+    ruta = Path(ruta)
+
+    if not ruta.is_file():
+        return None
+
+    def _leer(ruta):
+        try:
+            df = pd.read_excel(ruta)
+        except Exception:
+            return None
+
+        if df.empty or "Problema" not in df or "Punto de Medida" not in df:
+            return None
+
+        lineas = [
+            f"{ARCHIVO_MEDIDAS_SAE} se genero con la informacion que "
+            f"habia, pero:",
+            "",
+        ]
+
+        no_encontrados = df[df["Problema"] == PROBLEMA_NO_ENCONTRADO]
+        if not no_encontrados.empty:
+            puntos = list(pd.unique(no_encontrados["Punto de Medida"]))
+            lineas.append(
+                f"- Hay {len(puntos)} punto(s) de medida no encontrados "
+                f"en la API:"
+            )
+            lineas += [f"     {p}" for p in puntos[:8]]
+            if len(puntos) > 8:
+                lineas.append(f"     ... y {len(puntos) - 8} mas")
+            lineas.append("")
+
+        huecos = df[df["Problema"] == PROBLEMA_SIN_INFORMACION]
+        if not huecos.empty:
+            puntos = list(pd.unique(huecos["Punto de Medida"]))
+            lineas.append(
+                f"- Hay {len(puntos)} punto(s) de medida incompletos "
+                f"(cuartos de hora sin informacion):"
+            )
+            for _, h in huecos.head(8).iterrows():
+                lineas.append(
+                    f"     {h['Punto de Medida']} ({h.get('Canal', '')}): "
+                    f"de {_fecha_corta(h['Desde'])} a "
+                    f"{_fecha_corta(h['Hasta'])}"
+                )
+            if len(huecos) > 8:
+                lineas.append(f"     ... y {len(huecos) - 8} tramo(s) mas")
+            lineas.append("")
+
+        lineas.append(f"El detalle completo esta en {ARCHIVO_PUNTOS_FALLIDOS}.")
+
+        return {
+            "titulo": f"{ARCHIVO_MEDIDAS_SAE} incompleto",
+            "mensaje": "\n".join(lineas),
+            "ruta": str(ruta),
+        }
+
+    return _con_cache(ruta, "aviso_puntos_fallidos", _leer)
 
 
 def hojas_con_datos(ruta):
@@ -283,8 +366,23 @@ def revisar_estructura(carpeta_base, aamm=None):
                 else "se genera con el boton -> (baja las medidas del mes)"
             ),
             ruta=rutas["medidas_sae"],
+            aviso=(
+                aviso_puntos_fallidos(rutas["puntos_fallidos"])
+                if rutas["medidas_sae"].is_file() else None
+            ),
         )
     )
+
+    # Lo deja el mismo boton, al lado: solo se muestra cuando existe
+    # (es una salida informativa, no algo que "falte").
+    if rutas["puntos_fallidos"].is_file():
+        filas.append(
+            _fila(
+                "puntos_fallidos", ARCHIVO_PUNTOS_FALLIDOS, 1, "ok",
+                "detalle de lo que falto en la ultima descarga",
+                ruta=rutas["puntos_fallidos"],
+            )
+        )
 
     # El SoC del periodo vive aca adentro (nivel 1), no es una entrada
     # suelta: su nombre solo tiene que contener "SOC" y el AAMM.

@@ -125,6 +125,13 @@ SIMBOLO = {
     "pendiente": "PENDIENTE",
 }
 
+# El simbolo que la fila de Medidas_SAE.xlsx muestra cuando el archivo
+# se genero con informacion incompleta (ver nucleo.aviso_puntos_fallidos).
+# Va sin el selector de emoji (U+FE0F): Tk en Windows lo dibuja como un
+# cuadrito.
+SIMBOLO_AVISO = "\u26a0"
+COLOR_AVISO = "#d97706"
+
 COLOR_ESTADO = {
     "ok": COLOR_OK,
     "falta": COLOR_FALTA,
@@ -304,6 +311,29 @@ def abrir_en_explorador(ruta, es_archivo=False):
         subprocess.Popen(["xdg-open", str(carpeta)])
 
     return carpeta
+
+
+def abrir_archivo(ruta):
+    """
+    Abre ESE archivo con su programa (Excel para un .xlsx). Es la
+    excepcion a "nunca se abre el archivo": solo se usa cuando el
+    usuario lo pide con un boton (el "Ver detalle" del aviso de
+    Medidas_SAE.xlsx). Devuelve False si el archivo no esta.
+    """
+
+    ruta = Path(ruta)
+
+    if not ruta.is_file():
+        return False
+
+    if sys.platform == "win32":
+        os.startfile(str(ruta))
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(ruta)])
+    else:
+        subprocess.Popen(["xdg-open", str(ruta)])
+
+    return True
 
 
 def formato_tiempo(segundos):
@@ -633,9 +663,62 @@ def main():
         celda.pack_propagate(False)
         return celda
 
+    def ventana_aviso(aviso):
+        """
+        El cuadro que abre el simbolo de aviso de una fila: el mensaje,
+        un boton "Ver detalle" que abre el archivo con el detalle
+        (Puntos_fallidos.xlsx) y "Cerrar".
+        """
+
+        ventana = tk.Toplevel(root)
+        ventana.title(aviso.get("titulo", "Aviso"))
+        ventana.transient(root)
+        ventana.resizable(False, False)
+
+        cuerpo = tk.Frame(ventana, padx=18, pady=14)
+        cuerpo.pack(fill="both", expand=True)
+
+        tk.Label(
+            cuerpo, text=SIMBOLO_AVISO, fg=COLOR_AVISO,
+            font=("Segoe UI", 22, "bold"),
+        ).pack(side="left", anchor="n", padx=(0, 14))
+
+        tk.Label(
+            cuerpo, text=aviso.get("mensaje", ""), justify="left",
+            anchor="w", font=("Segoe UI", 9), wraplength=620,
+        ).pack(side="left", fill="both", expand=True)
+
+        botones = tk.Frame(ventana, pady=10)
+        botones.pack(fill="x")
+
+        def ver_detalle():
+            ruta = aviso.get("ruta", "")
+            if not abrir_archivo(ruta):
+                messagebox.showwarning(
+                    "No esta el archivo",
+                    f"No se encontro el archivo con el detalle:\n{ruta}",
+                    parent=ventana,
+                )
+                return
+            ventana.destroy()
+
+        tk.Button(
+            botones, text="Cerrar", width=12, command=ventana.destroy,
+        ).pack(side="right", padx=(6, 18))
+        tk.Button(
+            botones, text="Ver detalle", width=12,
+            font=("Segoe UI", 9, "bold"), bg="#fdf0d5",
+            command=ver_detalle,
+        ).pack(side="right", padx=6)
+
+        ventana.bind("<Escape>", lambda e: ventana.destroy())
+        ventana.grab_set()
+        ventana.focus_set()
+        return ventana
+
     def _fila_arbol(parent, prefijo, texto, estado=None, negrita=False,
                     boton=None, id_fila=None, ruta="", es_carpeta=False,
-                    origen=None):
+                    origen=None, aviso=None):
         """
         Una fila del diagrama. Columnas, en orden: estructura, estado,
         accion (el boton, si la fila tiene uno) y origen.
@@ -717,6 +800,15 @@ def main():
 
         celda_origen = tk.Frame(fila)
         celda_origen.pack(side="left", fill="x", expand=True)
+
+        # El aviso va primero, pegado al boton: es lo que hay que ver.
+        if aviso:
+            simbolo = tk.Label(
+                celda_origen, text=SIMBOLO_AVISO, fg=COLOR_AVISO,
+                cursor="hand2", font=("Segoe UI", 12, "bold"),
+            )
+            simbolo.pack(side="left", padx=(0, 8))
+            simbolo.bind("<Button-1>", lambda e, a=aviso: ventana_aviso(a))
 
         if origen:
 
@@ -831,6 +923,7 @@ def main():
                 ruta=fila.get("ruta", ""),
                 es_carpeta=fila.get("es_carpeta", False),
                 origen=fila.get("origen"),
+                aviso=fila.get("aviso"),
             )
 
         if corriendo["activo"]:

@@ -41,6 +41,19 @@ CARPETA_PRORRATA_RETIROS = "Prorrata retiros"
 ARCHIVO_MEDIDAS_SAE = "Medidas_SAE.xlsx"
 HOJA_MEDIDAS_SAE = "Medidas"
 
+# Al lado de Medidas_SAE.xlsx, siempre (vacio si no hubo problemas):
+# los puntos de medida que la API no devolvio y los cuartos de hora sin
+# informacion de los que si devolvio. Si tiene filas, la ventana pone
+# un aviso en la fila de Medidas_SAE.xlsx.
+ARCHIVO_PUNTOS_FALLIDOS = "Puntos_fallidos.xlsx"
+HOJA_PUNTOS_FALLIDOS = "Puntos fallidos"
+COLUMNAS_PUNTOS_FALLIDOS = [
+    "Punto de Medida", "Clave", "Problema", "Canal", "Desde", "Hasta",
+    "Cuartos de hora",
+]
+PROBLEMA_NO_ENCONTRADO = "No encontrado en la API"
+PROBLEMA_SIN_INFORMACION = "Sin informacion"
+
 # Medidas_SAE.xlsx tampoco se arma a mano (igual que cmg.xlsx): lo
 # genera el programa desde las dos APIs del Coordinador, y los pasos
 # intermedios (lotes descargados, marca de reanudacion) van a esta
