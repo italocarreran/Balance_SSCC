@@ -240,13 +240,15 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
   parcial (`generar_consolidado`, `generar_pagos_bess`) por separado.
 - Evaluar si `guardar_config()` necesita escritura atómica (ver
   `METODOLOGIA.md` §7).
-- **Septiembre 2026 con datos reales (cambio de hora):** volver a correr
-  "Traer Medidas_SAE.xlsx" (ahora vuelve a descargar los 47 puntos) y
-  confirmar que el log diga "filas descartadas por la hora inexistente…
-  (hora local 06-09 00:00…)", "cuartos de hora del mes: 2,876" y 0
-  incompletos. Si sigue con incompletos, el error dice hasta qué hora
-  trae valores la API: si es antes de fin de mes, la API todavía no lo
-  publicó (no es un bug). Regenerar también `fma_ctf_2609.xlsx`.
+- **Septiembre 2026 con datos reales (cambio de hora):** la API tiene
+  septiembre solo hasta el 13-09 (confirmado por el usuario). Con el
+  cambio de 2026-10-07, "Medidas_SAE.xlsx" se genera igual y
+  `Puntos_fallidos.xlsx` detalla lo que falta: confirmar con la corrida
+  real que el log diga "hora local 06-09 00:00…" y "cuartos de hora del
+  mes: 2,876", que el ⚠ aparezca y que "Ver detalle" abra el Excel en
+  Windows. Volver a generar cuando el Coordinador publique el mes
+  completo (el ⚠ tiene que desaparecer). Regenerar también
+  `fma_ctf_2609.xlsx`.
 - **¿`Medidas_SAE.xlsx` de agosto mal numerado?** Si la API de medidas
   entrega `intervalo`/`intervaloUtc` en ISO (`2026-08-05...`), el
   `dayfirst=True` que había en `parse_fecha_mixta()` leía los días 1-12
@@ -4227,4 +4229,84 @@ chat se le dejó un script suelto, sin argumentos, que consulta la API para
 MES COMPLETO" (→ la descarga guardada era vieja) o "ES LA API: tiene
 valores solo hasta …". Probado con la API simulada en los dos casos.
 El pendiente de la entrada (3) sigue: confirmar con ese resultado.
+
+## 2026-10-07 — Sin advertencia en Medidas_SAE y botón "Actualizar" para las carpetas
+
+Dos pedidos del usuario sobre la ventana (`Balance_BESS.py`):
+
+1. **Se sacó la confirmación previa de "Medidas_SAE.xlsx"** (el `askyesno`
+   "Es el proceso mas lento del programa… ¿Seguir?" de
+   `actualizar_medidas_sae()`). El botón arranca directo; el avance ya se
+   ve en el registro y la barra.
+2. **Botón "Actualizar" junto a "Examinar"** (`actualizar_vista()`). El
+   diagrama solo se repintaba al elegir carpeta, cambiar de mes o terminar
+   un proceso: un archivo pegado a mano no aparecía hasta cambiar de mes y
+   volver. El botón llama a `revisar()` y lo anota en el registro. Si hay
+   un proceso corriendo no hace nada, porque `revisar()` recrea los botones
+   del árbol y los volvería a habilitar a mitad de la corrida.
+
+**Verificación:** `tests/test_ventana_actualizar.py` (nuevo, abre la
+ventana real con un caso temporal): pegar `Homologacion ClavesTF y
+PRMTE.xlsx` en `Auxiliares/` no cambia la fila hasta apretar "Actualizar",
+que la pasa de FALTA a OK; el botón de Medidas_SAE llega a
+`generar_medidas_sae` sin llamar a `askyesno`. Las dos fallan con el
+`Balance_BESS.py` anterior. Por primera vez en este contenedor corrieron
+las pruebas de ventana: se instaló `python3-tk` (queda para Python 3.12)
+y `requirements.txt` en ese Python, y `xvfb-run -a python3.12 -m unittest
+discover` da 190 pruebas, 0 salteadas (con el Python 3.13 sin tkinter: 190,
+7 salteadas). Compila. Falta abrirla en Windows (pendiente de siempre).
+
+## 2026-10-07 (2) — Medidas_SAE incompleto: se genera igual, ⚠ en la fila y `Puntos_fallidos.xlsx`
+
+Pedido del usuario: la API tiene septiembre solo hasta el 13-09, y
+"Traer Medidas_SAE.xlsx" cortaba con error porque descartaba todos los
+puntos incompletos. Pidió: generar igual con lo que haya; un ⚠ al lado
+que abra un cuadro diciendo si hay puntos no encontrados o incompletos,
+con un botón "detalle" que abra el Excel; y un archivo "puntos fallidos"
+con punto, fechas desde/hasta sin información, que se cree siempre
+(vacío si no hubo problemas).
+
+- **`Claves_Balance.construir_por_clave()`** ya no descarta los
+  incompletos: entran con lo que traen (cuartos sin valor = 0).
+  `detallar_huecos()` (nuevo) da los tramos seguidos sin valor por punto
+  y canal, sobre el mes de `intervaloUtc` distintos (sin la hora
+  inexistente). Un canal que la API no devolvió sale como el mes entero.
+  El error "no quedó ningún registro principal" queda solo para una
+  descarga sin filas principales.
+- **`Medidas/Puntos_fallidos.xlsx`** (`ARCHIVO_PUNTOS_FALLIDOS`,
+  `medidas_sae.armar_puntos_fallidos()` / `escribir_puntos_fallidos()`),
+  siempre: `Punto de Medida | Clave | Problema | Canal | Desde | Hasta |
+  Cuartos de hora`. "No encontrado en la API" = punto de la homologación
+  que no está en la descarga (mes entero); "Sin informacion" = tramo de
+  `detallar_huecos()`. Hasta = inicio del último cuarto sin valor. La
+  parte de la API de operación real (`Gen real`) no entra: sus faltantes
+  siguen solo en el log.
+- **Árbol:** `estructura.aviso_puntos_fallidos()` lee el archivo
+  (cacheado por versión) y, si tiene renglones, la fila
+  `medidas_sae` lleva `aviso` ({titulo, mensaje, ruta}). `_fila()` tiene
+  el campo nuevo `aviso`. `Puntos_fallidos.xlsx` aparece como fila propia
+  (nivel 1, OK) solo cuando existe, para que no cuente como "falta".
+- **Ventana:** ⚠ (`SIMBOLO_AVISO`, U+26A0 sin el selector de emoji, que
+  Tk en Windows dibuja como cuadrito) pegado al botón; al apretarlo,
+  `ventana_aviso()`: el mensaje, **Ver detalle** (abre el Excel con
+  `abrir_archivo()`, `os.startfile` en Windows; única excepción a "nunca
+  se abre el archivo", porque lo pide un botón) y **Cerrar**.
+
+**Verificación:** `tests/test_claves_balance.py` (mes a medio publicar se
+genera igual con huecos 13-09 23:00 → 30-09 23:45 por punto y canal;
+hueco en medio de 8 cuartos; canal faltante = mes entero; mes completo
+sin huecos), `tests/test_puntos_fallidos.py` (nuevo: `generar_medidas_sae`
+de punta a punta con la API simulada y un punto de la homologación que no
+llega → archivo con el no encontrado + 4 tramos, aviso en el árbol; sin
+problemas → archivo vacío con encabezados y sin aviso) y
+`tests/test_ventana_actualizar.py` (ventana real: aparece el ⚠, el cuadro
+dice lo que falta, "Ver detalle" abre `Puntos_fallidos.xlsx` y cierra; sin
+renglones no hay ⚠). Capturas de la ventana y del cuadro con xvfb, se le
+mostraron al usuario. 195 pruebas, 0 salteadas con tkinter (8 sin él).
+Compila. Falta: corrida real y ver el ⚠ / "Ver detalle" en Windows.
+
+**Visto de paso, sin tocar:** `Homologacion.leer_homologacion()` abre un
+`pd.ExcelFile` que no cierra (salen `ResourceWarning` en las pruebas).
+En Windows podría dejar el archivo de homologación tomado mientras el
+proceso corre; no se cambió porque no es parte del pedido.
 

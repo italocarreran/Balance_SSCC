@@ -10,8 +10,11 @@ from .externos import (
     Claves_Balance, Descarga_PRMTE, ErrorMedidas, Generacion_Real,
     Homologacion,
 )
+from .formato import formatear_hoja
 from .parametros import (
-    ARCHIVO_MEDIDAS_SAE, COLUMNAS_AI, HOJA_MEDIDAS_SAE,
+    ARCHIVO_MEDIDAS_SAE, ARCHIVO_PUNTOS_FALLIDOS, COLUMNAS_AI,
+    COLUMNAS_PUNTOS_FALLIDOS, HOJA_MEDIDAS_SAE, HOJA_PUNTOS_FALLIDOS,
+    PROBLEMA_NO_ENCONTRADO, PROBLEMA_SIN_INFORMACION,
 )
 from .rutas import periodo_desde_aamm, resolver_rutas, validar_aamm
 from .utiles import ErrorEntrada
@@ -41,8 +44,8 @@ def _resumir_diagnostico_medidas(diagnostico, registrar):
 
     if not incompletos.empty:
         registrar(
-            f"  puntos de medida descartados por incompletos "
-            f"({len(incompletos):,}), esperados "
+            f"  puntos de medida incompletos, incluidos con lo que "
+            f"traen ({len(incompletos):,}), esperados "
             f"{diagnostico['cuartos_esperados']:,} cuartos de hora:"
         )
         for _, fila in incompletos.head(15).iterrows():
@@ -63,6 +66,71 @@ def _resumir_diagnostico_medidas(diagnostico, registrar):
         registrar(f"    ... y {len(total) - 25:,} mas")
 
 
+def armar_puntos_fallidos(puntos, df_homol, df_crudo, huecos, calendario):
+    """
+    La tabla de Puntos_fallidos.xlsx (COLUMNAS_PUNTOS_FALLIDOS):
+
+      - un renglon por cada punto de medida del archivo de homologacion
+        que la API no devolvio (ni en esta descarga ni en los lotes
+        reanudados), con el mes entero como tramo;
+      - un renglon por cada tramo seguido de cuartos de hora sin valor
+        de los que si devolvio (Claves_Balance.detallar_huecos).
+
+    Vacia (solo encabezados) si no falta nada.
+    """
+
+    claves = (
+        df_homol.dropna(subset=["Punto de Medida"])
+        .assign(_p=lambda d: d["Punto de Medida"].astype(str))
+        .groupby("_p")["clave"]
+        .apply(lambda c: ", ".join(sorted(set(map(str, c)))))
+        .to_dict()
+    )
+
+    descargados = set(df_crudo["idPuntoMedida"].astype(str)) \
+        if "idPuntoMedida" in df_crudo else set()
+
+    inicio = calendario["intervalo"].min() if not calendario.empty else None
+    fin = calendario["intervalo"].max() if not calendario.empty else None
+
+    filas = [
+        {
+            "Punto de Medida": punto,
+            "Clave": claves.get(str(punto), ""),
+            "Problema": PROBLEMA_NO_ENCONTRADO,
+            "Canal": "",
+            "Desde": inicio,
+            "Hasta": fin,
+            "Cuartos de hora": len(calendario),
+        }
+        for punto in puntos
+        if str(punto) not in descargados
+    ]
+
+    for _, hueco in huecos.iterrows():
+        filas.append({
+            "Punto de Medida": hueco["Punto de Medida"],
+            "Clave": claves.get(str(hueco["Punto de Medida"]), ""),
+            "Problema": PROBLEMA_SIN_INFORMACION,
+            "Canal": hueco["Canal"],
+            "Desde": hueco["Desde"],
+            "Hasta": hueco["Hasta"],
+            "Cuartos de hora": int(hueco["Cuartos de hora"]),
+        })
+
+    return pd.DataFrame(filas, columns=COLUMNAS_PUNTOS_FALLIDOS)
+
+
+def escribir_puntos_fallidos(ruta, df_fallidos):
+    """Escribe Puntos_fallidos.xlsx (con encabezados aunque este vacio)."""
+
+    with pd.ExcelWriter(ruta, engine="openpyxl") as writer:
+        df_fallidos.to_excel(
+            writer, sheet_name=HOJA_PUNTOS_FALLIDOS, index=False
+        )
+        formatear_hoja(writer.sheets[HOJA_PUNTOS_FALLIDOS])
+
+
 def generar_medidas_sae(
     carpeta_base, aamm, registrar=print, progreso=None
 ):
@@ -76,6 +144,10 @@ def generar_medidas_sae(
       3. arma el calendario de cuartos de hora y agrupa por clave;
       4. agrega las centrales de la hoja "Gen real" del MISMO Excel
          de homologacion, desde la API de operacion real.
+
+    Si faltan puntos de medida o cuartos de hora, el archivo se genera
+    IGUAL con lo que hay, y al lado se escribe Puntos_fallidos.xlsx con
+    el detalle (siempre se escribe: vacio si no falto nada).
 
     El paso 4 es opcional: si la hoja no existe o esta vacia, se
     escribe solo lo que viene del paso 3.
@@ -134,6 +206,10 @@ def generar_medidas_sae(
             df_crudo, df_homol, registrar=registrar
         )
         _resumir_diagnostico_medidas(diagnostico, registrar)
+
+        df_fallidos = armar_puntos_fallidos(
+            puntos, df_homol, df_crudo, diagnostico["huecos"], calendario
+        )
         avanzar(60)
 
         centrales_api = Homologacion.leer_gen_real(archivo_homol)
@@ -208,6 +284,21 @@ def generar_medidas_sae(
     registrar(
         f"  cuartos de hora: 1 a {int(df_sae['Cuarto de Hora'].max())}"
     )
+
+    escribir_puntos_fallidos(rutas["puntos_fallidos"], df_fallidos)
+    if df_fallidos.empty:
+        registrar(f"{ARCHIVO_PUNTOS_FALLIDOS}: sin problemas (vacio).")
+    else:
+        por_problema = df_fallidos.groupby("Problema")["Punto de Medida"]
+        registrar(
+            f"AVISO: {ARCHIVO_MEDIDAS_SAE} se genero con informacion "
+            f"incompleta. Detalle en {rutas['puntos_fallidos']}:"
+        )
+        for problema, puntos_problema in por_problema:
+            registrar(
+                f"  {problema}: {puntos_problema.nunique():,} punto(s) "
+                f"de medida"
+            )
 
     avanzar(100)
     registrar(f"Listo: {rutas['medidas_sae']}")

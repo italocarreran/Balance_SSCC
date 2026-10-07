@@ -120,7 +120,13 @@ importable como cualquier módulo.
   dicen en su propio detalle cuando falta.
 
   **Cada acción es un botón en la fila que le corresponde**, sin ventanas
-  intermedias. Abajo de todo hay además tres botones que no son de una fila
+  intermedias (desde 2026-10-07 tampoco la de `Medidas_SAE.xlsx`, que
+  antes preguntaba "es el proceso más lento… ¿Seguir?"). Junto a
+  **Examinar** está **Actualizar** (`actualizar_vista()`): vuelve a llamar
+  a `revisar()` para que un archivo pegado a mano en el explorador aparezca
+  en el diagrama sin cambiar de mes y volver; mientras corre un proceso no
+  hace nada (repintar recrea los botones del árbol, que en ese momento
+  están deshabilitados a propósito). Abajo de todo hay además tres botones que no son de una fila
   sola: **Crear carpeta del caso** (arma el caso del período con todas sus
   subcarpetas — ver `rutas.py`), **Ejecutar todo** (abre el plan de la
   corrida y la ejecuta respetando el grafo de dependencias — ver
@@ -356,8 +362,13 @@ importable como cualquier módulo.
   - **(2026-10-06, bug)** `Descarga_PRMTE` reanuda solo una descarga
     **cortada**: si la anterior había terminado, borra sus lotes y baja
     todo de nuevo. Antes una descarga hecha con el mes a medio publicar
-    quedaba pegada para siempre. Si aun así faltan datos, el error dice
-    hasta qué hora llegan los valores;
+    quedaba pegada para siempre;
+  - **(2026-10-07, pedido del usuario)** los puntos de medida
+    **incompletos ya no se descartan**: entran con lo que traen (los
+    cuartos sin valor suman 0) y `detallar_huecos()` devuelve, por punto y
+    canal, los tramos seguidos sin valor (desde / hasta en hora local, y
+    cuántos cuartos). Antes un mes a medio publicar dejaba sin ningún punto
+    y cortaba con error. Ver `Puntos_fallidos.xlsx` en `generar_medidas_sae`;
   - **(2026-10-06, bug)** `parse_fecha_mixta()` ya no usa `dayfirst` con
     fechas ISO (`2026-09-06` se leía como 9 de junio y partía el calendario
     en varios "períodos") y tolera ofsets mezclados;
@@ -1009,6 +1020,22 @@ importable como cualquier módulo.
     solo lo que viene de `homol`. Esa hoja la lee
     `Homologacion.leer_gen_real()`; `_resumir_diagnostico_medidas()` es lo
     que antes iba a `reporte_medidas_consolidadas.xlsx` y ahora va al log.
+    Si faltan puntos o cuartos de hora, el archivo se genera **igual** con
+    lo que hay, y al lado se escribe **siempre**
+    `Medidas/Puntos_fallidos.xlsx` (`armar_puntos_fallidos()` +
+    `escribir_puntos_fallidos()`; vacío, con encabezados, si no faltó
+    nada): `Punto de Medida | Clave | Problema | Canal | Desde | Hasta |
+    Cuartos de hora`, con `Problema` = "No encontrado en la API" (punto de
+    la homologación que la API no devolvió; el mes entero) o "Sin
+    informacion" (un tramo de `detallar_huecos()`). `estructura.py` lo lee
+    con `aviso_puntos_fallidos()` (cacheado por versión del archivo) y, si
+    tiene renglones, la fila de `Medidas_SAE.xlsx` lleva `aviso`: la
+    ventana pone un ⚠ al lado del botón que abre un cuadro con el resumen,
+    **Ver detalle** (abre el Excel con `abrir_archivo()`, la única
+    excepción a "nunca se abre el archivo") y **Cerrar**. El estado sale del
+    disco: el ⚠ sigue al cerrar y abrir la ventana. `Puntos_fallidos.xlsx`
+    aparece como fila propia (con link) cuando existe. La parte de la API
+    de operación real (hoja `Gen real`) no entra en este archivo.
   - `_leer_hoja_con_encabezado(ruta, hoja, columnas_buscadas)` — lector
     genérico de hojas cuyo encabezado no está en la primera fila (las hojas
     reales traen un título arriba). `_leer_resumen_bess()` es ahora un caso

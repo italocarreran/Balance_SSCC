@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, ARCHIVO_CONTROL, ARCHIVO_MEDIDAS_SAE,
+    ARCHIVO_PUNTOS_FALLIDOS,
     ARCHIVO_SALIDA, CARPETA_AUXILIARES, CARPETA_CMG,
     CARPETA_DB_SUBASTAS, CARPETA_FD_FMA, CARPETA_FD_FMA_ANTIGUA,
     CARPETA_MEDIDAS, CARPETA_OFERTAS, CARPETA_PRORRATA_RETIROS,
@@ -54,6 +55,7 @@ def resolver_rutas(carpeta_base):
         "prorrata_retiros_dir": prorrata_retiros_dir,
         "db_subastas_dir": subastas_dir / CARPETA_DB_SUBASTAS,
         "medidas_sae": medidas_dir / ARCHIVO_MEDIDAS_SAE,
+        "puntos_fallidos": medidas_dir / ARCHIVO_PUNTOS_FALLIDOS,
         "trabajo_medidas": medidas_dir / CARPETA_TRABAJO_MEDIDAS,
         "centrales": auxiliares_dir / ARCHIVO_CENTRALES,
         "cmg": cmg_dir / ARCHIVO_CMG,

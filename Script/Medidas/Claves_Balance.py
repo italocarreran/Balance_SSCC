@@ -184,6 +184,69 @@ def descartar_hora_inexistente(df):
     return df[~sobra], pd.concat([descartadas, df[sobra]])
 
 
+COLUMNAS_HUECOS = [
+    "Punto de Medida", "Canal", "Desde", "Hasta", "Cuartos de hora",
+]
+
+
+def detallar_huecos(df):
+    """
+    Por punto de medida y canal, los tramos seguidos de cuartos de hora
+    del mes que no tienen valor (canalVal1 = canal 1, canalVal3 =
+    canal 3; solo filas principales, igual que detectar_incompletos).
+    Un canal que la API no devolvio sale como un tramo del mes entero.
+
+    El mes de referencia son los intervaloUtc distintos de la descarga
+    (ya sin la hora inexistente), en orden UTC. Desde / Hasta son la
+    hora LOCAL de inicio del primer y del ultimo cuarto sin valor.
+
+    Devuelve un DataFrame con COLUMNAS_HUECOS (vacio si no falta nada).
+    """
+
+    cal = (
+        df[[COL_INTERVALO_LOCAL, COL_INTERVALO_UTC]]
+        .dropna()
+        .drop_duplicates(COL_INTERVALO_UTC)
+        .sort_values(COL_INTERVALO_UTC)
+        .reset_index(drop=True)
+    )
+
+    if cal.empty:
+        return pd.DataFrame(columns=COLUMNAS_HUECOS)
+
+    principal = df[df["principal"] == True]  # noqa: E712
+    filas = []
+
+    for punto in sorted(df["idPuntoMedida"].dropna().unique(), key=str):
+        del_punto = principal[principal["idPuntoMedida"] == punto]
+
+        for canal, columna in ((1, "canalVal1"), (3, "canalVal3")):
+            if columna in del_punto:
+                con_valor = del_punto.loc[
+                    del_punto[columna].notna(), COL_INTERVALO_UTC
+                ]
+            else:
+                con_valor = pd.Series(dtype=cal[COL_INTERVALO_UTC].dtype)
+
+            falta = ~cal[COL_INTERVALO_UTC].isin(con_valor)
+            if not falta.any():
+                continue
+
+            posiciones = cal.index[falta].to_series()
+            tramo = (posiciones.diff() != 1).cumsum()
+
+            for _, pos in posiciones.groupby(tramo):
+                filas.append({
+                    "Punto de Medida": punto,
+                    "Canal": f"Canal {canal}",
+                    "Desde": cal.loc[pos.iloc[0], COL_INTERVALO_LOCAL],
+                    "Hasta": cal.loc[pos.iloc[-1], COL_INTERVALO_LOCAL],
+                    "Cuartos de hora": len(pos),
+                })
+
+    return pd.DataFrame(filas, columns=COLUMNAS_HUECOS)
+
+
 def ultimo_dato(df):
     """Ultima hora local con algun valor medido (para el diagnostico)."""
 
@@ -329,35 +392,33 @@ def construir_por_clave(df, df_homol, registrar=print):
     conteos, incompletos = detectar_incompletos(df, esperados)
     registrar(f"  puntos de medida incompletos: {len(incompletos):,}")
 
-    principal_antes = df[df["principal"] == True]  # noqa: E712
-
-    df = df[~df["idPuntoMedida"].isin(incompletos["idPuntoMedida"])].copy()
+    # Los incompletos YA NO se descartan (pedido del usuario): entran
+    # con lo que traen -los cuartos sin valor suman 0- y el detalle de
+    # que falta y desde/hasta cuando va a Puntos_fallidos.xlsx (lo
+    # escribe quien llama, con `huecos`).
+    huecos = detallar_huecos(df)
+    if not incompletos.empty:
+        registrar(
+            "  (se incluyen igual con lo que traen; el detalle de los "
+            "cuartos de hora sin informacion va a Puntos_fallidos.xlsx)"
+        )
+        hasta = ultimo_dato(df[df["principal"] == True])  # noqa: E712
+        fin_mes = df[COL_INTERVALO_LOCAL].max()
+        if hasta is not None and pd.notna(fin_mes) and hasta < fin_mes:
+            registrar(
+                f"  AVISO: la descarga trae valores solo hasta el "
+                f"{pd.Timestamp(hasta):%d-%m-%Y %H:%M} (el mes llega al "
+                f"{pd.Timestamp(fin_mes):%d-%m-%Y %H:%M}): la API todavia "
+                f"no tiene publicado el resto del mes."
+            )
 
     df = df[df["principal"] == True].copy()  # noqa: E712
 
     if df.empty:
-        hasta = ultimo_dato(principal_antes)
-        fin_mes = principal_antes[COL_INTERVALO_LOCAL].max()
-        aviso_hasta = ""
-        if hasta is not None and fin_mes is not None and hasta < fin_mes:
-            aviso_hasta = (
-                f"\n\nLa descarga trae valores solo hasta el "
-                f"{pd.Timestamp(hasta):%d-%m-%Y %H:%M} (el mes llega al "
-                f"{pd.Timestamp(fin_mes):%d-%m-%Y %H:%M}): la API todavia no "
-                f"tiene publicado el resto del mes, o la descarga es de "
-                f"antes de que lo publicara."
-            )
-        muestra = "\n".join(
-            f"  {fila['idPuntoMedida']}: canalVal1={int(fila['canalVal1']):,} "
-            f"canalVal3={int(fila['canalVal3']):,}"
-            for _, fila in incompletos.head(5).iterrows()
-        )
         raise ErrorMedidas(
-            "Despues de descartar los puntos de medida incompletos no "
-            "quedo ningun registro principal. Revisa el periodo y la "
-            "cobertura de la descarga.\n\n"
-            f"Cuartos de hora esperados: {esperados:,}. Primeros puntos "
-            f"descartados:\n{muestra}{aviso_hasta}"
+            "La descarga no trae ningun registro principal: no hay con "
+            "que armar Medidas_SAE.xlsx. Revisa el periodo y la "
+            "cobertura de la descarga."
         )
 
     df["canalVal"] = df["canalVal1"].fillna(0) + df["canalVal3"].fillna(0)
@@ -413,6 +474,7 @@ def construir_por_clave(df, df_homol, registrar=print):
     diagnostico = {
         "conteos": conteos,
         "incompletos": incompletos,
+        "huecos": huecos,
         "cuartos_esperados": esperados,
         "generacion_total": (
             df_por_clave
