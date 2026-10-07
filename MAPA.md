@@ -305,7 +305,7 @@ importable como cualquier módulo.
   | Módulo | Script original | Qué hace |
   |---|---|---|
   | `Homologacion.py` | `0_diccionario_prmte_a_claves_balance.py` | lee las dos hojas del Excel de homologación: `homol` (`Punto de Medida` + `Canal` → `clave` + `Flujo`) y `Gen real` (ahí `Canal` es la unidad — se lee su principio: `MWhD`/`MWhR`/`kWhD`/`kWhR`) |
-  | `Descarga_PRMTE.py` | `1_generacion_prmte.py` | baja las medidas de cada punto, por lotes, reanudable |
+  | `Descarga_PRMTE.py` | `1_generacion_prmte.py` | baja las medidas de cada punto, por lotes, reanudable; desde 2026-10-07 contra la **API v2** (`medidas-v2/measurement`, ver abajo) |
   | `Claves_Balance.py` | `2_generacion_claves_Balance.py` | calendario de cuartos de hora + agrupación por clave |
   | `Generacion_Real.py` | `3_Generacion_Real.py` | agrega las centrales de la hoja `Gen real` desde la API de operación real |
 
@@ -359,6 +359,20 @@ importable como cualquier módulo.
     que trae valores medidos o, si empatan, con la más temprana. No hay
     fecha fija ni tabla de zonas horarias, así que sirve aunque el decreto
     mueva el día;
+  - **(2026-10-07)** `Descarga_PRMTE` usa la **API de medidas v2**
+    (`https://medidas.api.coordinador.cl/medidas-v2/measurement`, parámetros
+    `channelId`, `measurePointId`, `period`), la ruta que el responsable de
+    la API le dio al usuario. `traducir_v2()` pasa su respuesta a las
+    columnas de la v1 (`dateRange`→`intervalo`, `utcRange`→`intervaloUtc`,
+    `channel<N>`→`canalVal<N>` como número, `measurePointId`→`idPuntoMedida`,
+    `channel[].slug`→`slugCanal`, etc.), así que `Claves_Balance` y todo lo
+    demás no cambia. Sigue siendo **una llamada por canal (1 y 3)** y de
+    cada una se toma solo el canal pedido: si la v2 trae todos los canales
+    en cada fila, sumarlos en las dos llamadas duplicaría la energía.
+    `period` = `FORMATO_PERIODO_V2` (`AAAAMM` + `010000`, sin confirmar qué
+    significa). Un 4xx no se reintenta; las primeras respuestas de error de
+    la API (`ULTIMOS_ERRORES`) salen en el log y en el error. Con
+    `USAR_API_V2 = False` se vuelve a la v1;
   - **(2026-10-06, bug)** `Descarga_PRMTE` reanuda solo una descarga
     **cortada**: si la anterior había terminado, borra sus lotes y baja
     todo de nuevo. Antes una descarga hecha con el mes a medio publicar
