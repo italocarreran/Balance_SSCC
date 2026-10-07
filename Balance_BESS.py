@@ -1027,7 +1027,30 @@ def main():
     def seleccionar():
         examinar()
 
-    tk.Button(frame_carpeta, text="Examinar", command=seleccionar).pack(pady=(6, 0))
+    def actualizar_vista():
+        """
+        Vuelve a mirar las carpetas del caso y repinta el diagrama: un
+        archivo pegado a mano en el explorador no aparece hasta que
+        algo llame a revisar(). Antes habia que cambiar de mes y
+        volver. Mientras corre un proceso no hace nada: repintar el
+        arbol recrea sus botones, que en ese momento estan
+        deshabilitados a proposito.
+        """
+
+        if corriendo["activo"]:
+            return
+
+        revisar()
+        log("Carpetas revisadas de nuevo.")
+
+    frame_botones_carpeta = tk.Frame(frame_carpeta)
+    frame_botones_carpeta.pack(pady=(6, 0))
+    tk.Button(
+        frame_botones_carpeta, text="Examinar", command=seleccionar
+    ).pack(side="left", padx=4)
+    tk.Button(
+        frame_botones_carpeta, text="Actualizar", command=actualizar_vista
+    ).pack(side="left", padx=4)
 
     # El ultimo AAMM que se proceso, para no volver a preguntar lo
     # mismo cada vez que el campo pierde el foco sin haber cambiado.
@@ -1473,16 +1496,8 @@ def main():
             messagebox.showwarning("Falta el periodo", str(error))
             return
 
-        if not messagebox.askyesno(
-            f"Generar {nucleo.ARCHIVO_MEDIDAS_SAE}",
-            f"Se van a bajar las medidas del periodo {aamm} de las dos "
-            f"APIs del Coordinador, punto de medida por punto de "
-            f"medida.\n\nEs el proceso mas lento del programa (puede "
-            f"tardar bastante). Si se corta, la proxima vez retoma "
-            f"donde quedo.\n\n¿Seguir?",
-        ):
-            return
-
+        # Sin confirmacion previa (pedido del usuario): el avance y lo
+        # que tarda ya se ven en el registro y la barra.
         lanzar(
             nucleo.generar_medidas_sae,
             dict(carpeta_base=ruta, aamm=aamm),

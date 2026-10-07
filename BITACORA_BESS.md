@@ -4228,3 +4228,29 @@ MES COMPLETO" (→ la descarga guardada era vieja) o "ES LA API: tiene
 valores solo hasta …". Probado con la API simulada en los dos casos.
 El pendiente de la entrada (3) sigue: confirmar con ese resultado.
 
+## 2026-10-07 — Sin advertencia en Medidas_SAE y botón "Actualizar" para las carpetas
+
+Dos pedidos del usuario sobre la ventana (`Balance_BESS.py`):
+
+1. **Se sacó la confirmación previa de "Medidas_SAE.xlsx"** (el `askyesno`
+   "Es el proceso mas lento del programa… ¿Seguir?" de
+   `actualizar_medidas_sae()`). El botón arranca directo; el avance ya se
+   ve en el registro y la barra.
+2. **Botón "Actualizar" junto a "Examinar"** (`actualizar_vista()`). El
+   diagrama solo se repintaba al elegir carpeta, cambiar de mes o terminar
+   un proceso: un archivo pegado a mano no aparecía hasta cambiar de mes y
+   volver. El botón llama a `revisar()` y lo anota en el registro. Si hay
+   un proceso corriendo no hace nada, porque `revisar()` recrea los botones
+   del árbol y los volvería a habilitar a mitad de la corrida.
+
+**Verificación:** `tests/test_ventana_actualizar.py` (nuevo, abre la
+ventana real con un caso temporal): pegar `Homologacion ClavesTF y
+PRMTE.xlsx` en `Auxiliares/` no cambia la fila hasta apretar "Actualizar",
+que la pasa de FALTA a OK; el botón de Medidas_SAE llega a
+`generar_medidas_sae` sin llamar a `askyesno`. Las dos fallan con el
+`Balance_BESS.py` anterior. Por primera vez en este contenedor corrieron
+las pruebas de ventana: se instaló `python3-tk` (queda para Python 3.12)
+y `requirements.txt` en ese Python, y `xvfb-run -a python3.12 -m unittest
+discover` da 190 pruebas, 0 salteadas (con el Python 3.13 sin tkinter: 190,
+7 salteadas). Compila. Falta abrirla en Windows (pendiente de siempre).
+

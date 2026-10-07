@@ -120,7 +120,13 @@ importable como cualquier módulo.
   dicen en su propio detalle cuando falta.
 
   **Cada acción es un botón en la fila que le corresponde**, sin ventanas
-  intermedias. Abajo de todo hay además tres botones que no son de una fila
+  intermedias (desde 2026-10-07 tampoco la de `Medidas_SAE.xlsx`, que
+  antes preguntaba "es el proceso más lento… ¿Seguir?"). Junto a
+  **Examinar** está **Actualizar** (`actualizar_vista()`): vuelve a llamar
+  a `revisar()` para que un archivo pegado a mano en el explorador aparezca
+  en el diagrama sin cambiar de mes y volver; mientras corre un proceso no
+  hace nada (repintar recrea los botones del árbol, que en ese momento
+  están deshabilitados a propósito). Abajo de todo hay además tres botones que no son de una fila
   sola: **Crear carpeta del caso** (arma el caso del período con todas sus
   subcarpetas — ver `rutas.py`), **Ejecutar todo** (abre el plan de la
   corrida y la ejecuta respetando el grafo de dependencias — ver
