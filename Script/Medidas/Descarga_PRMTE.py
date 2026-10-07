@@ -31,6 +31,20 @@ from .comun import ErrorMedidas, leer_clave_api, CLAVE_PRMTE
 
 URL_MEDIDAS = "https://medidas.api.coordinador.cl/medidas/api/medidas/{periodo}/"
 
+# API de medidas v2 (ruta que el responsable de la API le dio al
+# usuario el 2026-10-07; la v1 dejo de traer septiembre 2026 despues del
+# 13). Misma informacion, otros nombres: extraer_datos_api_v2() la
+# traduce a las columnas de la v1, asi que el resto del proceso no se
+# entera. Con USAR_API_V2 = False se vuelve a la v1 sin tocar nada mas.
+USAR_API_V2 = True
+URL_MEDIDAS_V2 = "https://medidas.api.coordinador.cl/medidas-v2/measurement"
+
+# Como pide el mes la v2: 'period' de 12 digitos AAAAMMDDhhmm (el
+# ejemplo que dieron es 202609150000). SIN CONFIRMAR que significa
+# exactamente: se pide desde el dia 1 a las 00:00, que sirve tanto si
+# devuelve "el mes de esa fecha" como si devuelve "desde esa fecha".
+FORMATO_PERIODO_V2 = "{periodo}010000"
+
 CANALES = (1, 3)
 TAMANO_LOTE = 100
 REINTENTOS = 10
@@ -74,6 +88,141 @@ def _anotar_procesados(carpeta_trabajo, periodo, puntos):
             f.write(f"{punto}\n")
 
 
+# El ultimo error de la API que se vio en esta descarga (HTTP y texto),
+# para que el log diga POR QUE un punto vino vacio en vez de solo
+# "sin datos". Lo vacia descargar() al empezar.
+ULTIMOS_ERRORES = []
+
+
+def _anotar_error(texto):
+    if len(ULTIMOS_ERRORES) < 5:
+        ULTIMOS_ERRORES.append(texto)
+
+
+def _a_numero(serie):
+    """Los canales de la v2 vienen como texto: a numero (vacio = NaN)."""
+
+    texto = serie.astype(str).str.strip()
+    texto = texto.mask(texto.str.lower().isin(["", "none", "null", "nan"]))
+    return pd.to_numeric(
+        texto.str.replace(",", ".", regex=False), errors="coerce"
+    )
+
+
+def traducir_v2(registro, id_canal):
+    """
+    Un registro de la v2 -> el DataFrame de 'mediciones' con las mismas
+    columnas que armaba la v1 para ese canal:
+
+        measurement[].dateRange   -> intervalo
+        measurement[].utcRange    -> intervaloUtc
+        measurement[].principal   -> principal
+        measurement[].channel<N>  -> canalVal<N>   (solo el canal pedido)
+        coordinatorId / measurePointId / period / subStation /
+        lastReadingDate           -> idCoordinado / idPuntoMedida /
+                                     periodo / subEstacion /
+                                     fechaUltimaLectura
+        measurer[0].name          -> nombreMedidor
+        channel[] (el de ese channelId) -> slugCanal / descripcionCanal
+
+    Solo se toma el canal pedido y la otra columna queda vacia, igual
+    que con la v1 (una llamada por canal): si la v2 devolviera todos los
+    canales en cada llamada, sumarlos dos veces duplicaria la energia.
+    """
+
+    df = pd.DataFrame(registro.get("measurement") or [])
+
+    if df.empty:
+        return df
+
+    df = df.rename(columns={
+        "dateRange": "intervalo",
+        "utcRange": "intervaloUtc",
+    })
+
+    for canal in CANALES:
+        df[f"canalVal{canal}"] = (
+            _a_numero(df[f"channel{canal}"])
+            if canal == id_canal and f"channel{canal}" in df
+            else float("nan")
+        )
+
+    df = df.drop(
+        columns=[c for c in df.columns if str(c).startswith("channel")]
+    )
+
+    for campo, destino in (
+        ("coordinatorId", "idCoordinado"),
+        ("measurePointId", "idPuntoMedida"),
+        ("period", "periodo"),
+        ("subStation", "subEstacion"),
+        ("lastReadingDate", "fechaUltimaLectura"),
+    ):
+        df[destino] = registro.get(campo, "")
+
+    medidores = registro.get("measurer") or [{}]
+    canales = registro.get("channel") or [{}]
+    del_canal = next(
+        (c for c in canales if str(c.get("channelId")) == str(id_canal)),
+        canales[0],
+    )
+
+    df["nombreMedidor"] = medidores[0].get("name", "")
+    df["descripcionCanal"] = del_canal.get("description", "")
+    df["slugCanal"] = del_canal.get("slug", "")
+
+    return df
+
+
+def extraer_datos_api_v2(sesion, id_punto_medida, id_canal, periodo,
+                         user_key):
+    """
+    Como extraer_datos_api(), contra la v2. Un error 4xx (pedido mal
+    armado, sin permiso, punto inexistente) no se reintenta: repetirlo
+    da lo mismo y con REINTENTOS x puntos x canales la descarga se
+    eternizaba. Se reintenta solo un 5xx, un corte o una respuesta
+    vacia.
+    """
+
+    params = {
+        "channelId": id_canal,
+        "measurePointId": id_punto_medida,
+        "period": FORMATO_PERIODO_V2.format(periodo=periodo),
+    }
+    if user_key:
+        params["user_key"] = user_key
+
+    for _ in range(REINTENTOS):
+
+        try:
+            respuesta = sesion.get(
+                URL_MEDIDAS_V2, params=params, timeout=TIMEOUT,
+                headers={"accept": "application/json"},
+            )
+
+            if respuesta.status_code == 200:
+                datos = respuesta.json()
+                if datos and isinstance(datos, list):
+                    df = traducir_v2(datos[0], id_canal)
+                    if not df.empty:
+                        return df
+                continue
+
+            _anotar_error(
+                f"{id_punto_medida} canal {id_canal}: HTTP "
+                f"{respuesta.status_code} {respuesta.text[:300]}"
+            )
+            if 400 <= respuesta.status_code < 500:
+                return pd.DataFrame()
+            time.sleep(ESPERA_REINTENTO)
+
+        except Exception as error:
+            _anotar_error(f"{id_punto_medida} canal {id_canal}: {error}")
+            time.sleep(ESPERA_REINTENTO)
+
+    return pd.DataFrame()
+
+
 def extraer_datos_api(sesion, id_punto_medida, id_canal, periodo, user_key):
     """
     Un punto de medida + un canal. Devuelve el DataFrame de
@@ -87,6 +236,11 @@ def extraer_datos_api(sesion, id_punto_medida, id_canal, periodo, user_key):
         "idPuntoMedida": id_punto_medida,
         "user_key": user_key,
     }
+
+    if USAR_API_V2:
+        return extraer_datos_api_v2(
+            sesion, id_punto_medida, id_canal, periodo, user_key
+        )
 
     for _ in range(REINTENTOS):
 
@@ -161,6 +315,11 @@ def descargar(
 
     carpeta_trabajo = Path(carpeta_trabajo)
     carpeta_trabajo.mkdir(parents=True, exist_ok=True)
+
+    ULTIMOS_ERRORES.clear()
+    registrar(
+        f"  API: {URL_MEDIDAS_V2 if USAR_API_V2 else URL_MEDIDAS.format(periodo=periodo)}"
+    )
 
     procesados = _leer_procesados(carpeta_trabajo, periodo)
     pendientes = [p for p in puntos if str(p) not in procesados]
@@ -244,6 +403,8 @@ def descargar(
             f"{REINTENTOS} intentos: {', '.join(map(str, fallidos[:10]))}"
             + (" ..." if len(fallidos) > 10 else "")
         )
+        for error in ULTIMOS_ERRORES:
+            registrar(f"    respuesta de la API: {error}")
 
     archivos = sorted(
         carpeta_trabajo.glob(f"medidas_batch_{periodo}_*.parquet")
@@ -254,6 +415,11 @@ def descargar(
             f"No se obtuvo ningun dato de la API para el periodo "
             f"{periodo}. Revisa la clave (user_key), la conexion y que "
             f"el periodo ya este publicado."
+            + (
+                "\n\nLo que respondio la API:\n"
+                + "\n".join(f"  {e}" for e in ULTIMOS_ERRORES)
+                if ULTIMOS_ERRORES else ""
+            )
         )
 
     df = pd.concat(

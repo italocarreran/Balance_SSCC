@@ -249,6 +249,16 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
   Windows. Volver a generar cuando el Coordinador publique el mes
   completo (el ⚠ tiene que desaparecer). Regenerar también
   `fma_ctf_2609.xlsx`.
+- **API de medidas v2 — confirmar con la primera corrida real (o con el
+  responsable de la API):** (a) qué significa `period=AAAAMMDDhhmm`: hoy
+  se pide `AAAAMM010000`; si la v2 devuelve solo ese día o da error, el
+  log/el error muestran la respuesta de la API y se cambia
+  `FORMATO_PERIODO_V2`; (b) si `dateRange` es la hora LOCAL (como el
+  `intervalo` de la v1) aunque traiga "Z": si fuera UTC real, todo el
+  calendario quedaría corrido 3-4 h; (c) si pide `user_key` (hoy se
+  manda la misma clave `prmte`); (d) si los canales vienen con punto o
+  coma decimal (se aceptan los dos). Si la v2 no anda, `USAR_API_V2 =
+  False` en `Script/Medidas/Descarga_PRMTE.py` vuelve a la v1.
 - **¿`Medidas_SAE.xlsx` de agosto mal numerado?** Si la API de medidas
   entrega `intervalo`/`intervaloUtc` en ISO (`2026-08-05...`), el
   `dayfirst=True` que había en `parse_fecha_mixta()` leía los días 1-12
@@ -4309,4 +4319,39 @@ Compila. Falta: corrida real y ver el ⚠ / "Ver detalle" en Windows.
 `pd.ExcelFile` que no cierra (salen `ResourceWarning` en las pruebas).
 En Windows podría dejar el archivo de homologación tomado mientras el
 proceso corre; no se cambió porque no es parte del pedido.
+
+## 2026-10-07 (3) — Descarga de medidas contra la API v2 (`medidas-v2/measurement`)
+
+El usuario le preguntó al responsable de la API por qué septiembre llega
+solo hasta el 13-09 y le dieron una ruta nueva:
+`https://medidas.api.coordinador.cl:443/medidas-v2/measurement?channelId=1%2C3&measurePointId=ARENA_220_JT1_ARE&period=202609150000`,
+y el esquema de la respuesta (de Swagger, con valores de ejemplo, no una
+respuesta real). No se pudo consultar desde el contenedor (la red no
+llega a esa API); se le dejó al usuario un script suelto para ver una
+respuesta real, que todavía no corrió.
+
+- **`Descarga_PRMTE.extraer_datos_api_v2()` + `traducir_v2()`**: la
+  respuesta v2 se traduce a las columnas de la v1 (correspondencia uno a
+  uno según el esquema), así que `Claves_Balance`, `Puntos_fallidos.xlsx`,
+  el ⚠, etc. no cambian. `USAR_API_V2 = True`; en `False` vuelve a la v1.
+- **Una llamada por canal**, como antes, aunque la v2 acepta `1,3`: el
+  `slugCanal` de cada fila sale del canal pedido (la homologación cruza
+  por punto + slug) y se toma solo `channel<N>` del canal pedido (si la
+  v2 devuelve todos los canales en cada fila, tomar los dos en las dos
+  llamadas duplicaría la energía).
+- **`period`**: `FORMATO_PERIODO_V2 = "{periodo}010000"` (desde el día 1
+  00:00). Supuesto, no confirmado: el ejemplo traía `202609150000`.
+- **Errores**: un 4xx ya no se reintenta 10 veces (con 94 llamadas eran
+  ~15 minutos para nada); las primeras respuestas de error de la API se
+  muestran en el log y, si no llega nada, en el error de la ventana. Eso
+  es lo que va a decir rápido si el `period` o la clave están mal.
+
+**Verificación:** `tests/test_api_medidas_v2.py` (nuevo, 4 pruebas):
+traducción a columnas v1 tomando solo el canal pedido (con `channel2`
+lleno y `channel1`/`channel3` juntos en cada fila); `descargar()` +
+`construir_por_clave()` con respuestas v2 sintéticas de septiembre (cambio
+de hora y valores hasta el 20-09) dan **exactamente** lo mismo que con la
+v1, huecos incluidos; un 400 sale en el error con su texto; un 403 se pide
+una sola vez por punto y canal. 199 pruebas, 0 salteadas con tkinter.
+Compila. **Sin probar contra la API real**: ver pendiente.
 
