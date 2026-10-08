@@ -101,6 +101,48 @@ class TestTraducir(unittest.TestCase):
         self.assertEqual(uno["idPuntoMedida"].iloc[0], "P1")
 
 
+class TestFormatoRealV2(unittest.TestCase):
+    """
+    Formato visto en la primera respuesta real (ACNCAGUA_012_G1_CLB,
+    enero 2026, 2026-10-08): dateRange es hora de Chile con su ofset, y
+    utcRange es la hora UTC CORRECTA pero con el ofset de Chile pegado
+    ('2026-01-01T03:00:00.000-03:00' = 03:00 UTC). Leerlo como fecha con
+    zona lo corre 3 horas; el programa toma la hora escrita y no le pasa.
+    """
+
+    def test_utc_con_ofset_de_chile_no_corre_las_horas(self):
+        utc = pd.date_range("2026-01-01 03:00", periods=2976, freq="15min")
+        medidas = [{
+            "id": i, "yearx": 2026, "monthx": 1, "idSoc": 1,
+            "dateRange": (u - pd.Timedelta(hours=3)).strftime(
+                "%Y-%m-%dT%H:%M:%S.000-03:00"),
+            "utcRange": u.strftime("%Y-%m-%dT%H:%M:%S.000-03:00"),
+            "principal": True, "channel1": 12368.177734, "channel3": 1.5,
+        } for i, u in enumerate(utc)]
+        registro = {
+            "measurement": medidas, "measurePointId": "P1",
+            "lastReadingDate": "2026-01-31T23:45:00.000-03:00",
+            "channel": [{"channelId": 1, "slug": "s"},
+                        {"channelId": 3, "slug": "s"}],
+        }
+        df = pd.concat([dp.traducir_v2(registro, 1),
+                        dp.traducir_v2(registro, 3)], ignore_index=True)
+        homol = pd.DataFrame({"Punto de Medida": ["P1"], "Canal": ["s"],
+                              "clave": ["A"], "Flujo": [1]})
+
+        salida, calendario, diagnostico = cb.construir_por_clave(
+            df, homol, registrar=lambda *_: None)
+
+        self.assertEqual(diagnostico["cuartos_esperados"], 2976)
+        self.assertTrue(diagnostico["huecos"].empty)
+        self.assertEqual(calendario["intervalo"].min(),
+                         pd.Timestamp("2026-01-01 00:00"))
+        self.assertEqual(calendario["intervaloUtc"].min(),
+                         pd.Timestamp("2026-01-01 03:00"))
+        self.assertEqual(calendario["intervalo"].max(),
+                         pd.Timestamp("2026-01-31 23:45"))
+
+
 @unittest.skipUnless(_hay_parquet(), "sin pyarrow (los lotes son parquet)")
 class TestDescargaV2(unittest.TestCase):
 

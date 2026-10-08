@@ -253,11 +253,13 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
   responsable de la API):** (a) qué significa `period=AAAAMMDDhhmm`: hoy
   se pide `AAAAMM010000`; si la v2 devuelve solo ese día o da error, el
   log/el error muestran la respuesta de la API y se cambia
-  `FORMATO_PERIODO_V2`; (b) si `dateRange` es la hora LOCAL (como el
-  `intervalo` de la v1) aunque traiga "Z": si fuera UTC real, todo el
-  calendario quedaría corrido 3-4 h; (c) si pide `user_key` (hoy se
-  manda la misma clave `prmte`); (d) si los canales vienen con punto o
-  coma decimal (se aceptan los dos). Si la v2 no anda, `USAR_API_V2 =
+  `FORMATO_PERIODO_V2`; (c) si pide `user_key` (hoy se manda la misma
+  clave `prmte`). **Confirmado el 2026-10-08** con una respuesta real
+  (ver entrada de ese día): `period=AAAAMM010000` devuelve el mes
+  completo (2.976 cuartos en enero), `dateRange` es hora de Chile y
+  `utcRange` es la hora UTC correcta con el ofset de Chile pegado
+  (el programa no se ve afectado), los canales vienen como número.
+  Falta: un mes con cambio de hora por la v2. Si la v2 no anda, `USAR_API_V2 =
   False` en `Script/Medidas/Descarga_PRMTE.py` vuelve a la v1.
 - **¿`Medidas_SAE.xlsx` de agosto mal numerado?** Si la API de medidas
   entrega `intervalo`/`intervaloUtc` en ISO (`2026-08-05...`), el
@@ -4354,4 +4356,32 @@ de hora y valores hasta el 20-09) dan **exactamente** lo mismo que con la
 v1, huecos incluidos; un 400 sale en el error con su texto; un 403 se pide
 una sola vez por punto y canal. 199 pruebas, 0 salteadas con tkinter.
 Compila. **Sin probar contra la API real**: ver pendiente.
+
+## 2026-10-08 — Primera respuesta real de la API v2: `utcRange` trae el ofset equivocado
+
+El usuario adaptó a la v2 dos scripts sueltos de otro proyecto (no viven
+en este repo; los cambios se le pasaron por el chat) y uno cortó con
+"intervalos fuera de la grilla mensual" en enero 2026. Un diagnóstico de
+una llamada (`ACNCAGUA_012_G1_CLB`, canal 1, `period=202601010000`)
+mostró el formato real de la v2:
+
+- `HTTP 200`, 2.976 filas (el mes completo), todas `principal`, sin
+  `utcRange` repetidos; columnas extra `id`, `yearx`, `monthx`, `idSoc`;
+  `channel1` viene como número (no texto); `lastReadingDate`
+  `2026-01-31T23:45:00.000-03:00`.
+- `dateRange` = hora de Chile con su ofset (`2026-01-01T00:00:00.000-03:00`).
+- `utcRange` = la hora **UTC correcta pero con el ofset de Chile pegado**
+  (`2026-01-01T03:00:00.000-03:00`, que es 03:00 UTC). Leído como fecha con
+  zona (`utc=True`) queda en las 06:00 UTC: todo corrido 3 horas.
+
+**Este programa no se ve afectado:** `Claves_Balance.parse_fecha_mixta()`
+siempre toma la hora escrita y descarta el ofset, así que `intervaloUtc`
+queda en las 03:00 y el calendario sale bien (verificado). Se agregó
+`TestFormatoRealV2` a `tests/test_api_medidas_v2.py` con ese formato
+exacto para que no se rompa. En los scripts sueltos del usuario el
+arreglo fue tomar `str[:19]` de `utcRange` y marcarlo con "Z" (y dejar
+`dateRange` sin ofset).
+
+Quedan confirmados del pendiente de la v2: el `period` (mes completo) y
+cómo vienen las horas. Falta ver un mes con cambio de hora por la v2.
 
