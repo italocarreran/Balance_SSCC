@@ -787,29 +787,35 @@ def generar_pagos_bess(
     # TRA: la energia de Medidores tiene que repartirse entera entre
     # las dos hojas. Va antes de escribir: si no cuadra, la corrida
     # queda NO APROBADA y eso se escribe en el libro.
-    registrar("Conciliando energia Medidores -> E Costos + RE545...")
-    # Y va dentro de un try: si la conciliacion revienta por algo
-    # inesperado, lo unico que se pierde tiene que ser la conciliacion
-    # -no todo lo calculado-. Antes un error aca dejaba la corrida sin
-    # archivo y sin nada que revisar (el KeyError 'Energia_Positiva'
-    # que reporto el usuario).
-    try:
-        conciliacion = conciliar_energia(
-            df_medidores, df_ecostos_base, df_re545_base,
-            registrar=registrar,
-        )
-    except Exception as error:  # noqa: BLE001 - se informa, no se tapa
-        anotar(registrar, Alerta(
-            "TRA-010", CRITICA, "Traspaso",
-            f"No se pudo conciliar la energia: {type(error).__name__}: "
-            f"{error}.",
-            accion="se escribe igual el archivo, sin conciliacion",
-            origen_control="CATALOGO TRA-010",
-        ))
-        conciliacion = {
-            "conciliacion_completa": False,
-            "error": f"{type(error).__name__}: {error}",
-        }
+    # Solo se concilia si en esta corrida se recalculo alguna de las
+    # dos hojas de calculo: si se pidio solo COMPENSACION_CENTRAL,
+    # PRORRATA_RETIROS o el Resumen, Medidores ni se lee y no hay nada
+    # nuevo que conciliar (antes eso terminaba en un TRA-010 falso).
+    conciliacion = None
+    if quiere_calculo:
+        registrar("Conciliando energia Medidores -> E Costos + RE545...")
+        # Y va dentro de un try: si la conciliacion revienta por algo
+        # inesperado, lo unico que se pierde tiene que ser la conciliacion
+        # -no todo lo calculado-. Antes un error aca dejaba la corrida sin
+        # archivo y sin nada que revisar (el KeyError 'Energia_Positiva'
+        # que reporto el usuario).
+        try:
+            conciliacion = conciliar_energia(
+                df_medidores, df_ecostos_base, df_re545_base,
+                registrar=registrar,
+            )
+        except Exception as error:  # noqa: BLE001 - se informa, no se tapa
+            anotar(registrar, Alerta(
+                "TRA-010", CRITICA, "Traspaso",
+                f"No se pudo conciliar la energia: {type(error).__name__}: "
+                f"{error}.",
+                accion="se escribe igual el archivo, sin conciliacion",
+                origen_control="CATALOGO TRA-010",
+            ))
+            conciliacion = {
+                "conciliacion_completa": False,
+                "error": f"{type(error).__name__}: {error}",
+            }
 
     # cmg.xlsx ya no es una entrada de esta etapa: el CMg sale de la
     # hoja 'CMg' del consolidado, que si esta en el manifiesto.
