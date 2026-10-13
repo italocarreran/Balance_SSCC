@@ -20,7 +20,10 @@ from .ecostos import (
     renombrar_calculo_e_costos,
 )
 from .manifiesto import construir_manifiesto
-from .ecostos_prorratas import construir_dic_mapeo_diccionario
+from .ecostos_prorratas import (
+    agregar_central_fd, construir_dic_mapeo_diccionario,
+    mapa_unidad_fd_a_central,
+)
 from .escritura import escribir_pagos_bess, escribir_salida
 from .estructura import SECCIONES_CONSOLIDADO, SECCIONES_PAGOS
 from .fma import (
@@ -31,7 +34,8 @@ from .hojas_entrada import (
     construir_fd, leer_cmg, leer_cmg_consolidado, leer_fd_consolidado,
 )
 from .lectura import (
-    construir_homologacion, leer_centrales, leer_medidas_sae,
+    construir_homologacion, leer_centrales, leer_centrales_planilla,
+    leer_medidas_sae, obtener_centrales,
 )
 from .medidores import (
     completar_ofertas_en_medidores, construir_medidores,
@@ -40,8 +44,9 @@ from .medidores import (
 from .ofertas_sscc import leer_ofertas_sscc_consolidado
 from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, ARCHIVO_MEDIDAS_SAE,
-    CARPETA_DB_SUBASTAS, CARPETA_FD_FMA, HOJA_DICCIONARIO,
-    HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545,
+    CARPETA_DB_SUBASTAS, CARPETA_FD_FMA, COLUMNA_CENTRAL, HOJA_CENTRALES,
+    HOJA_DICCIONARIO, HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545,
+    HOJA_MEDIDORES, HOJA_RESUMEN_BESS,
 )
 from .prorrata_retiros import (
     buscar_archivo_prorrata, construir_prorrata_retiros,
@@ -64,7 +69,7 @@ from .soc import extraer_soc
 from .subastas_accdb import (
     construir_mapa_propietario, construir_subastas_desde_accdb,
 )
-from .utiles import ErrorEntrada
+from .utiles import ErrorEntrada, _texto_seguro
 
 
 def generar_consolidado(
@@ -117,15 +122,39 @@ def generar_consolidado(
 
     rutas = resolver_rutas(carpeta_base)
 
-    # Centrales.xlsx lo necesitan dos secciones ("medidores" y
-    # "subastas"): se abre UNA vez por corrida, no una por seccion
-    # (pedido del usuario: "que no se abran planillas innecesarias").
+    # El maestro de centrales sale de la hoja "Centrales" de la planilla
+    # (pedido del usuario: copiar Centrales.xlsx una vez y que cada
+    # paso lo lea de ahi). Centrales.xlsx solo se abre si se pidio
+    # actualizar esa hoja, o si la planilla todavia no la tiene -- y en
+    # ese caso se aprovecha la lectura para dejarla escrita. Se obtiene
+    # UNA vez por corrida, la pidan una o tres secciones.
     centrales_leidas = {}
+    centrales_a_escribir = None
+
+    if "centrales" in secciones_activas:
+        if not rutas["centrales"].is_file():
+            raise ErrorEntrada(f"No se encontro {rutas['centrales']}")
+        registrar(f"Leyendo {ARCHIVO_CENTRALES}...")
+        resumen_bess, diccionario_maestro = leer_centrales(rutas["centrales"])
+        registrar(
+            f"  {len(resumen_bess):,} central(es) en '{HOJA_RESUMEN_BESS}'; "
+            f"se copian a la hoja '{HOJA_CENTRALES}'."
+        )
+        centrales_leidas["datos"] = (resumen_bess, diccionario_maestro)
+        centrales_a_escribir = centrales_leidas["datos"]
 
     def leer_centrales_una_vez():
+        nonlocal centrales_a_escribir
         if "datos" not in centrales_leidas:
-            registrar(f"Leyendo {ARCHIVO_CENTRALES}...")
-            centrales_leidas["datos"] = leer_centrales(rutas["centrales"])
+            resumen_bess, diccionario_maestro, origen = obtener_centrales(
+                rutas, registrar=registrar
+            )
+            centrales_leidas["datos"] = (resumen_bess, diccionario_maestro)
+            if origen == "archivo":
+                # La planilla no tenia la foto: queda escrita ahora,
+                # para que el proximo paso ya no abra Centrales.xlsx.
+                centrales_a_escribir = centrales_leidas["datos"]
+                hojas_regenerar.add(HOJA_CENTRALES)
         return centrales_leidas["datos"]
 
     df_medidores = None
@@ -135,21 +164,13 @@ def generar_consolidado(
 
     avanzar(5)
 
+    quiere_medidores = "medidores" in secciones_activas
     quiere_ofertas = "ofertas_sscc" in secciones_activas
 
-    if "medidores" in secciones_activas or quiere_ofertas:
+    if quiere_medidores or quiere_ofertas:
 
         aamm_val = validar_aamm(aamm)
-
-        if not rutas["medidas_sae"].is_file():
-            raise ErrorEntrada(
-                f"No se encontro {rutas['medidas_sae']}"
-            )
-
-        if not rutas["centrales"].is_file():
-            raise ErrorEntrada(
-                f"No se encontro {rutas['centrales']}"
-            )
+        anio, mes = periodo_desde_aamm(aamm_val)
 
         # El archivo de ofertas SOLO hace falta para la hoja "Ofertas
         # SSCC": Medidores ya no depende de el (pedido del usuario de
@@ -164,12 +185,19 @@ def generar_consolidado(
                     f"{rutas['ofertas_dir']}"
                 )
 
-        archivo_soc = buscar_soc(rutas["medidas_dir"], aamm_val)
-        anio, mes = periodo_desde_aamm(aamm_val)
-
         registrar(f"Periodo indicado: {anio}-{mes:02d} ({aamm_val})")
 
         _, diccionario = leer_centrales_una_vez()
+
+    if quiere_medidores:
+
+        if not rutas["medidas_sae"].is_file():
+            raise ErrorEntrada(
+                f"No se encontro {rutas['medidas_sae']}"
+            )
+
+        archivo_soc = buscar_soc(rutas["medidas_dir"], aamm_val)
+
         mapa = construir_homologacion(diccionario)
         registrar(f"  homologaciones cargadas: {len(mapa):,}")
         avanzar(20)
@@ -197,16 +225,24 @@ def generar_consolidado(
             df_sae, df_soc, mes, registrar=registrar
         )
 
-        if quiere_ofertas:
-            registrar("Construyendo Ofertas SSCC...")
-            df_wxy, df_resumen_ventana, avisos_ofertas = (
-                construir_ofertas_sscc(
-                    df_medidores, archivo_ofertas, diccionario, anio, mes,
-                    registrar=registrar,
-                )
-            )
-            avisos.extend(avisos_ofertas)
+    elif quiere_ofertas:
+        # Solo 'Ofertas SSCC': las centrales y ventanas salen de la
+        # hoja 'Medidores' ya escrita. Antes se la reconstruia en
+        # memoria, lo que abria Medidas_SAE.xlsx y el SoC para nada
+        # (y fallaba si ese dia no estaban a mano).
+        df_medidores = _leer_medidores_del_libro(rutas["salida"], registrar)
 
+    if quiere_ofertas:
+        registrar("Construyendo Ofertas SSCC...")
+        df_wxy, df_resumen_ventana, avisos_ofertas = (
+            construir_ofertas_sscc(
+                df_medidores, archivo_ofertas, diccionario, anio, mes,
+                registrar=registrar,
+            )
+        )
+        avisos.extend(avisos_ofertas)
+
+    if quiere_medidores or quiere_ofertas:
         for aviso in avisos:
             registrar(f"  [AVISO] {aviso}")
 
@@ -234,6 +270,37 @@ def generar_consolidado(
             archivo_sscc, registrar=registrar
         )
 
+        # La columna 'Central' (el nombre Balance_BESS de cada unidad):
+        # se homologa aca, una vez, y E Costos la usa tal cual. Si no
+        # hay maestro de centrales, la hoja sale igual, sin la columna.
+        try:
+            _, diccionario_fd = leer_centrales_una_vez()
+        except ErrorEntrada as error:
+            registrar(
+                f"  [AVISO] la hoja FD queda sin la columna "
+                f"'{COLUMNA_CENTRAL}': {error}"
+            )
+        else:
+            mapa_central = mapa_unidad_fd_a_central(diccionario_fd)
+            df_fd_csf = agregar_central_fd(df_fd_csf, mapa_central)
+            df_fd_cpf = agregar_central_fd(df_fd_cpf, mapa_central)
+
+            sin_central = sorted({
+                unidad
+                for df_fd in (df_fd_csf, df_fd_cpf)
+                for unidad, central in zip(
+                    df_fd["Unidad"], df_fd[COLUMNA_CENTRAL]
+                )
+                if not central and _texto_seguro(unidad)
+            })
+            if sin_central:
+                registrar(
+                    f"  [AVISO] {len(sin_central)} unidad(es) de la hoja "
+                    f"FD sin central en el Diccionario (columna "
+                    f"'{COLUMNA_CENTRAL}' vacia): "
+                    f"{', '.join(sin_central)}"
+                )
+
     avanzar(84)
 
     if "subastas" in secciones_activas:
@@ -250,16 +317,17 @@ def generar_consolidado(
             dic_cpf = {}
             diccionario_centrales = None
 
-            if rutas["centrales"].is_file():
+            try:
                 resumen_bess, diccionario_centrales = leer_centrales_una_vez()
+            except ErrorEntrada as error:
+                registrar(
+                    f"  [AVISO] {error} La columna Propietario de "
+                    f"Subastas queda vacia."
+                )
+            else:
                 mapa_propietarios = construir_mapa_propietario(resumen_bess)
                 dic_cpf = construir_dic_bloque_diccionario(
                     diccionario_centrales, TITULO_BLOQUE_FMA_CPF
-                )
-            else:
-                registrar(
-                    f"  [AVISO] no se encontro {rutas['centrales']}: la "
-                    f"columna Propietario de Subastas queda vacia."
                 )
 
             registrar(
@@ -287,7 +355,7 @@ def generar_consolidado(
                 except desempeno_fd.ErrorDesempeno as error:
                     raise ErrorEntrada(str(error)) from error
 
-                if rutas["centrales"].is_file():
+                if diccionario_centrales is not None:
                     dic_unidad_fd = construir_dic_bloque_diccionario(
                         diccionario_centrales, TITULO_BLOQUE_FD
                     ) or construir_dic_mapeo_diccionario(diccionario_centrales)
@@ -355,6 +423,7 @@ def generar_consolidado(
         hojas_regenerar=hojas_regenerar,
         registrar=registrar,
         ruta_control=rutas["control"],
+        centrales=centrales_a_escribir,
     )
 
     avanzar(100)
@@ -363,14 +432,52 @@ def generar_consolidado(
     return rutas["salida"]
 
 
+def _leer_medidores_del_libro(ruta_salida, registrar):
+    """
+    La hoja 'Medidores' ya escrita en la planilla, para los pasos que
+    la necesitan sin recalcularla (hoy, 'Ofertas SSCC' sola).
+    """
+
+    ruta_salida = Path(ruta_salida)
+
+    if not ruta_salida.is_file():
+        raise ErrorEntrada(
+            f"No se encontro {ruta_salida}. Primero hay que generar la "
+            f"hoja 'Medidores' con su boton 'Actualizar'."
+        )
+
+    registrar(f"Leyendo hoja 'Medidores' de {ruta_salida.name}...")
+
+    try:
+        df_medidores = pd.read_excel(ruta_salida, sheet_name=HOJA_MEDIDORES)
+    except ValueError as error:
+        raise ErrorEntrada(
+            f"{ruta_salida.name} no tiene la hoja 'Medidores' todavia: "
+            f"generala primero con su boton 'Actualizar' (la hoja "
+            f"'Ofertas SSCC' saca de ahi las centrales y las ventanas)."
+        ) from error
+
+    if df_medidores.empty:
+        raise ErrorEntrada(
+            f"La hoja 'Medidores' de {ruta_salida.name} esta vacia: "
+            f"generala primero con su boton 'Actualizar'."
+        )
+
+    registrar(f"  filas: {len(df_medidores):,}")
+
+    return df_medidores
+
+
 def _leer_entradas_del_consolidado(ruta_salida, quiere_fd, registrar):
     """
     Las hojas de entrada de la planilla que necesitan las dos
     hojas de calculo, leidas con UNA sola apertura del archivo.
 
     Devuelve (df_medidores, df_wxy, df_resumen_ventana, df_cmg,
-    df_subastas, df_fd_csf, df_fd_cpf); los dos ultimos son None si
-    no se pidio "ecostos" (RE545 no usa FD).
+    df_subastas, df_fd_csf, df_fd_cpf, centrales); los dos FD son None
+    si no se pidio "ecostos" (RE545 no usa FD), y centrales es
+    (resumen, diccionario) de la hoja "Centrales" o None si el libro no
+    la tiene.
 
     Existe para dos cosas que pidio el usuario:
       - que no se abran planillas innecesarias: un
@@ -454,9 +561,16 @@ def _leer_entradas_del_consolidado(ruta_salida, quiere_fd, registrar):
                 ruta_salida, registrar=registrar, libro=libro
             )
 
+        # El maestro de centrales, de la hoja "Centrales" del mismo
+        # libro ya abierto. None si es un libro de antes de esa hoja
+        # (ahi se cae a Centrales.xlsx, ver obtener_centrales).
+        centrales = leer_centrales_planilla(ruta_salida, libro=libro)
+        if centrales is not None:
+            registrar(f"Leyendo hoja '{HOJA_CENTRALES}' de {ruta_salida.name}...")
+
     return (
         df_medidores, df_wxy, df_resumen_ventana, df_cmg, df_subastas,
-        df_fd_csf, df_fd_cpf,
+        df_fd_csf, df_fd_cpf, centrales,
     )
 
 
@@ -472,11 +586,14 @@ def generar_pagos_bess(
     archivo no existe, se crea. La usan los botones "Actualizar" de
     las filas-hoja del diagrama.
 
-    No recalcula Medidores ni Subastas: los lee tal cual estan en
-    la misma planilla, que debe generarse primero con su
-    propio boton "Actualizar". Centrales.xlsx y cmg.xlsx si se leen/
-    recalculan frescos. El archivo SSCC_Desempeño_* solo se exige si
-    se pide "ecostos" -- "re545" no usa FD.
+    No abre ningun archivo de entrada: Medidores, Ofertas SSCC, CMg,
+    FD, Subastas y el maestro de centrales salen de las hojas de la
+    misma planilla, cada una generada antes con su propio boton
+    "Actualizar" (la hoja FD solo se lee si se pide "ecostos" --
+    "re545" no usa FD). La unica excepcion es un libro de antes de la
+    hoja "Centrales": ahi se lee Centrales.xlsx y se avisa. Cada
+    seccion se puede correr sola, en el orden y el dia que se quiera,
+    mientras las hojas que necesita ya esten escritas.
     """
 
     def avanzar(valor):
@@ -526,8 +643,9 @@ def generar_pagos_bess(
     #
     #   Medidores / Ofertas SSCC / Subastas / CMg  -> solo si hay que
     #     recalcular alguna de las dos hojas de calculo;
-    #   Centrales.xlsx -> ademas para COMPENSACION_CENTRAL y el
-    #     Resumen (el Propietario de cada central);
+    #   la hoja 'Centrales' -> ademas para COMPENSACION_CENTRAL y el
+    #     Resumen (el Propietario de cada central). Centrales.xlsx ya
+    #     no se abre aca (salvo un libro de antes de esa hoja);
     #   la hoja 'FD' del consolidado -> solo para E Costos (RE545 no
     #     usa FD), como ya era.
     # ----------------------------------------------------------
@@ -538,6 +656,7 @@ def generar_pagos_bess(
     df_wxy = df_resumen_ventana = None
     df_cmg = df_subastas = None
     df_fd_csf = df_fd_cpf = None
+    centrales_del_libro = None
     resumen = diccionario = None
     mapa_barra = dic_cmg = dic_factor = umbral_soc_minimo = None
     dic_eficiencia = dic_capacidad = None
@@ -558,7 +677,7 @@ def generar_pagos_bess(
 
         (
             df_medidores, df_wxy, df_resumen_ventana, df_cmg, df_subastas,
-            df_fd_csf, df_fd_cpf,
+            df_fd_csf, df_fd_cpf, centrales_del_libro,
         ) = _leer_entradas_del_consolidado(
             rutas["salida"], quiere_ecostos, registrar
         )
@@ -589,13 +708,19 @@ def generar_pagos_bess(
 
     avanzar(10)
 
+    origen_centrales = None
+
     if quiere_calculo or quiere_resumen or quiere_compensacion:
 
-        if not rutas["centrales"].is_file():
-            raise ErrorEntrada(f"No se encontro {rutas['centrales']}")
-
-        registrar(f"Leyendo {ARCHIVO_CENTRALES}...")
-        resumen, diccionario = leer_centrales(rutas["centrales"])
+        # Hoja "Centrales" de la planilla; Centrales.xlsx solo si el
+        # libro es de antes de que existiera esa hoja.
+        if centrales_del_libro is not None:
+            resumen, diccionario = centrales_del_libro
+            origen_centrales = "hoja"
+        else:
+            resumen, diccionario, origen_centrales = obtener_centrales(
+                rutas, registrar=registrar
+            )
 
     if quiere_calculo:
 
@@ -821,7 +946,10 @@ def generar_pagos_bess(
     # hoja 'CMg' del consolidado, que si esta en el manifiesto.
     manifiesto = construir_manifiesto([
         ("Planilla de entradas", rutas["salida"]),
-        ("Centrales", rutas["centrales"]),
+        # Centrales.xlsx solo si de verdad se abrio: lo normal es que
+        # el maestro salga de la hoja "Centrales" de la misma planilla.
+        ("Centrales",
+         rutas["centrales"] if origen_centrales == "archivo" else None),
         ("Prorrata retiros", archivo_prorrata),
     ])
 

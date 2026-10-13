@@ -29,11 +29,13 @@ from .alertas import ALTA, Alerta
 
 from .ecostos import COLUMNAS_SALIDA_E_COSTOS, GRUPOS_CALCULO_E_COSTOS
 from .formato import formatear_libro
+from .lectura import TITULO_CENTRALES_DICCIONARIO, TITULO_CENTRALES_RESUMEN
 from .ofertas_sscc import (
     HOJA_OFERTAS_SSCC, TITULO_OFERTAS_POR_DIA, TITULO_RESUMEN_VENTANA,
 )
 from .parametros import (
-    HOJA_ALERTAS, HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545, HOJA_CMG,
+    HOJA_ALERTAS, HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545, HOJA_CENTRALES,
+    HOJA_CMG,
     HOJA_COMPENSACION_CENTRAL, HOJA_EJECUCION, HOJA_FD, HOJA_LOG,
     HOJA_MEDIDORES, HOJA_PRORRATA_RETIROS, HOJA_RESUMEN, HOJA_SUBASTAS,
     ORDEN_HOJAS_CONTROL, ORDEN_HOJAS_SALIDA,
@@ -114,6 +116,7 @@ _FILAS_ENCABEZADO = {
     HOJA_CALCULO_RE545: 2,
     HOJA_PRORRATA_RETIROS: 3,
     HOJA_OFERTAS_SSCC: 2,
+    HOJA_CENTRALES: 2,
 }
 
 
@@ -567,7 +570,35 @@ def _copiar_hoja_existente(wb_origen, nombre_hoja, wb_destino):
 
 _HOJAS_CONSOLIDADO = (
     HOJA_MEDIDORES, HOJA_OFERTAS_SSCC, HOJA_CMG, HOJA_FD, HOJA_SUBASTAS,
+    HOJA_CENTRALES,
 )
+
+
+def _escribir_hoja_centrales(writer, resumen, diccionario):
+    """
+    La hoja "Centrales": 'Resumen BESS' con su titulo y sus
+    encabezados, y al lado la hoja 'Diccionario' tal cual (celda por
+    celda, sin encabezado propio). El formato y el porque estan en
+    lectura.py, junto a leer_centrales_planilla(), que es la que la
+    vuelve a leer: las dos puntas se mueven juntas.
+    """
+
+    _, columna = _escribir_tabla_con_titulo(
+        writer, HOJA_CENTRALES, resumen, TITULO_CENTRALES_RESUMEN,
+    )
+
+    pd.DataFrame([[TITULO_CENTRALES_DICCIONARIO]]).to_excel(
+        writer, sheet_name=HOJA_CENTRALES, index=False, header=False,
+        startrow=0, startcol=columna,
+    )
+    writer.sheets[HOJA_CENTRALES].cell(
+        row=1, column=columna + 1
+    ).font = Font(bold=True)
+
+    diccionario.to_excel(
+        writer, sheet_name=HOJA_CENTRALES, index=False, header=False,
+        startrow=1, startcol=columna,
+    )
 
 
 def escribir_salida(
@@ -585,6 +616,7 @@ def escribir_salida(
     hojas_regenerar=None,
     registrar=print,
     ruta_control=None,
+    centrales=None,
 ):
     """
     Escribe la MITAD DE ENTRADAS de la planilla de salida: la tabla
@@ -610,6 +642,9 @@ def escribir_salida(
     ruta_control: si se pasa, ahi se escribe la hoja "Log" (avisos e
     incidencias) -- en el archivo de control, ya no como una hoja mas
     de esta planilla.
+
+    centrales: (resumen_bess, diccionario) de Centrales.xlsx, para la
+    hoja "Centrales" (ver _escribir_hoja_centrales).
     """
 
     ruta_salida = Path(ruta_salida)
@@ -731,6 +766,15 @@ def escribir_salida(
                 )
         else:
             _preservar_o_avisar(writer, HOJA_SUBASTAS)
+
+        if HOJA_CENTRALES in regenerar and centrales is not None:
+            _escribir_hoja_centrales(writer, *centrales)
+        else:
+            # Es la unica hoja de entrada que NO se deja vacia si falta:
+            # un libro de antes de que existiera sigue andando con
+            # Centrales.xlsx (ver obtener_centrales), asi que no hay
+            # nada que avisar.
+            _copiar_hoja_existente(wb_existente, HOJA_CENTRALES, writer.book)
 
         _preservar_ajenas(writer, wb_existente, set())
         _ordenar_hojas(writer.book, ORDEN_HOJAS_SALIDA)

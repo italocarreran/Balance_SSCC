@@ -10,7 +10,7 @@ from pathlib import Path
 from .lectura import (
     ROL_BALANCE_BESS, ROL_OFERTAS, ROL_SUBASTAS, filas_diccionario,
 )
-from .parametros import HOJA_OFERTAS_SSCC, INICIO_VENTANA
+from .parametros import COLUMNA_CENTRAL, HOJA_OFERTAS_SSCC, INICIO_VENTANA
 from .utiles import (
     ErrorEntrada, _es_numero, _texto_seguro, _tiene_valor, _valor_clave,
 )
@@ -470,6 +470,60 @@ def _homologar_fge(nombre, mapa_f, mapa_g):
     return "0"
 
 
+def agregar_central_ofertas(df_wxy, diccionario):
+    """
+    Copia de la tabla "Ofertas SSCC por dia" con la columna
+    COLUMNA_CENTRAL al lado de "Nombre": el nombre Balance_BESS de esa
+    central, homologado UNA vez al importar (Diccionario: Subastas u
+    Ofertas -> Balance_BESS, la misma regla de Medidores!V). Vacia si
+    el Diccionario no la conoce.
+    """
+
+    mapa_f, mapa_g = _mapas_homologacion_fge(diccionario)
+
+    centrales = [
+        _homologar_fge(nombre, mapa_f, mapa_g) for nombre in df_wxy["Nombre"]
+    ]
+
+    df = df_wxy.copy()
+    df.insert(
+        df.columns.get_loc("Nombre") + 1,
+        COLUMNA_CENTRAL,
+        ["" if central == "0" else central for central in centrales],
+    )
+
+    return df
+
+
+def centrales_ofertas(df_wxy, diccionario=None):
+    """
+    El nombre Balance_BESS de cada fila de df_wxy, para la columna V:
+    la columna COLUMNA_CENTRAL si la tabla ya la trae (el caso normal,
+    ver agregar_central_ofertas) o, en un libro de antes, homologando
+    "Nombre" con el Diccionario. "0" donde no hay central (lo mismo
+    que devuelve la formula original cuando no encuentra).
+    """
+
+    if COLUMNA_CENTRAL in df_wxy.columns:
+        return [
+            _texto_seguro(central) or "0"
+            for central in df_wxy[COLUMNA_CENTRAL]
+        ]
+
+    if diccionario is None:
+        raise ErrorEntrada(
+            f"La tabla de Ofertas SSCC no trae la columna "
+            f"'{COLUMNA_CENTRAL}' y no se paso el Diccionario para "
+            f"homologar los nombres. Actualiza la hoja 'Ofertas SSCC'."
+        )
+
+    mapa_f, mapa_g = _mapas_homologacion_fge(diccionario)
+
+    return [
+        _homologar_fge(nombre, mapa_f, mapa_g) for nombre in df_wxy["Nombre"]
+    ]
+
+
 def calcular_r(df_medidores, df_wxy, diccionario, registrar=print):
     """
     Replica Medidores!R = VLOOKUP(B&G, V:Y, 4, FALSE).
@@ -484,13 +538,13 @@ def calcular_r(df_medidores, df_wxy, diccionario, registrar=print):
     Devuelve (serie_r, avisos).
     """
 
-    mapa_f, mapa_g = _mapas_homologacion_fge(diccionario)
-
     tabla_v = {}
-    for _, fila in df_wxy.iterrows():
-        homologado = _homologar_fge(fila["Nombre"], mapa_f, mapa_g)
-        clave_v = f"{int(fila['Dia'])}|{homologado.upper()}"
-        tabla_v.setdefault(clave_v, fila["Oferta completa"])
+    for homologado, dia, oferta in zip(
+        centrales_ofertas(df_wxy, diccionario),
+        df_wxy["Dia"], df_wxy["Oferta completa"],
+    ):
+        clave_v = f"{int(dia)}|{homologado.upper()}"
+        tabla_v.setdefault(clave_v, oferta)
 
     claves_medidores = (
         df_medidores["Dia"].astype("Int64").astype(str)

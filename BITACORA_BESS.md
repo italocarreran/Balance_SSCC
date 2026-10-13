@@ -12,6 +12,15 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **Hoja `Centrales` (2026-10-13):** en el primer libro real, apretar
+  "Actualizar" en la fila `hoja 'Centrales'` (hasta entonces cada paso lee
+  `Centrales.xlsx` y avisa) y volver a importar `FD` y `Ofertas SSCC` para
+  que traigan la columna `Central`. Confirmar que E Costos y RE545 dan lo
+  mismo que antes y revisar el aviso de unidades de FD sin central.
+- Decidir si la hoja `Subastas` debe dejar de abrir el `SSCC_Desempeño_*`
+  (hoy lo necesita para `CTF Horario` y la alternativa TG/TV, que la hoja
+  `FD` no guarda): habría que agregar ese bloque a la hoja `FD`.
+
 - Crear casos de prueba con datos reales y comparar la salida Python
   contra `11_PAGOS_BESS_2607_Definitivo.xlsm` (Medidores, Ofertas SSCC,
   CMg, FD, Subastas, Calculo E Costos) (plan §13 punto 10, §20.3). Todo se
@@ -4355,3 +4364,75 @@ v1, huecos incluidos; un 400 sale en el error con su texto; un 403 se pide
 una sola vez por punto y canal. 199 pruebas, 0 salteadas con tkinter.
 Compila. **Sin probar contra la API real**: ver pendiente.
 
+
+## 2026-10-13 — Cada paso se corre solo: hoja `Centrales`, columna `Central` y dos errores de COMPENSACION_CENTRAL
+
+El usuario corre los pasos a medida que le llega cada entrada (E Costos un
+día, RE545 al otro, la compensación después) y pidió que nada falle por
+correrlos por separado ni abra planillas que no hacen falta. Propuso
+copiar el `Resumen BESS` de `Centrales.xlsx` a una hoja de la planilla y
+dejar escrito, al importar, el nombre nuestro de cada central.
+
+**Dos errores al correr COMPENSACION_CENTRAL sola** (commits de la misma
+sesión, antes de lo demás):
+- `'NoneType' object has no attribute 'columns'`: `Centrales.xlsx` solo
+  se leía si se pedía E Costos, RE545 o el Resumen; la compensación sola
+  le pasaba `None` a `construir_mapa_propietario`.
+- `TRA-010 CRITICA ... 'NoneType' object is not subscriptable`: la
+  conciliación de energía corría siempre, también sin Medidores leído, y
+  dejaba la corrida NO APROBADA. Ahora solo corre si se recalcula E Costos
+  o RE545.
+
+**Hoja `Centrales`** (`HOJA_CENTRALES`, última del libro, sección
+`"centrales"` de `SECCIONES_CONSOLIDADO`): `Resumen BESS` con su título
+y, al lado, el `Diccionario` crudo celda por celda (así los dos formatos
+del Diccionario se siguen leyendo igual; prueba de ida y vuelta con los
+dos). Su botón "Actualizar" es lo único que abre `Centrales.xlsx`. Todo
+lo demás (`generar_consolidado`, `generar_pagos_bess`, `generar_cmg`) usa
+`obtener_centrales()`: la hoja si está; si el libro es de antes, lee
+`Centrales.xlsx`, avisa, y `generar_consolidado` deja la hoja escrita de
+paso. Los pasos de cálculo la leen con la misma apertura del libro que el
+resto de las hojas.
+
+**Columna `Central`** (`COLUMNA_CENTRAL`): el nombre Balance_BESS,
+homologado una vez al importar.
+- "Ofertas SSCC por día": al lado de `Nombre` (`agregar_central_ofertas`).
+  `calcular_r` busca por ahí (`centrales_ofertas`); sin la columna (libro
+  viejo) homologa con el Diccionario como antes.
+- Hoja `FD`: al final de cada bloque (`agregar_central_fd`, desde
+  `mapa_unidad_fd_a_central`, el par Balance_BESS→FD leído al revés).
+  `leer_fd_consolidado` acepta los bloques con y sin la columna. E Costos
+  `AM:AR` arma el cruce central→unidad desde esa columna
+  (`dic_mapeo_desde_fd`), con el Diccionario solo de respaldo para lo que
+  la hoja no cubra (así FD-007 y DIC-001 siguen distinguiéndose igual).
+  Las unidades sin central se avisan en el log al importar.
+
+**`Ofertas SSCC` sola** ya no rehace Medidores desde `Medidas_SAE.xlsx` +
+SoC: lee la hoja `Medidores` escrita (`_leer_medidores_del_libro`). En
+"Ejecutar todo" pasa a depender de `consolidado:medidores` en vez de
+`medidas_sae`. `consolidado:centrales` es dependencia **opcional** de
+todas las hojas (ordena y deja viejo, no bloquea: cada paso sabe caer a
+`Centrales.xlsx`).
+
+**De paso:** `leer_centrales`, `leer_cmg`, `construir_fd` y
+`Desempeno_Horario.construir_tablas_fd` abrían un `pd.ExcelFile` solo para
+mirar los nombres de hoja y no lo cerraban (en Windows puede dejar el
+archivo tomado): ahora con `with`.
+
+**No cambió:** la hoja `Subastas` sigue abriendo el `SSCC_Desempeño_*`
+para su FD y el Vector de Participación CSF: usa `CTF Horario` y la
+alternativa TG/TV, que la hoja `FD` no guarda. Moverlo exigiría agregar
+otro bloque a la hoja `FD`.
+
+**Verificación:** `tests/test_pasos_sueltos.py` (nuevo, 13 pruebas): con
+la hoja `Centrales` copiada y `Centrales.xlsx` borrado, E Costos, RE545,
+COMPENSACION_CENTRAL, PRORRATA_RETIROS y Resumen corren de a uno sin
+error, sin abrir `Centrales.xlsx` y sin TRA-010; E Costos y RE545 dan
+exactamente lo mismo leyendo la hoja que leyendo el archivo; libro viejo
+cae al archivo con aviso; sin hoja ni archivo, error que lo dice; ida y
+vuelta de los dos formatos del Diccionario; `Ofertas SSCC` sola sin
+`Medidas_SAE.xlsx` ni SoC; columna `Central` en FD (ida y vuelta) y en
+Ofertas, y E Costos igual a la referencia con un Diccionario **sin**
+columna FD. Se ajustaron `test_orquestador` (la sección nueva) y
+`test_planillas_ordenadas` (la última hoja es `Centrales`). 212 pruebas,
+13 salteadas (tkinter). Compila. **Sin probar contra un libro real.**

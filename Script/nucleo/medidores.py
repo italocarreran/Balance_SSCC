@@ -7,7 +7,7 @@ import pandas as pd
 from pathlib import Path
 
 from .ofertas_sscc import (
-    calcular_r, calcular_s, calcular_t, cargar_resumen_en_medidores,
+    agregar_central_ofertas, calcular_r, calcular_s, calcular_t, cargar_resumen_en_medidores,
     construir_resumen_ofertas_sscc, construir_resumen_ventana_oferta,
 )
 from .parametros import (
@@ -346,6 +346,10 @@ def construir_ofertas_sscc(
             f"{periodo_ofertas[0]}-{periodo_ofertas[1]:02d}, pero el "
             f"caso corresponde a {anio}-{mes:02d}."
         )
+
+    # La central de cada fila se homologa aca, una sola vez, y queda
+    # escrita en la hoja: el calculo la toma de ahi (ver calcular_r).
+    df_wxy = agregar_central_ofertas(df_wxy, diccionario)
 
     r_valor, avisos_r = calcular_r(
         df_medidores, df_wxy, diccionario, registrar=registrar

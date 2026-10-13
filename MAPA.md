@@ -29,7 +29,7 @@ Script/
         rutas.py               <- rutas del caso y busqueda de entradas
         estructura.py          <- el arbol que dibuja la ventana
         origenes.py            <- de donde viene lo que se trae (links)
-        lectura.py             <- Medidas_SAE.xlsx y Centrales.xlsx
+        lectura.py             <- Medidas_SAE.xlsx, Centrales.xlsx y la hoja "Centrales"
         soc.py                 <- el SoC por bloques del SCADA
         ofertas_sscc.py        <- la hoja Ofertas SSCC (y R, S, T, V)
         hojas_entrada.py       <- hojas CMg, FD y Subastas
@@ -152,6 +152,7 @@ importable como cualquier módulo.
   | `FD y FMA/fma_cft_<AAMM>.xlsx` | **Generar** | `nucleo.generar_fma` con `{"ctf"}` — desde el `CTF_<AAAA><MM>.csv` del DCO |
   | `Subastas/DB subastas/` | **Traer** | `nucleo.traer_subastas` — copia los `OfertasSSCCAdj*.accdb` del período desde la unidad de red |
   | `Balance_BESS.xlsx` | **Actualizar** | las dos mitades de un viaje: `generar_consolidado` con todas las secciones y después `generar_pagos_bess` con todas |
+  | `Balance_BESS.xlsx/Centrales` | **Actualizar** | copia `Resumen BESS` y `Diccionario` de `Centrales.xlsx` a la planilla: es lo único que abre ese archivo |
   | cada `hoja '...'` de entrada | **Actualizar** | `generar_consolidado` con esa sola sección |
   | cada `hoja '...'` de cálculo | **Calcular** | `generar_pagos_bess` con esa sola |
   | `Balance_BESS.xlsx/COMPENSACION_CENTRAL` | **Resumir** | compensación por central y ciclo/ventana, y total por empresa |
@@ -165,7 +166,7 @@ importable como cualquier módulo.
 
   La salida es **una sola planilla** (`ARCHIVO_SALIDA`), con las hojas
   ordenadas de fin a inicio (`ORDEN_HOJAS_SALIDA`: `Resumen` arriba,
-  `Medidores` abajo). Se desglosa por hoja igual que `Centrales.xlsx`: lo que
+  `Medidores` y, al final, `Centrales`). Se desglosa por hoja igual que `Centrales.xlsx`: lo que
   no se actualiza se **conserva** tal cual estaba en el archivo (no se
   recalcula ni se borra — ver `escribir_salida`/`hojas_regenerar`), y si el
   archivo todavía no existe se crea con el resto de las hojas vacías (queda
@@ -684,8 +685,24 @@ importable como cualquier módulo.
   período AAMM que ingresa el usuario), y escribe `Balance_BESS.xlsx` (una
   sola planilla: `Resumen`, `PRORRATA_RETIROS`, `COMPENSACION_CENTRAL`,
   `Calculo RE545`, `Calculo E Costos`, `Subastas`, `FD`, `CMg`,
-  `Ofertas SSCC`, `Medidores`) y `Control_corrida.xlsx` (`Ejecucion`,
-  `Alertas`, `Log`).
+  `Ofertas SSCC`, `Medidores`, `Centrales`) y `Control_corrida.xlsx`
+  (`Ejecucion`, `Alertas`, `Log`).
+
+  **Cada paso se corre solo** (pedido del usuario, 2026-10-13: la
+  información del mes llega de a poco y se corre E Costos un día, RE545
+  al otro, la compensación después). Para eso:
+
+  | Qué | Cómo |
+  |---|---|
+  | Hoja `Centrales` | foto de `Centrales.xlsx` (`Resumen BESS` + `Diccionario` crudo, lado a lado con su título). Su botón es lo **único** que abre `Centrales.xlsx`; todo lo demás usa `obtener_centrales()`/`leer_centrales_planilla()` (`lectura.py`). Un libro de antes de la hoja cae a `Centrales.xlsx` con un aviso, y `generar_consolidado` la deja escrita de paso. |
+  | Columna `Central` | el nombre Balance_BESS, homologado **una vez al importar**: al lado de `Nombre` en "Ofertas SSCC por día" (`agregar_central_ofertas`) y al final de cada bloque de la hoja `FD` (`agregar_central_fd`). `calcular_r` y E Costos `AM:AR` (`dic_mapeo_desde_fd`) buscan directo por ahí; el Diccionario queda solo como respaldo para libros sin la columna. |
+  | `Ofertas SSCC` sola | lee la hoja `Medidores` ya escrita (`_leer_medidores_del_libro`): no abre `Medidas_SAE.xlsx` ni el SoC. |
+  | Hojas de cálculo | no abren ningún archivo de entrada; la conciliación de energía solo corre si se recalcula E Costos o RE545. |
+  | "Ejecutar todo" | la tarea `consolidado:centrales` es dependencia **opcional** de las demás: ordena y deja viejo lo que sale de ella, pero no bloquea. |
+
+  Lo que **sí** sigue abriendo el `SSCC_Desempeño_*` es la hoja
+  `Subastas` (columna FD y Vector de Participación CSF): necesita la hoja
+  `CTF Horario` y la alternativa TG/TV, que la hoja `FD` no guarda.
 
   **Medidores**: calculadas J (SoC), L (Ventana), O (Indicador_SoC).
 
@@ -903,10 +920,10 @@ importable como cualquier módulo.
     hojas de fin a inicio (`ORDEN_HOJAS_SALIDA`): `Resumen`,
     `PRORRATA_RETIROS`, `COMPENSACION_CENTRAL`, `Calculo RE545`,
     `Calculo E Costos`, `Subastas` (con sus nombres reales), `FD` (los
-    bloques CSF y CPF lado a lado, columnas A:M y Q:AE, con sus nombres
-    reales), `CMg`, `Ofertas SSCC` (las tablas W:Y y AB:AE equivalentes,
-    una al lado de la otra — ver `_escribir_tabla_con_titulo()`) y
-    `Medidores`. `'Calculo E Costos'!AM:AR` sale de la hoja `FD` de la
+    bloques CSF y CPF lado a lado, columnas A:N y Q:AF, con sus nombres
+    reales y la columna `Central` al final de cada uno), `CMg`, `Ofertas SSCC` (las tablas W:Y y AB:AE equivalentes,
+    una al lado de la otra — ver `_escribir_tabla_con_titulo()`),
+    `Medidores` y `Centrales` (la foto de `Centrales.xlsx`). `'Calculo E Costos'!AM:AR` sale de la hoja `FD` de la
     misma planilla (`leer_fd_consolidado()`), no de releer el
     `SSCC_Desempeño_*`: las hojas de entrada son la única foto con la que
     se calcula, igual que ya pasaba con `Medidores` y `Subastas`.

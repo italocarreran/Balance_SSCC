@@ -108,6 +108,22 @@ HOJA_CMG = "CMg"
 HOJA_FD = "FD"
 HOJA_SUBASTAS = "Subastas"
 
+# La foto de Centrales.xlsx dentro de la planilla (pedido del usuario:
+# "que la hoja de resumen de Centrales.xlsx se agregue en una nueva
+# hoja"): 'Resumen BESS' y 'Diccionario' copiados una vez con su
+# boton, y de ahi los lee todo lo demas. Asi cada paso que se corre
+# suelto (E Costos hoy, RE545 maniana, la compensacion despues) usa la
+# misma version del maestro y no vuelve a abrir Centrales.xlsx.
+HOJA_CENTRALES = "Centrales"
+
+# La columna que se agrega al importar una hoja que trae los nombres de
+# OTRO origen (la unidad del FD, el nombre de las ofertas): el nombre
+# Balance_BESS de esa central, ya homologado con el Diccionario. Asi
+# el calculo busca directo por esta columna en vez de volver a
+# homologar cada vez, y en la planilla se ve a que central corresponde
+# cada fila.
+COLUMNA_CENTRAL = "Central"
+
 # El calculo y el cierre (el "fin").
 HOJA_CALCULO_ECOSTOS = "Calculo E Costos"
 HOJA_CALCULO_RE545 = "Calculo RE545"
@@ -131,6 +147,7 @@ ORDEN_HOJAS_SALIDA = (
     HOJA_CMG,
     HOJA_OFERTAS_SSCC,
     HOJA_MEDIDORES,
+    HOJA_CENTRALES,
 )
 
 # --- hojas del archivo de control ----------------------------------

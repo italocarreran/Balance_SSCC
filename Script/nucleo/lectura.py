@@ -3,11 +3,13 @@
 Medidas_SAE.xlsx y el maestro Centrales.xlsx.
 """
 
+from pathlib import Path
+
 import pandas as pd
 
 from .parametros import (
-    ARCHIVO_CENTRALES, ARCHIVO_MEDIDAS_SAE, COLUMNAS_AI,
-    HOJA_DICCIONARIO, HOJA_MEDIDAS_SAE, HOJA_RESUMEN_BESS,
+    ARCHIVO_CENTRALES, ARCHIVO_MEDIDAS_SAE, ARCHIVO_SALIDA, COLUMNAS_AI,
+    HOJA_CENTRALES, HOJA_DICCIONARIO, HOJA_MEDIDAS_SAE, HOJA_RESUMEN_BESS,
 )
 from .utiles import ErrorEntrada, _texto_seguro, _tiene_valor, normalizar
 
@@ -106,15 +108,18 @@ def _leer_resumen_bess(ruta, nombre_hoja, filas_a_revisar=15):
 def leer_centrales(ruta):
     """Devuelve (resumen_bess, diccionario) como DataFrames."""
 
-    excel = pd.ExcelFile(ruta)
+    # Solo los nombres de hoja, y se cierra enseguida: un ExcelFile
+    # que queda abierto deja el archivo tomado en Windows.
+    with pd.ExcelFile(ruta) as excel:
+        hojas = list(excel.sheet_names)
 
     def buscar_hoja(nombre_buscado):
-        for hoja in excel.sheet_names:
+        for hoja in hojas:
             if normalizar(hoja) == normalizar(nombre_buscado):
                 return hoja
         raise ErrorEntrada(
             f"{ARCHIVO_CENTRALES} no tiene la hoja "
-            f"'{nombre_buscado}'. Hojas: {excel.sheet_names}"
+            f"'{nombre_buscado}'. Hojas: {hojas}"
         )
 
     resumen = _leer_resumen_bess(ruta, buscar_hoja(HOJA_RESUMEN_BESS))
@@ -126,6 +131,161 @@ def leer_centrales(ruta):
     )
 
     return resumen, diccionario
+
+
+# ============================================================
+# LA HOJA "Centrales" DE LA PLANILLA: la foto de Centrales.xlsx
+# ============================================================
+#
+# Pedido del usuario: la informacion del mes llega de a poco y cada
+# paso se corre en un dia distinto (E Costos hoy, RE545 maniana, la
+# compensacion despues). Antes cada uno de esos pasos volvia a abrir
+# Centrales.xlsx; ahora su boton 'Actualizar' copia una vez las dos
+# hojas que se usan ('Resumen BESS' y 'Diccionario') a la hoja
+# "Centrales" de la planilla, y todo lo demas la lee de ahi.
+#
+# Las dos tablas van una al lado de la otra, cada una con su titulo en
+# la fila 1 (mismo criterio que la hoja 'Ofertas SSCC'):
+#
+#   A1: TITULO_CENTRALES_RESUMEN    <2 columnas vacias>   X1: TITULO_CENTRALES_DICCIONARIO
+#   A2: encabezados de Resumen BESS                       X2: la hoja Diccionario TAL CUAL
+#   A3: datos                                                 (sin encabezado propio)
+#
+# El Diccionario se copia crudo, celda por celda, porque se lee de dos
+# formas (la tabla unica con encabezados y los bloques lado a lado del
+# formato viejo, ver mas abajo) y las dos tienen que seguir dando lo
+# mismo que leyendo Centrales.xlsx. Es la ultima tabla de la hoja: se
+# lee desde su columna hasta el final, sin adivinar un ancho (sus
+# columnas vacias del medio son las que separan los bloques viejos).
+
+TITULO_CENTRALES_RESUMEN = (
+    f"{HOJA_RESUMEN_BESS} (copia de {ARCHIVO_CENTRALES})"
+)
+TITULO_CENTRALES_DICCIONARIO = (
+    f"{HOJA_DICCIONARIO} (copia de {ARCHIVO_CENTRALES})"
+)
+
+
+def _sin_filas_vacias_al_final(df):
+    """Corta el relleno vacio de abajo (las filas que ocupa la otra tabla)."""
+
+    if df.empty:
+        return df
+
+    con_datos = df.map(_tiene_valor).any(axis=1).to_numpy()
+    ultimas = [i for i, tiene in enumerate(con_datos) if tiene]
+
+    return df.iloc[: ultimas[-1] + 1] if ultimas else df.iloc[:0]
+
+
+def leer_centrales_planilla(ruta_salida, libro=None):
+    """
+    (resumen_bess, diccionario) desde la hoja "Centrales" de la
+    planilla de salida, con la misma forma que devuelve
+    leer_centrales() leyendo Centrales.xlsx: resumen con sus nombres de
+    columna y diccionario crudo (header=None, columnas 0..n).
+
+    Devuelve None si la planilla no existe, no tiene la hoja o la hoja
+    esta vacia: quien llama decide si eso es un error.
+
+    libro: un pd.ExcelFile ya abierto de la planilla (para no volver a
+    parsear el libro entero si ya se esta leyendo otra hoja).
+    """
+
+    ruta_salida = Path(ruta_salida)
+    fuente = libro
+
+    if fuente is None:
+        if not ruta_salida.is_file():
+            return None
+        fuente = ruta_salida
+
+    try:
+        crudo = pd.read_excel(fuente, sheet_name=HOJA_CENTRALES, header=None)
+    except ValueError:
+        return None
+
+    if crudo.empty:
+        return None
+
+    columnas_titulo = {
+        _texto_seguro(crudo.iloc[0, col]): col
+        for col in range(crudo.shape[1])
+        if _tiene_valor(crudo.iloc[0, col])
+    }
+
+    col_resumen = columnas_titulo.get(TITULO_CENTRALES_RESUMEN)
+    col_diccionario = columnas_titulo.get(TITULO_CENTRALES_DICCIONARIO)
+
+    if col_resumen is None or col_diccionario is None:
+        return None
+
+    ancho = 0
+    while (
+        col_resumen + ancho < crudo.shape[1]
+        and _tiene_valor(crudo.iloc[1, col_resumen + ancho])
+    ):
+        ancho += 1
+
+    if not ancho:
+        return None
+
+    # El resumen se relee con header= para que cada columna vuelva con
+    # su tipo (numeros como numeros), igual que desde Centrales.xlsx.
+    resumen = pd.read_excel(
+        fuente, sheet_name=HOJA_CENTRALES, header=1,
+        usecols=list(range(col_resumen, col_resumen + ancho)),
+    )
+    resumen = _sin_filas_vacias_al_final(resumen).reset_index(drop=True)
+
+    diccionario = crudo.iloc[1:, col_diccionario:]
+    diccionario = _sin_filas_vacias_al_final(diccionario)
+    diccionario = diccionario.reset_index(drop=True)
+    diccionario.columns = range(diccionario.shape[1])
+
+    return resumen, diccionario
+
+
+def obtener_centrales(rutas, registrar=print, libro=None):
+    """
+    El maestro de centrales para cualquier paso: (resumen, diccionario,
+    origen).
+
+      origen = "hoja"    -> salio de la hoja "Centrales" de la planilla
+                            (el caso normal: Centrales.xlsx ni se abre);
+      origen = "archivo" -> la planilla todavia no tiene esa hoja (un
+                            libro de antes de que existiera) y se leyo
+                            Centrales.xlsx, avisando en el log.
+
+    rutas: el dict de resolver_rutas() (usa "salida" y "centrales").
+    Si no hay ni hoja ni archivo, ErrorEntrada.
+    """
+
+    leido = leer_centrales_planilla(rutas["salida"], libro=libro)
+
+    if leido is not None:
+        registrar(
+            f"Leyendo hoja '{HOJA_CENTRALES}' de {Path(rutas['salida']).name}..."
+        )
+        return leido[0], leido[1], "hoja"
+
+    if not Path(rutas["centrales"]).is_file():
+        raise ErrorEntrada(
+            f"No hay de donde sacar el maestro de centrales: "
+            f"{Path(rutas['salida']).name} no tiene la hoja "
+            f"'{HOJA_CENTRALES}' y no se encontro {rutas['centrales']}."
+        )
+
+    registrar(
+        f"  [AVISO] {ARCHIVO_SALIDA} todavia no tiene la hoja "
+        f"'{HOJA_CENTRALES}': se lee {ARCHIVO_CENTRALES}. Actualiza esa "
+        f"hoja con su boton para que los pasos siguientes no tengan que "
+        f"volver a abrirlo."
+    )
+    registrar(f"Leyendo {ARCHIVO_CENTRALES}...")
+    resumen, diccionario = leer_centrales(rutas["centrales"])
+
+    return resumen, diccionario, "archivo"
 
 
 def _bloques_columnas_diccionario(diccionario):

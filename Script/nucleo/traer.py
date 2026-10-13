@@ -9,7 +9,7 @@ from .externos import (
     extrae_cmg, indicadores_dco, indices_fma, ofertas_adj,
 )
 from .diccionarios import construir_mapa_barra
-from .lectura import leer_centrales
+from .lectura import obtener_centrales
 from .parametros import (
     ARCHIVO_CENTRALES, CARPETA_FD_FMA, HOJA_CMG_ORIGEN,
     HOJA_RESUMEN_BESS,
@@ -255,12 +255,6 @@ def generar_cmg(
     if not rutas["base"].is_dir():
         raise ErrorEntrada(f"No se encontro la carpeta base {rutas['base']}")
 
-    if not rutas["centrales"].is_file():
-        raise ErrorEntrada(
-            f"No se encontro {rutas['centrales']} (de ahi salen las "
-            f"barras a filtrar)."
-        )
-
     ruta_csv = (
         Path(ruta_csv) if ruta_csv
         else extrae_cmg.ruta_csv_local(rutas["cmg_dir"], aamm)
@@ -275,8 +269,9 @@ def generar_cmg(
 
     avanzar(10)
 
-    registrar(f"Leyendo {ARCHIVO_CENTRALES} (hoja '{HOJA_RESUMEN_BESS}')...")
-    resumen, _ = leer_centrales(rutas["centrales"])
+    # Las barras salen de 'Resumen BESS': de la hoja "Centrales" de la
+    # planilla si ya esta, o de Centrales.xlsx si todavia no.
+    resumen, _, _ = obtener_centrales(rutas, registrar=registrar)
     barras = barras_desde_resumen_bess(resumen)
     registrar(f"  barras a filtrar: {len(barras)}")
     for barra in barras:

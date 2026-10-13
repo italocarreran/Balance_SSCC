@@ -244,10 +244,15 @@ class TestUnaSolaPlanilla(unittest.TestCase):
             df_subastas=pd.DataFrame({"subasta": [1, 2]}),
             hojas_regenerar={
                 nucleo.HOJA_MEDIDORES, nucleo.HOJA_CMG, nucleo.HOJA_SUBASTAS,
+                nucleo.HOJA_CENTRALES,
             },
             ruta_existente=ruta,
             ruta_control=control,
             registrar=lambda *a: None,
+            centrales=(
+                pd.DataFrame({"Nombre activo": ["SAE UNO"]}),
+                pd.DataFrame([["Balance_BESS", "FD"], ["SAE UNO", "SAE 1"]]),
+            ),
         )
 
     def calculo(self, ruta):
@@ -272,7 +277,9 @@ class TestUnaSolaPlanilla(unittest.TestCase):
 
             self.assertEqual(hojas, list(nucleo.ORDEN_HOJAS_SALIDA))
             self.assertEqual(hojas[0], nucleo.HOJA_RESUMEN)
-            self.assertEqual(hojas[-1], nucleo.HOJA_MEDIDORES)
+            # La ultima es la foto de Centrales.xlsx: el maestro del
+            # que sale todo lo demas.
+            self.assertEqual(hojas[-1], nucleo.HOJA_CENTRALES)
 
     def test_cada_mitad_preserva_la_otra(self):
         with tempfile.TemporaryDirectory() as carpeta:

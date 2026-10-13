@@ -285,7 +285,8 @@ def construir_tablas_fd(ruta_sscc, dia_cambio_hora=None, registrar=print):
     ruta_sscc = Path(ruta_sscc)
 
     try:
-        hojas_del_archivo = pd.ExcelFile(ruta_sscc).sheet_names
+        with pd.ExcelFile(ruta_sscc) as excel:
+            hojas_del_archivo = list(excel.sheet_names)
     except Exception as error:
         raise ErrorDesempeno(
             f"No se pudo abrir {ruta_sscc.name}: {error}"

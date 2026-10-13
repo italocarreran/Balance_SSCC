@@ -21,7 +21,7 @@ from .ecostos_prorratas import (
     calcular_as_at, calcular_au_av, calcular_fd_prorrateado,
     calcular_prorratas, construir_dic_fd_bloque,
     construir_dic_mapeo_diccionario, construir_dic_prorrata,
-    construir_prorrata_sscc, unidades_bloque_fd,
+    construir_prorrata_sscc, dic_mapeo_desde_fd, unidades_bloque_fd,
 )
 from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, HOJA_CALCULO_ECOSTOS,
@@ -267,9 +267,11 @@ def completar_calculo_e_costos_grupos(
     advertencias de cada columna.
 
     dic_factor, umbral_soc_minimo: de construir_dic_resumen_factor().
-    diccionario: hoja Diccionario de Centrales.xlsx (header=None).
-    df_fd_csf, df_fd_cpf: de construir_fd() (nombres reales ya
-    aplicados).
+    diccionario: hoja Diccionario (header=None), de la hoja
+    "Centrales" de la planilla. Solo hace falta para las centrales que
+    la columna 'Central' de la hoja FD no cubre; puede ser None.
+    df_fd_csf, df_fd_cpf: los dos bloques de la hoja FD (nombres reales
+    ya aplicados, y la columna 'Central' si la hoja la trae).
 
     Fuera de esta funcion: la columna AY del archivo real (que la
     macro original tampoco escribe) y toda la hoja Calculo RE545.
@@ -325,7 +327,16 @@ def completar_calculo_e_costos_grupos(
     df["AK"] = df["AH"]
     df["AL"] = 0.0
 
-    dic_mapeo = construir_dic_mapeo_diccionario(diccionario)
+    # La hoja FD ya trae, al lado de cada fila, el nombre Balance_BESS
+    # de su unidad (columna 'Central', puesta al importarla): ese cruce
+    # manda. El Diccionario queda solo para lo que la hoja no cubra (un
+    # libro de antes de la columna, o una central sin ninguna fila en
+    # FD, que es lo que distingue FD-007 de DIC-001 mas abajo).
+    dic_mapeo = (
+        construir_dic_mapeo_diccionario(diccionario)
+        if diccionario is not None else {}
+    )
+    dic_mapeo.update(dic_mapeo_desde_fd(df_fd_csf, df_fd_cpf))
     dic_fd_csf = construir_dic_fd_bloque(df_fd_csf, "id", "CSF(+)", "CSF(-)")
     dic_fd_cpf = construir_dic_fd_bloque(df_fd_cpf, "id", "CPF(+)", "CPF(-)")
 

@@ -7,7 +7,7 @@ import pandas as pd
 from pathlib import Path
 
 from .parametros import (
-    HOJA_CMG_ORIGEN, HOJA_CPF_HORARIO, HOJA_CSF_HORARIO,
+    COLUMNA_CENTRAL, HOJA_CMG_ORIGEN, HOJA_CPF_HORARIO, HOJA_CSF_HORARIO,
 )
 from .utiles import ErrorEntrada, _texto_seguro
 
@@ -82,17 +82,18 @@ def leer_cmg(ruta_cmg, registrar=print):
     archivo (fila 1), igual que hace la macro al no tocarlo.
     """
 
-    excel = pd.ExcelFile(ruta_cmg)
+    with pd.ExcelFile(ruta_cmg) as excel:
+        hojas = list(excel.sheet_names)
 
-    if not excel.sheet_names:
+    if not hojas:
         raise ErrorEntrada(
             f"{Path(ruta_cmg).name} no contiene hojas."
         )
 
     nombre_hoja = (
         HOJA_CMG_ORIGEN
-        if HOJA_CMG_ORIGEN in excel.sheet_names
-        else excel.sheet_names[0]
+        if HOJA_CMG_ORIGEN in hojas
+        else hojas[0]
     )
 
     df = pd.read_excel(ruta_cmg, sheet_name=nombre_hoja)
@@ -261,10 +262,11 @@ def construir_fd(ruta_sscc, registrar=print):
 
     ruta_sscc = Path(ruta_sscc)
 
-    excel = pd.ExcelFile(ruta_sscc)
+    with pd.ExcelFile(ruta_sscc) as excel:
+        hojas = list(excel.sheet_names)
 
     for hoja in (HOJA_CPF_HORARIO, HOJA_CSF_HORARIO):
-        if hoja not in excel.sheet_names:
+        if hoja not in hojas:
             raise ErrorEntrada(
                 f"No existe la hoja '{hoja}' en {ruta_sscc.name}."
             )
@@ -506,7 +508,14 @@ def leer_fd_consolidado(ruta_consolidado, registrar=print, libro=None):
 
     for columnas in bloques:
 
-        esperado = esperados.get(len(columnas))
+        # Desde que se importa con la columna 'Central' (el nombre
+        # Balance_BESS de la unidad, ver agregar_central_fd), cada
+        # bloque trae una columna mas al final. Un libro de antes no la
+        # trae: los dos se leen igual.
+        con_central = (
+            _texto_seguro(crudo.iloc[0, columnas[-1]]) == COLUMNA_CENTRAL
+        )
+        esperado = esperados.get(len(columnas) - int(con_central))
 
         if esperado is None:
             continue
@@ -515,6 +524,10 @@ def leer_fd_consolidado(ruta_consolidado, registrar=print, libro=None):
 
         if tipo in encontrados:
             continue
+
+        nombres = list(nombres.values()) + (
+            [COLUMNA_CENTRAL] if con_central else []
+        )
 
         bloque = crudo.iloc[1:, columnas].reset_index(drop=True)
 
@@ -528,7 +541,7 @@ def leer_fd_consolidado(ruta_consolidado, registrar=print, libro=None):
             if pd.notna(ultima) else bloque.iloc[:0]
         )
 
-        encontrados[tipo] = bloque.set_axis(list(nombres.values()), axis=1)
+        encontrados[tipo] = bloque.set_axis(nombres, axis=1)
 
     faltan = [t for t in ("csf", "cpf") if t not in encontrados]
 

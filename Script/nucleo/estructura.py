@@ -15,7 +15,7 @@ from .parametros import (
     ARCHIVO_PUNTOS_FALLIDOS, ARCHIVO_SALIDA, CARPETA_AUXILIARES, CARPETA_CMG,
     CARPETA_DB_SUBASTAS, CARPETA_FD_FMA, CARPETA_MEDIDAS,
     CARPETA_OFERTAS, CARPETA_PRORRATA_RETIROS, CARPETA_SUBASTAS,
-    HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545, HOJA_CMG,
+    HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545, HOJA_CENTRALES, HOJA_CMG,
     HOJA_COMPENSACION_CENTRAL, HOJA_DICCIONARIO, HOJA_FD,
     HOJA_MEDIDORES, HOJA_OFERTAS_SSCC, HOJA_PRORRATA_RETIROS,
     HOJA_RESUMEN, HOJA_RESUMEN_BESS, HOJA_SUBASTAS, ORDEN_HOJAS_SALIDA,
@@ -832,20 +832,29 @@ def revisar_estructura(carpeta_base, aamm=None):
 
 SECCIONES_CONSOLIDADO = (
     (
+        "centrales",
+        HOJA_CENTRALES,
+        f"Copia '{HOJA_RESUMEN_BESS}' y '{HOJA_DICCIONARIO}' de "
+        f"{ARCHIVO_CENTRALES}. Es la UNICA seccion que abre ese archivo: "
+        f"todas las demas leen esta hoja.",
+        (HOJA_CENTRALES,),
+    ),
+    (
         "medidores",
         "Medidores",
-        f"Usa {ARCHIVO_MEDIDAS_SAE}, el SoC del periodo y "
-        f"{ARCHIVO_CENTRALES}. Ya NO usa OfertasSSCC: las columnas "
-        f"que salian de ahi viven en la hoja 'Ofertas SSCC'.",
+        f"Usa {ARCHIVO_MEDIDAS_SAE}, el SoC del periodo y la hoja "
+        f"'{HOJA_CENTRALES}' (Diccionario). Ya NO usa OfertasSSCC: las "
+        f"columnas que salian de ahi viven en la hoja 'Ofertas SSCC'.",
         (HOJA_MEDIDORES,),
     ),
     (
         "ofertas_sscc",
         "Ofertas SSCC",
         f"Usa el archivo *OfertasSSCC* de {CARPETA_OFERTAS}/ y la hoja "
-        f"'Medidores' (centrales y ventanas). Guarda las dos tablas de "
-        f"las que salen las columnas R, S y T de la planilla original: "
-        f"'Medidores' ya no las trae ni depende de este archivo.",
+        f"'Medidores' ya escrita (centrales y ventanas). Guarda las dos "
+        f"tablas de las que salen las columnas R, S y T de la planilla "
+        f"original, con la columna 'Central' (el nombre Balance_BESS) ya "
+        f"homologada.",
         (HOJA_OFERTAS_SSCC,),
     ),
     (
@@ -858,7 +867,8 @@ SECCIONES_CONSOLIDADO = (
         "fd",
         "FD",
         f"Usa el archivo {CARPETA_FD_FMA}/ (hojas CPF/CSF "
-        f"Horario).",
+        f"Horario) y agrega a cada bloque la columna 'Central' (el "
+        f"nombre Balance_BESS, desde la hoja '{HOJA_CENTRALES}').",
         (HOJA_FD,),
     ),
     (
@@ -867,8 +877,9 @@ SECCIONES_CONSOLIDADO = (
         f"Usa los Access de {CARPETA_SUBASTAS}/{CARPETA_DB_SUBASTAS}/ "
         f"(su origen real), y de {CARPETA_FD_FMA}/ las salidas de FMA "
         f"(fma_cpf/fma_csf/fma_cft) y el SSCC_Desempeño_* (columna FD y "
-        f"Vector de Participacion CSF), mas {ARCHIVO_CENTRALES} "
-        f"(Propietario + nomenclaturas).",
+        f"Vector de Participacion CSF, que necesitan la hoja CTF y las "
+        f"filas que la hoja 'FD' no guarda), mas la hoja "
+        f"'{HOJA_CENTRALES}' (Propietario + nomenclaturas).",
         (HOJA_SUBASTAS,),
     ),
 )
@@ -878,18 +889,16 @@ SECCIONES_PAGOS = (
     (
         "ecostos",
         "Calculo E Costos",
-        f"Usa las hojas 'Medidores', 'Ofertas SSCC', 'FD' y 'Subastas' "
-        f"de esta misma planilla, mas {ARCHIVO_CENTRALES} y "
-        f"{ARCHIVO_CMG}. El FD homologado de AM:AR sale de la hoja "
-        f"'FD' del consolidado, no de releer el SSCC_Desempeño_*.",
+        f"Usa las hojas 'Medidores', 'Ofertas SSCC', 'CMg', 'FD', "
+        f"'Subastas' y '{HOJA_CENTRALES}' de esta misma planilla: no abre "
+        f"ningun archivo de entrada.",
         (HOJA_CALCULO_ECOSTOS,),
     ),
     (
         "re545",
         "Calculo RE545",
-        f"Usa las hojas 'Medidores', 'Ofertas SSCC' y 'Subastas' de "
-        f"esta misma planilla, mas {ARCHIVO_CENTRALES} y {ARCHIVO_CMG} -- "
-        f"no necesita el FD.",
+        f"Usa las hojas 'Medidores', 'Ofertas SSCC', 'CMg', 'Subastas' y "
+        f"'{HOJA_CENTRALES}' de esta misma planilla -- no necesita el FD.",
         (HOJA_CALCULO_RE545,),
     ),
     (
@@ -897,7 +906,7 @@ SECCIONES_PAGOS = (
         HOJA_COMPENSACION_CENTRAL,
         "Resume la compensacion de las dos hojas de calculo por central y "
         "ciclo/ventana, y el total que recibe cada empresa (el Propietario "
-        f"de '{HOJA_RESUMEN_BESS}' de {ARCHIVO_CENTRALES}).",
+        f"de la hoja '{HOJA_CENTRALES}').",
         (HOJA_COMPENSACION_CENTRAL,),
     ),
     (

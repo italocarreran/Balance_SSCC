@@ -186,19 +186,27 @@ TAREAS = (
         "subastas_db", None, "db_subastas",
         (), (), (),
     ),
-    # --- Las 5 hojas de entrada de la planilla (en UNA escritura) ---
+    # --- Las hojas de entrada de la planilla (en UNA escritura) ------
+    Tarea(
+        # La foto de Centrales.xlsx dentro de la planilla: es lo unico
+        # que abre ese archivo, y todo lo de abajo la lee de ahi.
+        "consolidado:centrales", "hoja 'Centrales'",
+        "consolidado", "centrales", "consolidado:centrales",
+        _REQ_CENTRALES, (), (),
+    ),
     Tarea(
         "consolidado:medidores", "hoja 'Medidores'",
         "consolidado", "medidores", "consolidado:medidores",
-        _REQ_CENTRALES + ("soc",), ("medidas_sae",), (),
+        _REQ_CENTRALES + ("soc",), ("medidas_sae",),
+        ("consolidado:centrales",),
     ),
     Tarea(
-        # No depende de la hoja 'Medidores' ya escrita:
-        # generar_consolidado la reconstruye en memoria a partir de
-        # Medidas_SAE (por eso depende de ese paso, no de la hoja).
+        # Sale de la hoja 'Medidores' ya escrita (centrales y
+        # ventanas), no de rehacerla desde Medidas_SAE.
         "consolidado:ofertas_sscc", "hoja 'Ofertas SSCC'",
         "consolidado", "ofertas_sscc", "consolidado:ofertas_sscc",
-        _REQ_CENTRALES + ("soc", "ofertas"), ("medidas_sae",), (),
+        _REQ_CENTRALES + ("ofertas",), ("consolidado:medidores",),
+        ("consolidado:centrales",),
     ),
     Tarea(
         "consolidado:cmg", "hoja 'CMg'",
@@ -206,9 +214,11 @@ TAREAS = (
         (), ("cmg_xlsx",), (),
     ),
     Tarea(
+        # La columna 'Central' de cada bloque sale de la hoja
+        # 'Centrales'.
         "consolidado:fd", "hoja 'FD'",
         "consolidado", "fd", "consolidado:fd",
-        (), ("fd_sscc",), (),
+        (), ("fd_sscc",), ("consolidado:centrales",),
     ),
     Tarea(
         # El FMA es OPCIONAL (si falta, esa columna queda en 0, igual
@@ -217,9 +227,14 @@ TAREAS = (
         "consolidado:subastas", "hoja 'Subastas'",
         "consolidado", "subastas", "consolidado:subastas",
         _REQ_CENTRALES, ("subastas_db", "fd_sscc"),
-        ("fma_cpf", "fma_csf", "fma_ctf"),
+        ("fma_cpf", "fma_csf", "fma_ctf", "consolidado:centrales"),
     ),
     # --- Las hojas de calculo de la planilla (en UNA escritura) ------
+    # Ninguna abre un archivo de entrada: todo sale de las hojas de
+    # arriba, incluida 'Centrales'. La hoja 'Centrales' es dependencia
+    # OPCIONAL de todo: ordena (si se rehace en la corrida, va antes) y
+    # deja viejo lo que sale de ella, pero no bloquea, porque cada paso
+    # sabe leer Centrales.xlsx si el libro todavia no tiene la hoja.
     Tarea(
         "pagos:ecostos", "hoja 'Calculo E Costos'",
         "pagos", "ecostos", "pagos:ecostos",
@@ -228,7 +243,7 @@ TAREAS = (
             "consolidado:medidores", "consolidado:ofertas_sscc",
             "consolidado:cmg", "consolidado:fd", "consolidado:subastas",
         ),
-        (),
+        ("consolidado:centrales",),
     ),
     Tarea(
         # RE545 no usa el FD.
@@ -239,15 +254,16 @@ TAREAS = (
             "consolidado:medidores", "consolidado:ofertas_sscc",
             "consolidado:cmg", "consolidado:subastas",
         ),
-        (),
+        ("consolidado:centrales",),
     ),
     Tarea(
         # Llego despues que el grafo (venia de otra rama): resume por
         # central lo que calculan las dos hojas de arriba, asi que
-        # depende de las dos y del Propietario de 'Resumen BESS'.
+        # depende de las dos y del Propietario de la hoja 'Centrales'.
         "pagos:compensacion_central", f"hoja '{HOJA_COMPENSACION_CENTRAL}'",
         "pagos", "compensacion_central", "pagos:compensacion_central",
-        _REQ_CENTRALES_RESUMEN, ("pagos:ecostos", "pagos:re545"), (),
+        _REQ_CENTRALES_RESUMEN, ("pagos:ecostos", "pagos:re545"),
+        ("consolidado:centrales",),
     ),
     Tarea(
         "pagos:prorrata_retiros", "hoja 'PRORRATA_RETIROS'",
@@ -258,7 +274,7 @@ TAREAS = (
         "pagos:resumen", "hoja 'Resumen'",
         "pagos", "resumen", "pagos:resumen",
         _REQ_CENTRALES_RESUMEN + ("prorrata_archivo",),
-        ("pagos:prorrata_retiros",), (),
+        ("pagos:prorrata_retiros",), ("consolidado:centrales",),
     ),
 )
 

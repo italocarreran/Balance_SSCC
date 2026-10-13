@@ -358,7 +358,10 @@ class TestCorrida(unittest.TestCase):
         self.assertEqual(len(consolidado), 1)
         self.assertEqual(
             consolidado[0],
-            ("cmg", "fd", "medidores", "ofertas_sscc", "subastas"),
+            (
+                "centrales", "cmg", "fd", "medidores", "ofertas_sscc",
+                "subastas",
+            ),
         )
         self.assertEqual(len(pagos), 1)
         self.assertEqual(

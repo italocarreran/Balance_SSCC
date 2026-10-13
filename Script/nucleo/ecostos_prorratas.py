@@ -6,8 +6,10 @@ E Costos, etapa 3: AG:AL, AM:AR (FD), AS:AV.
 import math
 import pandas as pd
 
-from .lectura import ROL_BALANCE_BESS, ROL_FD, mapa_diccionario
-from .parametros import HOJA_DICCIONARIO
+from .lectura import (
+    ROL_BALANCE_BESS, ROL_FD, filas_diccionario, mapa_diccionario,
+)
+from .parametros import COLUMNA_CENTRAL, HOJA_DICCIONARIO
 from .alertas import ALTA, MEDIA, Alerta, anotar, anotar_muchas
 from .utiles import (
     _columna_clave_vba, _normaliza_valor_vba, _texto_seguro,
@@ -243,6 +245,73 @@ def construir_dic_mapeo_diccionario(diccionario):
 
         if clave_norm and clave_norm not in dic:
             dic[clave_norm] = fila[1]
+
+    return dic
+
+
+def mapa_unidad_fd_a_central(diccionario):
+    """
+    El mismo par de columnas que construir_dic_mapeo_diccionario(),
+    leido al reves: unidad del FD normalizada -> nombre Balance_BESS
+    (tal cual). Es lo que pone la columna 'Central' de la hoja FD al
+    importarla. La primera central que reclama una unidad gana.
+    """
+
+    pares = [
+        (fila.get(ROL_BALANCE_BESS), fila.get(ROL_FD))
+        for fila in filas_diccionario(diccionario)
+    ]
+
+    if not any(_tiene_valor(unidad) for _, unidad in pares):
+        # Formato viejo: A -> B (ver construir_dic_mapeo_diccionario).
+        pares = [
+            (fila[0], fila[1]) for _, fila in diccionario.iterrows()
+        ] if diccionario.shape[1] > 1 else []
+
+    mapa = {}
+
+    for central, unidad in pares:
+        if _tiene_valor(central) and _tiene_valor(unidad):
+            mapa.setdefault(normalizar(unidad), _texto_seguro(central))
+
+    return mapa
+
+
+def agregar_central_fd(df_fd, mapa_central, columna_unidad="Unidad"):
+    """
+    Copia del bloque FD con la columna COLUMNA_CENTRAL al final: el
+    nombre Balance_BESS de la unidad de cada fila ("" si el
+    Diccionario no la reclama).
+    """
+
+    df = df_fd.copy()
+    df[COLUMNA_CENTRAL] = df[columna_unidad].map(
+        lambda unidad: mapa_central.get(normalizar(unidad), "")
+    )
+
+    return df
+
+
+def dic_mapeo_desde_fd(*bloques_fd):
+    """
+    central normalizada -> unidad, desde la columna COLUMNA_CENTRAL que
+    ya trae la hoja FD (ver agregar_central_fd). Es el mismo mapeo que
+    construir_dic_mapeo_diccionario() pero sin volver a homologar: la
+    central ya viene escrita al lado de cada fila. {} si la hoja es de
+    antes de que existiera la columna.
+    """
+
+    dic = {}
+
+    for df_fd in bloques_fd:
+
+        if df_fd is None or COLUMNA_CENTRAL not in df_fd.columns:
+            continue
+
+        for central, unidad in zip(df_fd[COLUMNA_CENTRAL], df_fd["Unidad"]):
+            clave = normalizar(central)
+            if clave and _tiene_valor(unidad):
+                dic.setdefault(clave, unidad)
 
     return dic
 
