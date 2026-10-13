@@ -12,6 +12,20 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **FMA CPF en el cambio de hora (septiembre, visto 2026-10-13, en
+  pausa a pedido del usuario):** el `tabla_resumen_6_9_2026.xlsx` real
+  trae **24 filas (00..23) con datos medidos** en un día de 23 horas (el
+  6-09 no existe la hora local 00). `Indices_FMA.construir_fma_cpf` pone
+  `Hora = fila + 1` sin ajuste, así que salen valores en la hora 1
+  (inexistente) y en la 24 del día 6. Los tiempos de frecuencia de las 24
+  filas son todos distintos y la fila 00 no repite la 23 del día 5:
+  hipótesis, el reporte va en UTC-4 fijo (fila 00 = 01:00 local = hora 2
+  de subastas; fila 23 = 00:00-01:00 del día 7), lo que podría correr
+  también los días siguientes. Para confirmar: cruzar los tiempos de
+  frecuencia contra `tabla_resumen_7_9_2026.xlsx` o contra el
+  `2026.09_Respuesta_CPF.xlsx` mensual (donde, según el usuario, la hora
+  1 del día 6 sale en cero). Recién ahí corregir la asignación de hora.
+
 - **Escritura rápida (2026-10-13 (3)):** abrir en **Excel** (Windows) un
   `Balance_BESS.xlsx` después de actualizar una hoja suelta y confirmar
   que abre sin el aviso "encontramos un problema con el contenido". Se
