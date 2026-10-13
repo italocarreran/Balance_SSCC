@@ -12,6 +12,13 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **Escritura rápida (2026-10-13 (3)):** abrir en **Excel** (Windows) un
+  `Balance_BESS.xlsx` después de actualizar una hoja suelta y confirmar
+  que abre sin el aviso "encontramos un problema con el contenido". Se
+  validó con pandas, openpyxl y LibreOffice, no con Excel. Si Excel
+  reclamara, el cambio se revierte en `escritura.py` (volver a
+  `_abrir_existente` + escribir directo en `ruta_salida`).
+
 - **Hoja `Centrales` (2026-10-13):** en el primer libro real, apretar
   "Actualizar" en la fila `hoja 'Centrales'` (hasta entonces cada paso lee
   `Centrales.xlsx` y avisa) y volver a importar `FD` y `Ofertas SSCC` para
@@ -4499,3 +4506,51 @@ no se usa (salen los de las hojas); la hoja `FMA` va y vuelve igual; RE545
 sin hoja `FMA` da error claro. El caso de `test_control_corrida` ganó su
 hoja `FMA`. 216 pruebas, 13 salteadas (tkinter). Compila. **Sin probar
 contra un libro real.**
+
+## 2026-10-13 (3) — Actualizar una hoja ya no reescribe el libro entero
+
+Pedido del usuario: *"la hoja centrales se demora mucho en armar,
+debería ser rápido [...] que se copien, se cierre y se peguen en el
+documento de salida"*.
+
+**Medido** (libro sintético de 61 MB con hojas de ~27.000 filas, como
+uno real lleno): actualizar `Centrales` tardaba **430 s**, y casi todo
+era de la escritura: `openpyxl.load_workbook` del libro entero para
+preservar las hojas que no cambiaban (182 s) y volver a guardarlo
+completo (119 s), más la copia celda por celda. Leer `Centrales.xlsx`
+era despreciable. Le pasaba a **cualquier** botón de una hoja sola.
+
+**Cambio:** `Script/nucleo/xlsx_rapido.py` (nuevo). Las dos escrituras
+escriben solo las hojas de la pasada en un libro temporal (`.~nuevas_…`,
+con el mismo código y formato de siempre) y `pegar_hojas()` arma el
+libro final copiando el zip viejo entrada por entrada **comprimida tal
+cual** (no se descomprime ninguna hoja que no cambia) y poniendo el XML
+de las nuevas en su lugar:
+- textos compartidos del temporal → texto en línea (`inlineStr`), así no
+  se toca el `sharedStrings.xml` del libro;
+- estilos: cada estilo de la hoja pegada se busca en el `styles.xml` del
+  libro y, si no está, se agrega **como texto** (no se reescribe el XML:
+  un libro guardado por Excel declara espacios de nombres que un parser
+  descartaría);
+- hojas nuevas: entrada en `workbook.xml`, sus relaciones y
+  `[Content_Types].xml`; orden según `ORDEN_HOJAS_SALIDA`, y
+  `localSheetId` acomodado si hay nombres definidos;
+- se escribe a `.~Balance_BESS.xlsx` y recién al final `os.replace`: si
+  algo falla, el libro anterior queda intacto.
+`escritura.py` ve el libro existente solo por los nombres de sus hojas
+(`_LibroEnZip`); el archivo de control sigue con openpyxl (es chico).
+
+**Resultado:** el mismo caso, **0,8 s**. Las 7 hojas que no se tocaron
+quedan idénticas byte a byte; zip válido; abre con pandas, openpyxl
+completo y LibreOffice; la hoja pegada conserva negrita, formato de
+número y panel fijo. Probado también sobre un libro guardado por
+LibreOffice (otro `styles.xml`, prefijos en la raíz) y después
+recalculando E Costos encima.
+
+**Verificación:** `tests/test_xlsx_rapido.py` (nuevo, 5 pruebas):
+reemplazar una hoja deja las demás idénticas y lee bien textos con
+`< & "` y tildes; agregar y ordenar; estilos de la hoja pegada y de las
+no tocadas; un `workbook.xml` "estilo Excel" (prefijo en la raíz); y
+`escribir_salida` con una sola hoja no reescribe las otras ni deja
+temporales. 221 pruebas, 13 salteadas (tkinter). **Sin probar con Excel
+de Windows**: ver pendiente.

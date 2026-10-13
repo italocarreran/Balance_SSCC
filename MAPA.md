@@ -50,6 +50,7 @@ Script/
         compensacion.py        <- quien recibe: por central/ciclo y por empresa
         medidores.py           <- la hoja Medidores
         escritura.py           <- los dos libros de salida
+        xlsx_rapido.py         <- pegar hojas en el .xlsx a nivel zip (sin abrir el libro)
         formato.py             <- ancho/negrita/panel fijo de las hojas
         proceso.py             <- los dos procesos completos
         orquestador.py         <- el grafo de "Ejecutar todo" (plan y corrida)
@@ -700,6 +701,7 @@ importable como cualquier módulo.
   | `Ofertas SSCC` sola | lee la hoja `Medidores` ya escrita (`_leer_medidores_del_libro`): no abre `Medidas_SAE.xlsx` ni el SoC. |
   | Hojas de cálculo | no abren ningún archivo de entrada; la conciliación de energía solo corre si se recalcula E Costos o RE545. |
   | "Ejecutar todo" | la tarea `consolidado:centrales` es dependencia **opcional** de las demás: ordena y deja viejo lo que sale de ella, pero no bloquea. |
+  | Escritura | `escribir_salida`/`escribir_pagos_bess` escriben **solo** las hojas de esta pasada en un libro temporal chico y `xlsx_rapido.pegar_hojas()` las pega en el zip de `Balance_BESS.xlsx`: las demás hojas se copian comprimidas tal cual (ni se descomprimen), los textos van en línea y los estilos se agregan al `styles.xml` como texto. Actualizar `Centrales` en un libro de 61 MB: de 430 s a 0,8 s. |
 
   **FD y FMA de las subastas se aplican en RE545, no en `Subastas`**
   (pedido del usuario, 2026-10-13: evitar un descuento doble). La hoja

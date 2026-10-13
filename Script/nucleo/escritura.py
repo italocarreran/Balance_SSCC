@@ -19,6 +19,7 @@ archivo, cada una PRESERVA las hojas de la otra: lo que no se
 recalcula en esta pasada se copia tal cual del libro anterior.
 """
 
+import shutil
 from pathlib import Path
 
 import openpyxl
@@ -42,6 +43,7 @@ from .parametros import (
     ORDEN_HOJAS_CONTROL, ORDEN_HOJAS_SALIDA,
 )
 from .re545 import COLUMNAS_SALIDA_RE545, GRUPOS_CALCULO_RE545
+from .xlsx_rapido import nombres_de_hojas, pegar_hojas
 
 
 # Las hojas que escribe cada mitad de la planilla. No definen el
@@ -77,6 +79,74 @@ def _abrir_existente(ruta):
         return None
 
 
+class _LibroEnZip:
+    """
+    El libro de salida que ya existe, visto solo por los nombres de sus
+    hojas (se leen del indice del zip, sin abrir ninguna hoja). Las
+    hojas que no se reescriben ni se copian: quedan en el zip tal cual y
+    pegar_hojas() solo reemplaza las nuevas (ver xlsx_rapido.py).
+    """
+
+    def __init__(self, ruta):
+        self.ruta = Path(ruta)
+        self.sheetnames = nombres_de_hojas(ruta)
+
+
+def _abrir_existente_en_zip(ruta):
+    """_LibroEnZip de 'ruta', o None si no existe o no es un .xlsx."""
+
+    if ruta is None or not Path(ruta).is_file():
+        return None
+
+    try:
+        return _LibroEnZip(ruta)
+    except Exception:
+        return None
+
+
+def _archivo_temporal(ruta_salida):
+    """Donde se escriben las hojas nuevas antes de pegarlas."""
+
+    ruta_salida = Path(ruta_salida)
+    return ruta_salida.with_name(f".~nuevas_{ruta_salida.name}")
+
+
+def _pegar_en_salida(writer_ruta, ruta_salida, wb_existente, escritas_vacio):
+    """
+    Pasa las hojas del libro temporal al de salida (xlsx_rapido) y borra
+    el temporal. Si el libro existente es otro archivo que el de salida,
+    se parte de una copia suya.
+    """
+
+    ruta_salida = Path(ruta_salida)
+
+    try:
+        if (
+            wb_existente is not None
+            and wb_existente.ruta.resolve() != ruta_salida.resolve()
+        ):
+            shutil.copyfile(wb_existente.ruta, ruta_salida)
+
+        pegar_hojas(
+            ruta_salida, writer_ruta, ORDEN_HOJAS_SALIDA,
+            ignorar=escritas_vacio,
+        )
+    finally:
+        Path(writer_ruta).unlink(missing_ok=True)
+
+
+# Una hoja de relleno para el libro temporal cuando esta pasada no
+# escribe ninguna (openpyxl no guarda un libro sin hojas). No se pega.
+_HOJA_RELLENO = "__sin_hojas__"
+
+
+def _asegurar_una_hoja(writer):
+    if not writer.book.sheetnames:
+        writer.book.create_sheet(_HOJA_RELLENO)
+        return {_HOJA_RELLENO}
+    return set()
+
+
 def _preservar_ajenas(writer, wb_existente, escritas):
     """
     Copia al libro nuevo toda hoja del anterior que esta pasada no
@@ -85,7 +155,8 @@ def _preservar_ajenas(writer, wb_existente, escritas):
     no sabe nada de las hojas de la otra, solo que no las toca.
     """
 
-    if wb_existente is None:
+    if wb_existente is None or isinstance(wb_existente, _LibroEnZip):
+        # En el zip, lo que no se escribe ya queda como estaba.
         return
 
     for nombre in wb_existente.sheetnames:
@@ -299,7 +370,8 @@ def escribir_pagos_bess(
     # Siempre se lee el libro que hay: aunque se regeneren TODAS las
     # hojas de calculo, las de entrada (la otra mitad de la planilla)
     # hay que preservarlas igual.
-    wb_existente = _abrir_existente(ruta_existente or ruta_salida)
+    wb_existente = _abrir_existente_en_zip(ruta_existente or ruta_salida)
+    ruta_temporal = _archivo_temporal(ruta_salida)
 
     avisos_preservacion = []
     escritas = []
@@ -325,7 +397,7 @@ def escribir_pagos_bess(
                 origen_control="CONTROL NUEVO",
             ))
 
-    with pd.ExcelWriter(ruta_salida, engine="openpyxl") as writer:
+    with pd.ExcelWriter(ruta_temporal, engine="openpyxl") as writer:
 
         if HOJA_RESUMEN in regenerar:
             if df_resumen is not None:
@@ -461,6 +533,9 @@ def escribir_pagos_bess(
         _ordenar_hojas(writer.book, ORDEN_HOJAS_SALIDA)
 
         formatear_libro(writer.book, _FILAS_ENCABEZADO)
+        relleno = _asegurar_una_hoja(writer)
+
+    _pegar_en_salida(ruta_temporal, ruta_salida, wb_existente, relleno)
 
     escribir_control(
         ruta_control,
@@ -550,6 +625,10 @@ def _copiar_hoja_existente(wb_origen, nombre_hoja, wb_destino):
 
     if wb_origen is None or nombre_hoja not in wb_origen.sheetnames:
         return False
+
+    if isinstance(wb_origen, _LibroEnZip):
+        # Queda en el zip tal cual: no hay nada que copiar.
+        return True
 
     hoja_o = wb_origen[nombre_hoja]
     hoja_d = wb_destino.create_sheet(title=nombre_hoja)
@@ -664,7 +743,8 @@ def escribir_salida(
     # Siempre se lee el libro que hay: aunque se regeneren TODAS las
     # hojas de entrada, las de calculo (la otra mitad de la planilla)
     # hay que preservarlas igual.
-    wb_existente = _abrir_existente(ruta_existente or ruta_salida)
+    wb_existente = _abrir_existente_en_zip(ruta_existente or ruta_salida)
+    ruta_temporal = _archivo_temporal(ruta_salida)
 
     avisos_preservacion = []
 
@@ -698,7 +778,7 @@ def escribir_salida(
             columns=["tipo", "detalle"],
         )
 
-    with pd.ExcelWriter(ruta_salida, engine="openpyxl") as writer:
+    with pd.ExcelWriter(ruta_temporal, engine="openpyxl") as writer:
 
         if HOJA_MEDIDORES in regenerar:
             df.to_excel(
@@ -801,6 +881,9 @@ def escribir_salida(
         _ordenar_hojas(writer.book, ORDEN_HOJAS_SALIDA)
 
         formatear_libro(writer.book, _FILAS_ENCABEZADO)
+        relleno = _asegurar_una_hoja(writer)
+
+    _pegar_en_salida(ruta_temporal, ruta_salida, wb_existente, relleno)
 
     escribir_control(ruta_control, df_log=_armar_log())
 
