@@ -4568,3 +4568,26 @@ no tocadas; un `workbook.xml` "estilo Excel" (prefijo en la raíz); y
 `escribir_salida` con una sola hoja no reescribe las otras ni deja
 temporales. 221 pruebas, 13 salteadas (tkinter). **Sin probar con Excel
 de Windows**: ver pendiente.
+
+## 2026-10-13 (4) — "Ejecutar todo": el botón Ejecutar se bloqueaba por el Excel de prorrata
+
+Reporte del usuario (captura): en "Ejecutar todo", con las hojas tildadas
+("Rehacer todo", o tildando una hoja, que arrastra todo lo que sale de
+ella), el botón **Ejecutar** quedaba deshabilitado: "hoja
+'PRORRATA_RETIROS' / 'Resumen': falta el Excel de prorrata de retiros".
+*"Quiero correr lo seleccionado, no todo"*.
+
+`planificar()` solo dejaba afuera lo que espera una entrada tardía
+(`ENTRADAS_TARDIAS`) en la selección por defecto ("Solo lo que falta");
+en una selección a mano lo marcaba "bloqueada" y eso bloqueaba toda la
+corrida. Ahora `_sacar_las_que_esperan_entradas_tardias()` aplica el
+mismo criterio a cualquier selección: esas hojas (y lo que sale de ellas)
+quedan fuera con un aviso ("queda fuera de esta corrida: falta … Se puede
+hacer después con su botón") y el resto se ejecuta. Lo que falta por otro
+motivo (una entrada inicial, una dependencia sin tildar) sigue
+bloqueando.
+
+**Verificación:** `tests/test_orquestador.py` +2 pruebas (todo tildado sin
+el Excel de prorrata → se puede ejecutar, PRORRATA_RETIROS y Resumen
+afuera con aviso; tildar una hoja sola tampoco se bloquea; sin el SoC
+sigue bloqueando). 223 pruebas, 13 salteadas (tkinter).

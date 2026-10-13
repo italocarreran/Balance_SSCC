@@ -422,6 +422,55 @@ def _seleccion_por_defecto(hechas, estado_fila):
         elegidas -= descartar
 
 
+def _sacar_las_que_esperan_entradas_tardias(seleccion, hechas, estado_fila):
+    """
+    De una seleccion hecha a mano ("Rehacer todo" o tildando), saca lo
+    que no se puede hacer porque le falta una entrada que llega despues
+    (ENTRADAS_TARDIAS: el Excel de prorrata de retiros), y en cadena lo
+    que sale de eso. Devuelve (seleccion, sacadas).
+
+    Pedido del usuario: con "Rehacer todo" el boton Ejecutar quedaba
+    deshabilitado solo porque todavia no estaba el Excel de prorrata,
+    aunque todo lo demas se podia hacer. Ahora esas hojas quedan fuera,
+    a la vista y con el aviso, y el resto se ejecuta. (Es el mismo
+    criterio que ya usaba "Solo lo que falta", _seleccion_por_defecto.)
+
+    Lo que falta por OTRO motivo (una entrada inicial, una dependencia
+    que no se tildo) sigue bloqueando, como siempre.
+    """
+
+    elegidas = set(seleccion)
+    sacadas = []
+
+    while True:
+
+        descartar = []
+
+        for tarea in TAREAS:
+
+            if tarea.id not in elegidas:
+                continue
+
+            sin_tardia = [
+                req for req in tarea.requisitos
+                if req in ENTRADAS_TARDIAS and estado_fila.get(req) != "ok"
+            ]
+            depende_de_sacada = [
+                dep for dep in tarea.depende
+                if dep in sacadas and not hechas[dep]
+            ]
+
+            if sin_tardia or depende_de_sacada:
+                descartar.append(tarea.id)
+
+        if not descartar:
+            return elegidas, sacadas
+
+        for id_tarea in descartar:
+            elegidas.discard(id_tarea)
+            sacadas.append(id_tarea)
+
+
 def planificar(carpeta_base, aamm, seleccion=None, filas=None):
     """
     Que se va a hacer y que no, sin hacer nada.
@@ -464,13 +513,28 @@ def planificar(carpeta_base, aamm, seleccion=None, filas=None):
         for tarea in TAREAS
     }
 
+    advertencias = []
+
     if seleccion is None:
         seleccion = _seleccion_por_defecto(hechas, estado_fila)
     else:
-        seleccion = set(seleccion)
+        seleccion, sacadas = _sacar_las_que_esperan_entradas_tardias(
+            seleccion, hechas, estado_fila
+        )
+        for id_tarea in sacadas:
+            tarea = TAREA_POR_ID[id_tarea]
+            faltan = [
+                _nombre_requisito(req) for req in tarea.requisitos
+                if estado_fila.get(req) != "ok"
+            ]
+            advertencias.append(
+                f"{tarea.etiqueta} queda fuera de esta corrida"
+                + (f": falta {', '.join(faltan)}" if faltan else
+                   ": sale de una hoja que tambien quedo fuera")
+                + ". Se puede hacer despues con su boton."
+            )
 
     tareas = []
-    advertencias = []
 
     for tarea in TAREAS:
 

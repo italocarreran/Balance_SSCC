@@ -102,6 +102,44 @@ class TestGrafoCompleto(unittest.TestCase):
 
 class TestPlan(unittest.TestCase):
 
+    def test_lo_tildado_corre_aunque_falte_el_excel_de_prorrata(self):
+        """
+        Reporte del usuario: con "Rehacer todo" (o tildando hojas, que
+        arrastra a PRORRATA_RETIROS y Resumen) el boton Ejecutar quedaba
+        deshabilitado solo porque faltaba el Excel de prorrata. Esas dos
+        quedan fuera con un aviso y el resto se ejecuta.
+        """
+
+        filas = caso_completo(prorrata_archivo="falta")
+        todo = {tarea.id for tarea in orquestador.TAREAS}
+
+        plan = nucleo.planificar("/caso", "2607", seleccion=todo, filas=filas)
+
+        self.assertTrue(plan["puede_ejecutar"], plan["bloqueos"])
+        elegidas = {t["id"] for t in plan["tareas"] if t["seleccionada"]}
+        self.assertNotIn("pagos:prorrata_retiros", elegidas)
+        self.assertNotIn("pagos:resumen", elegidas)
+        self.assertIn("consolidado:centrales", elegidas)
+        self.assertIn("pagos:compensacion_central", elegidas)
+        self.assertTrue(
+            any("PRORRATA_RETIROS" in a and "queda fuera" in a
+                for a in plan["advertencias"]),
+            plan["advertencias"],
+        )
+
+        # Tildar una sola hoja arrastra lo que sale de ella, y tampoco
+        # se bloquea por la prorrata.
+        una = nucleo.propagar_seleccion({"consolidado:centrales"})
+        plan = nucleo.planificar("/caso", "2607", seleccion=una, filas=filas)
+        self.assertTrue(plan["puede_ejecutar"], plan["bloqueos"])
+
+    def test_una_entrada_inicial_que_falta_sigue_bloqueando(self):
+        filas = caso_completo(soc="falta")
+        plan = nucleo.planificar(
+            "/caso", "2607", seleccion={"consolidado:medidores"}, filas=filas
+        )
+        self.assertFalse(plan["puede_ejecutar"])
+
     def test_de_cero_se_hace_todo_y_el_boton_se_puede_apretar(self):
         plan = nucleo.planificar("/caso", "2607", filas=caso_vacio())
 
