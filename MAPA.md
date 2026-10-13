@@ -34,7 +34,8 @@ Script/
         ofertas_sscc.py        <- la hoja Ofertas SSCC (y R, S, T, V)
         hojas_entrada.py       <- hojas CMg, FD y Subastas
         subastas_accdb.py      <- Subastas desde los Access
-        fma.py                 <- Subastas!Q (FMA) y Subastas!P (FD)
+        fma.py                 <- el FMA y el FD de cada fila de Subastas
+        factores_subastas.py   <- ...aplicados en RE545 desde las hojas FD y FMA
         diccionarios.py        <- los diccionarios de Resumen BESS y CMg
         columnas_compartidas.py<- L, M y N/O: iguales en las dos hojas
         ecostos.py             <- Calculo E Costos: base y orquestacion
@@ -684,7 +685,7 @@ importable como cualquier módulo.
   la carpeta base, valida que existan las entradas requeridas (incluido el
   período AAMM que ingresa el usuario), y escribe `Balance_BESS.xlsx` (una
   sola planilla: `Resumen`, `PRORRATA_RETIROS`, `COMPENSACION_CENTRAL`,
-  `Calculo RE545`, `Calculo E Costos`, `Subastas`, `FD`, `CMg`,
+  `Calculo RE545`, `Calculo E Costos`, `Subastas`, `FMA`, `FD`, `CMg`,
   `Ofertas SSCC`, `Medidores`, `Centrales`) y `Control_corrida.xlsx`
   (`Ejecucion`, `Alertas`, `Log`).
 
@@ -700,9 +701,19 @@ importable como cualquier módulo.
   | Hojas de cálculo | no abren ningún archivo de entrada; la conciliación de energía solo corre si se recalcula E Costos o RE545. |
   | "Ejecutar todo" | la tarea `consolidado:centrales` es dependencia **opcional** de las demás: ordena y deja viejo lo que sale de ella, pero no bloquea. |
 
-  Lo que **sí** sigue abriendo el `SSCC_Desempeño_*` es la hoja
-  `Subastas` (columna FD y Vector de Participación CSF): necesita la hoja
-  `CTF Horario` y la alternativa TG/TV, que la hoja `FD` no guarda.
+  **FD y FMA de las subastas se aplican en RE545, no en `Subastas`**
+  (pedido del usuario, 2026-10-13: evitar un descuento doble). La hoja
+  `Subastas` llega hasta `Energía SSCC` (B:O), sin FD ni FMA, y para
+  importarla ya no se abre el `SSCC_Desempeño_*` ni las salidas de FMA.
+  `factores_subastas.subastas_con_fd_y_fma()` calcula el FD (desde la
+  hoja `FD`, `tablas_fd_desde_hoja`) y el FMA (desde la hoja nueva `FMA`,
+  `leer_fma_consolidado`) de cada fila en el momento de calcular RE545, con
+  las mismas funciones de antes (`calcular_fd_subastas`/
+  `calcular_fma_subastas`), y `construir_dic_reservas_subastas` los suma
+  por nombre en `AI:AN`/`AO:AT`. Un libro viejo con `Subastas!FD/FMA`
+  escritos: se ignoran y se recalculan. E Costos aplica su FD por su
+  lado (`AM:AR`, hoja `FD`) y nunca usó esas columnas; FMA no aplica en
+  E Costos (igual que la planilla 11).
 
   **Medidores**: calculadas J (SoC), L (Ventana), O (Indicador_SoC).
 
@@ -919,7 +930,9 @@ importable como cualquier módulo.
   - `<CARPETA_BASE>/Balance_BESS.xlsx` — **una sola planilla**, con las
     hojas de fin a inicio (`ORDEN_HOJAS_SALIDA`): `Resumen`,
     `PRORRATA_RETIROS`, `COMPENSACION_CENTRAL`, `Calculo RE545`,
-    `Calculo E Costos`, `Subastas` (con sus nombres reales), `FD` (los
+    `Calculo E Costos`, `Subastas` (con sus nombres reales, hasta
+    `Energía SSCC`), `FMA` (las salidas fma_cpf/csf/cft, una tabla al lado
+    de la otra), `FD` (los
     bloques CSF y CPF lado a lado, columnas A:N y Q:AF, con sus nombres
     reales y la columna `Central` al final de cada uno), `CMg`, `Ofertas SSCC` (las tablas W:Y y AB:AE equivalentes,
     una al lado de la otra — ver `_escribir_tabla_con_titulo()`),

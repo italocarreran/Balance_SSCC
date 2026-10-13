@@ -221,13 +221,18 @@ TAREAS = (
         (), ("fd_sscc",), ("consolidado:centrales",),
     ),
     Tarea(
-        # El FMA es OPCIONAL (si falta, esa columna queda en 0, igual
-        # que la formula original): no bloquea, pero si se genera en
-        # esta corrida tiene que ser antes.
+        # Las salidas de FMA son OPCIONALES (si falta una, el FMA de esas
+        # filas queda en 0, igual que la formula original): no bloquean,
+        # pero si se generan en esta corrida tienen que ir antes.
+        "consolidado:fma", "hoja 'FMA'",
+        "consolidado", "fma", "consolidado:fma",
+        (), (), ("fma_cpf", "fma_csf", "fma_ctf"),
+    ),
+    Tarea(
+        # Ya no lleva FD ni FMA (se aplican en RE545): solo los Access.
         "consolidado:subastas", "hoja 'Subastas'",
         "consolidado", "subastas", "consolidado:subastas",
-        _REQ_CENTRALES, ("subastas_db", "fd_sscc"),
-        ("fma_cpf", "fma_csf", "fma_ctf", "consolidado:centrales"),
+        _REQ_CENTRALES, ("subastas_db",), ("consolidado:centrales",),
     ),
     # --- Las hojas de calculo de la planilla (en UNA escritura) ------
     # Ninguna abre un archivo de entrada: todo sale de las hojas de
@@ -246,13 +251,14 @@ TAREAS = (
         ("consolidado:centrales",),
     ),
     Tarea(
-        # RE545 no usa el FD.
+        # Aca se aplican el FD y el FMA de las subastas (AI:AT).
         "pagos:re545", "hoja 'Calculo RE545'",
         "pagos", "re545", "pagos:re545",
         _REQ_CENTRALES,
         (
             "consolidado:medidores", "consolidado:ofertas_sscc",
-            "consolidado:cmg", "consolidado:subastas",
+            "consolidado:cmg", "consolidado:subastas", "consolidado:fd",
+            "consolidado:fma",
         ),
         ("consolidado:centrales",),
     ),

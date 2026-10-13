@@ -108,6 +108,12 @@ HOJA_CMG = "CMg"
 HOJA_FD = "FD"
 HOJA_SUBASTAS = "Subastas"
 
+# Las salidas de FMA (fma_cpf/fma_csf/fma_cft) importadas a la planilla.
+# Antes el FMA se calculaba al importar Subastas y quedaba escrito como
+# una columna mas de esa hoja; ahora se aplica recien en el calculo que
+# lo usa (RE545), a partir de esta hoja. Ver factores_subastas.py.
+HOJA_FMA = "FMA"
+
 # La foto de Centrales.xlsx dentro de la planilla (pedido del usuario:
 # "que la hoja de resumen de Centrales.xlsx se agregue en una nueva
 # hoja"): 'Resumen BESS' y 'Diccionario' copiados una vez con su
@@ -143,6 +149,7 @@ ORDEN_HOJAS_SALIDA = (
     HOJA_CALCULO_RE545,
     HOJA_CALCULO_ECOSTOS,
     HOJA_SUBASTAS,
+    HOJA_FMA,
     HOJA_FD,
     HOJA_CMG,
     HOJA_OFERTAS_SSCC,

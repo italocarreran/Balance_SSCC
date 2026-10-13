@@ -22,7 +22,8 @@ ahora en el modulo de su etapa:
     ofertas_sscc.py          Ofertas SSCC y las columnas R, S, T, V de Medidores.
     hojas_entrada.py         Hojas CMg, FD y Subastas del consolidado.
     subastas_accdb.py        Subastas desde su origen: los Access OfertasSSCCAdj*.
-    fma.py                   Subastas!Q (FMA) y Subastas!P (FD).
+    fma.py                   el FMA y el FD de cada fila de Subastas.
+    factores_subastas.py     ...calculados en RE545 desde las hojas FD y FMA.
     diccionarios.py          Diccionarios del maestro y del CMg: los usan las dos hojas.
     ecostos.py               Calculo E Costos: traspaso base y orquestacion.
     columnas_compartidas.py  L, M y N/O: iguales en las dos hojas de calculo.
@@ -78,7 +79,7 @@ from .parametros import (
     ORDEN_HOJAS_CONTROL, ORDEN_HOJAS_SALIDA,
     HOJA_CMG_ORIGEN, HOJA_CPF_HORARIO, HOJA_CSF_HORARIO,
     HOJA_DICCIONARIO, HOJA_MEDIDAS_SAE, HOJA_RESUMEN_BESS,
-    HOJA_CENTRALES, COLUMNA_CENTRAL,
+    HOJA_CENTRALES, COLUMNA_CENTRAL, HOJA_FMA,
     COLUMNAS_OFERTAS_EN_MEDIDORES, INICIO_VENTANA, LETRA_A_CAMPO,
     PATRON_AAMM,
     PATRON_NOMBRE_OFERTAS, PATRON_NOMBRE_SSCC_DESEMPENO,
@@ -167,6 +168,10 @@ from .fma import (
     _clave_numerica_o_texto, _dic_desde_tabla, _numero_o_cero,
     calcular_fd_subastas, calcular_fma_subastas, cargar_tablas_fma,
     construir_dic_bloque_diccionario,
+)
+from .factores_subastas import (
+    COLUMNA_FD_SUBASTAS, COLUMNA_FMA_SUBASTAS, TITULOS_FMA,
+    leer_fma_consolidado, subastas_con_fd_y_fma, tablas_fd_desde_hoja,
 )
 from .diccionarios import (
     _buscar_cmg, _mapa_resumen_bess_por_nombre, _normaliza_cuarto,
@@ -276,7 +281,9 @@ __all__ = [
     "HOJA_CALCULO_RE545", "HOJA_PRORRATA_RETIROS", "HOJA_RESUMEN",
     "HOJA_CMG_ORIGEN", "HOJA_CPF_HORARIO",
     "HOJA_CSF_HORARIO", "HOJA_DICCIONARIO", "HOJA_MEDIDAS_SAE",
-    "HOJA_RESUMEN_BESS", "HOJA_CENTRALES", "COLUMNA_CENTRAL",
+    "HOJA_RESUMEN_BESS", "HOJA_CENTRALES", "COLUMNA_CENTRAL", "HOJA_FMA",
+    "COLUMNA_FD_SUBASTAS", "COLUMNA_FMA_SUBASTAS", "TITULOS_FMA",
+    "leer_fma_consolidado", "subastas_con_fd_y_fma", "tablas_fd_desde_hoja",
     "INICIO_VENTANA",
     "LETRA_A_CAMPO", "COLUMNAS_OFERTAS_EN_MEDIDORES",
     "PATRON_AAMM", "PATRON_NOMBRE_OFERTAS",

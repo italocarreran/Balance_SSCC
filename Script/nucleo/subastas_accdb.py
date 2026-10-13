@@ -6,13 +6,12 @@ Subastas desde su origen: los Access OfertasSSCCAdj*.
 import pandas as pd
 
 from .externos import ofertas_adj
-from .fma import calcular_fd_subastas, calcular_fma_subastas
 from .hojas_entrada import (
     NOMBRES_SUBASTAS, _contiene_bess_o_sae_sin_bat,
     _ordenar_subastas_por_hora_mes,
 )
 from .parametros import (
-    ARCHIVO_CENTRALES, CARPETA_FD_FMA, HOJA_RESUMEN_BESS,
+    ARCHIVO_CENTRALES, HOJA_RESUMEN_BESS,
 )
 from .utiles import (
     ErrorEntrada, _entero_a_texto, _texto_seguro, normalizar,
@@ -154,10 +153,6 @@ def construir_subastas_desde_accdb(
     aamm,
     mapa_propietarios=None,
     dia_cambio_hora=None,
-    tablas_fma=None,
-    dic_cpf=None,
-    tablas_fd=None,
-    dic_unidad_fd=None,
     registrar=print,
 ):
     """
@@ -167,6 +162,12 @@ def construir_subastas_desde_accdb(
 
     El filtro es el mismo de siempre: se quedan solo las filas cuya
     Configuración contiene "BESS" o "SAE".
+
+    La hoja llega hasta "Energía SSCC" (B:O). El FD y el FMA ya NO se
+    escriben aca (eran P y Q): se calculan y se aplican recien en
+    Calculo RE545, desde las hojas 'FD' y 'FMA' de la planilla (ver
+    factores_subastas.py). Asi la hoja trae lo que dice el Access, sin
+    ningun descuento, y no puede haber un FD aplicado dos veces.
     """
 
     try:
@@ -238,36 +239,9 @@ def construir_subastas_desde_accdb(
         filtrado[COLUMNA_ENERGIA_SSCC_ACCDB], errors="coerce"
     )
 
-    df["P"] = pd.NA
-    df["Q"] = pd.NA
-
-    df = df[list("BCDEFGHIJKLMNOPQ")]
+    df = df[list("BCDEFGHIJKLMNO")]
     df = df.rename(columns=NOMBRES_SUBASTAS)
     df = _ordenar_subastas_por_hora_mes(df)
-
-    # FD (P) y FMA (Q): se calculan aca, con la hoja ya en su orden
-    # definitivo, para que queden alineadas fila a fila con lo que se
-    # escribe.
-    if tablas_fd:
-        df[NOMBRES_SUBASTAS["P"]] = calcular_fd_subastas(
-            df, tablas_fd, dic_unidad_fd=dic_unidad_fd, registrar=registrar
-        )
-    else:
-        registrar(
-            f"  [AVISO] sin archivo SSCC_Desempeño_* en "
-            f"{CARPETA_FD_FMA}/: la columna FD queda vacia."
-        )
-
-    if tablas_fma:
-        df[NOMBRES_SUBASTAS["Q"]] = calcular_fma_subastas(
-            df, tablas_fma, dic_cpf=dic_cpf, tablas_fd=tablas_fd,
-            dic_unidad_fd=dic_unidad_fd, registrar=registrar,
-        )
-    else:
-        registrar(
-            f"  [AVISO] sin salidas de FMA en {CARPETA_FD_FMA}/: la "
-            f"columna FMA queda vacia."
-        )
 
     if mapa_propietarios:
         sin_propietario = sorted(

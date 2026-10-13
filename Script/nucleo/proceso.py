@@ -6,7 +6,7 @@ Los dos procesos completos, de punta a punta.
 import pandas as pd
 from pathlib import Path
 
-from .externos import desempeno_fd, ofertas_adj
+from .externos import ofertas_adj
 
 from .alertas import CRITICA, Alerta, Registro, anotar
 from .conciliacion import conciliar_energia
@@ -20,16 +20,11 @@ from .ecostos import (
     renombrar_calculo_e_costos,
 )
 from .manifiesto import construir_manifiesto
-from .ecostos_prorratas import (
-    agregar_central_fd, construir_dic_mapeo_diccionario,
-    mapa_unidad_fd_a_central,
-)
+from .ecostos_prorratas import agregar_central_fd, mapa_unidad_fd_a_central
+from .factores_subastas import leer_fma_consolidado, subastas_con_fd_y_fma
 from .escritura import escribir_pagos_bess, escribir_salida
 from .estructura import SECCIONES_CONSOLIDADO, SECCIONES_PAGOS
-from .fma import (
-    TITULO_BLOQUE_FD, TITULO_BLOQUE_FMA_CPF, cargar_tablas_fma,
-    construir_dic_bloque_diccionario,
-)
+from .fma import cargar_tablas_fma
 from .hojas_entrada import (
     construir_fd, leer_cmg, leer_cmg_consolidado, leer_fd_consolidado,
 )
@@ -45,8 +40,8 @@ from .ofertas_sscc import leer_ofertas_sscc_consolidado
 from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, ARCHIVO_MEDIDAS_SAE,
     CARPETA_DB_SUBASTAS, CARPETA_FD_FMA, COLUMNA_CENTRAL, HOJA_CENTRALES,
-    HOJA_DICCIONARIO, HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545,
-    HOJA_MEDIDORES, HOJA_RESUMEN_BESS,
+    HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545,
+    HOJA_FMA, HOJA_MEDIDORES, HOJA_RESUMEN_BESS,
 )
 from .prorrata_retiros import (
     buscar_archivo_prorrata, construir_prorrata_retiros,
@@ -301,6 +296,20 @@ def generar_consolidado(
                     f"{', '.join(sin_central)}"
                 )
 
+    avanzar(80)
+
+    tablas_fma = None
+
+    if "fma" in secciones_activas:
+        # Las tres salidas de FMA, tal cual las normaliza
+        # Script/Subastas/Fma.py: no se aplican aca (ver
+        # factores_subastas.py). Lo que falte queda sin tabla y se avisa.
+        aamm_val = validar_aamm(aamm)
+        registrar(f"Leyendo las salidas de FMA de {CARPETA_FD_FMA}/...")
+        tablas_fma = cargar_tablas_fma(
+            rutas["sscc_desempeno_dir"], aamm_val, registrar=registrar
+        )
+
     avanzar(84)
 
     if "subastas" in secciones_activas:
@@ -312,13 +321,14 @@ def generar_consolidado(
 
         if hay_accdb:
             # Camino normal desde ahora: el origen real de las
-            # subastas son los Access, no la planilla 3.
+            # subastas son los Access, no la planilla 3. Ya no se
+            # calculan ni FD ni FMA aca (se aplican en Calculo RE545),
+            # asi que ni el SSCC_Desempeño_* ni las salidas de FMA se
+            # abren para importar esta hoja.
             mapa_propietarios = {}
-            dic_cpf = {}
-            diccionario_centrales = None
 
             try:
-                resumen_bess, diccionario_centrales = leer_centrales_una_vez()
+                resumen_bess, _ = leer_centrales_una_vez()
             except ErrorEntrada as error:
                 registrar(
                     f"  [AVISO] {error} La columna Propietario de "
@@ -326,57 +336,6 @@ def generar_consolidado(
                 )
             else:
                 mapa_propietarios = construir_mapa_propietario(resumen_bess)
-                dic_cpf = construir_dic_bloque_diccionario(
-                    diccionario_centrales, TITULO_BLOQUE_FMA_CPF
-                )
-
-            registrar(
-                f"Leyendo las salidas de FMA de {CARPETA_FD_FMA}/..."
-            )
-            tablas_fma = cargar_tablas_fma(
-                rutas["sscc_desempeno_dir"], aamm_val, registrar=registrar
-            )
-
-            # El FD (Subastas!P) y el Vector de Participacion CSF que
-            # necesita el FMA salen los dos del archivo SSCC_Desempeño_*.
-            tablas_fd = None
-            dic_unidad_fd = {}
-
-            archivo_sscc_fd = buscar_archivo_sscc_desempeno(
-                rutas["sscc_desempeno_dir"]
-            )
-
-            if archivo_sscc_fd:
-                registrar(f"Leyendo el FD de {archivo_sscc_fd.name}...")
-                try:
-                    tablas_fd = desempeno_fd.construir_tablas_fd(
-                        archivo_sscc_fd, registrar=registrar
-                    )
-                except desempeno_fd.ErrorDesempeno as error:
-                    raise ErrorEntrada(str(error)) from error
-
-                if diccionario_centrales is not None:
-                    dic_unidad_fd = construir_dic_bloque_diccionario(
-                        diccionario_centrales, TITULO_BLOQUE_FD
-                    ) or construir_dic_mapeo_diccionario(diccionario_centrales)
-            else:
-                registrar(
-                    f"  [AVISO] no hay ningun SSCC_Desempeño_* en "
-                    f"{CARPETA_FD_FMA}/ (se baja con el boton 'Traer "
-                    f"FD'): las columnas FD y el Vector de Participacion "
-                    f"CSF quedan sin dato."
-                )
-
-            if not dic_cpf:
-                registrar(
-                    f"  [AVISO] {ARCHIVO_CENTRALES} no tiene la columna "
-                    f"'FMA_CPF' en la hoja {HOJA_DICCIONARIO} "
-                    f"(Configuración -> central como la nombra fma_cpf): "
-                    f"el FMA de las filas CPF se busca con el nombre tal "
-                    f"cual y va a quedar en 0. Es el formato de "
-                    f"Diccionario de una sola tabla, con los encabezados "
-                    f"Balance_BESS | FD | Subastas | Ofertas | FMA_CPF."
-                )
 
             registrar(
                 f"Leyendo las subastas de {CARPETA_DB_SUBASTAS}/ "
@@ -386,10 +345,6 @@ def generar_consolidado(
                 rutas["subastas_dir"],
                 aamm_val,
                 mapa_propietarios=mapa_propietarios,
-                tablas_fma=tablas_fma,
-                dic_cpf=dic_cpf,
-                tablas_fd=tablas_fd,
-                dic_unidad_fd=dic_unidad_fd,
                 registrar=registrar,
             )
 
@@ -424,6 +379,7 @@ def generar_consolidado(
         registrar=registrar,
         ruta_control=rutas["control"],
         centrales=centrales_a_escribir,
+        tablas_fma=tablas_fma,
     )
 
     avanzar(100)
@@ -468,16 +424,18 @@ def _leer_medidores_del_libro(ruta_salida, registrar):
     return df_medidores
 
 
-def _leer_entradas_del_consolidado(ruta_salida, quiere_fd, registrar):
+def _leer_entradas_del_consolidado(
+    ruta_salida, quiere_fd, registrar, quiere_fma=False
+):
     """
     Las hojas de entrada de la planilla que necesitan las dos
     hojas de calculo, leidas con UNA sola apertura del archivo.
 
     Devuelve (df_medidores, df_wxy, df_resumen_ventana, df_cmg,
-    df_subastas, df_fd_csf, df_fd_cpf, centrales); los dos FD son None
-    si no se pidio "ecostos" (RE545 no usa FD), y centrales es
-    (resumen, diccionario) de la hoja "Centrales" o None si el libro no
-    la tiene.
+    df_subastas, df_fd_csf, df_fd_cpf, centrales, tablas_fma); los dos
+    FD son None si quiere_fd es falso, tablas_fma es None si quiere_fma
+    es falso, y centrales es (resumen, diccionario) de la hoja
+    "Centrales" o None si el libro no la tiene.
 
     Existe para dos cosas que pidio el usuario:
       - que no se abran planillas innecesarias: un
@@ -561,6 +519,15 @@ def _leer_entradas_del_consolidado(ruta_salida, quiere_fd, registrar):
                 ruta_salida, registrar=registrar, libro=libro
             )
 
+        # El FMA solo lo usa RE545, que es donde se aplica (ver
+        # factores_subastas.py).
+        tablas_fma = None
+        if quiere_fma:
+            registrar(f"Leyendo hoja '{HOJA_FMA}' de {ruta_salida.name}...")
+            tablas_fma = leer_fma_consolidado(
+                ruta_salida, registrar=registrar, libro=libro
+            )
+
         # El maestro de centrales, de la hoja "Centrales" del mismo
         # libro ya abierto. None si es un libro de antes de esa hoja
         # (ahi se cae a Centrales.xlsx, ver obtener_centrales).
@@ -570,7 +537,7 @@ def _leer_entradas_del_consolidado(ruta_salida, quiere_fd, registrar):
 
     return (
         df_medidores, df_wxy, df_resumen_ventana, df_cmg, df_subastas,
-        df_fd_csf, df_fd_cpf, centrales,
+        df_fd_csf, df_fd_cpf, centrales, tablas_fma,
     )
 
 
@@ -587,11 +554,11 @@ def generar_pagos_bess(
     las filas-hoja del diagrama.
 
     No abre ningun archivo de entrada: Medidores, Ofertas SSCC, CMg,
-    FD, Subastas y el maestro de centrales salen de las hojas de la
-    misma planilla, cada una generada antes con su propio boton
-    "Actualizar" (la hoja FD solo se lee si se pide "ecostos" --
-    "re545" no usa FD). La unica excepcion es un libro de antes de la
-    hoja "Centrales": ahi se lee Centrales.xlsx y se avisa. Cada
+    FD, FMA, Subastas y el maestro de centrales salen de las hojas de
+    la misma planilla, cada una generada antes con su propio boton
+    "Actualizar" (la hoja FD la usan "ecostos" y "re545"; la hoja FMA,
+    solo "re545", que es donde se aplica). La unica excepcion es un
+    libro de antes de la hoja "Centrales": ahi se lee Centrales.xlsx y se avisa. Cada
     seccion se puede correr sola, en el orden y el dia que se quiera,
     mientras las hojas que necesita ya esten escritas.
     """
@@ -656,7 +623,7 @@ def generar_pagos_bess(
     df_wxy = df_resumen_ventana = None
     df_cmg = df_subastas = None
     df_fd_csf = df_fd_cpf = None
-    centrales_del_libro = None
+    centrales_del_libro = tablas_fma = None
     resumen = diccionario = None
     mapa_barra = dic_cmg = dic_factor = umbral_soc_minimo = None
     dic_eficiencia = dic_capacidad = None
@@ -677,9 +644,10 @@ def generar_pagos_bess(
 
         (
             df_medidores, df_wxy, df_resumen_ventana, df_cmg, df_subastas,
-            df_fd_csf, df_fd_cpf, centrales_del_libro,
+            df_fd_csf, df_fd_cpf, centrales_del_libro, tablas_fma,
         ) = _leer_entradas_del_consolidado(
-            rutas["salida"], quiere_ecostos, registrar
+            rutas["salida"], quiere_ecostos or quiere_re545, registrar,
+            quiere_fma=quiere_re545,
         )
 
         # La hoja Medidores de la que salen los dos calculos tiene que
@@ -800,8 +768,15 @@ def generar_pagos_bess(
         df_re545 = construir_calculo_re545(
             df_medidores, mapa_barra, dic_cmg, registrar=registrar
         )
+        # El FD y el FMA de cada fila de Subastas se calculan aca, que
+        # es el unico lugar donde se aplican (AI:AT y AU). La hoja
+        # Subastas ya no los trae: asi no hay un FD aplicado dos veces.
+        df_subastas_re545 = subastas_con_fd_y_fma(
+            df_subastas, df_fd_csf, df_fd_cpf, tablas_fma, diccionario,
+            registrar=registrar,
+        )
         df_re545_base = completar_calculo_re545(
-            df_re545, df_subastas, umbral_soc_minimo, dic_capacidad,
+            df_re545, df_subastas_re545, umbral_soc_minimo, dic_capacidad,
             dic_eficiencia, registrar=registrar,
         )
 

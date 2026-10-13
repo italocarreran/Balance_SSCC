@@ -16,7 +16,7 @@ from .parametros import (
     CARPETA_DB_SUBASTAS, CARPETA_FD_FMA, CARPETA_MEDIDAS,
     CARPETA_OFERTAS, CARPETA_PRORRATA_RETIROS, CARPETA_SUBASTAS,
     HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545, HOJA_CENTRALES, HOJA_CMG,
-    HOJA_COMPENSACION_CENTRAL, HOJA_DICCIONARIO, HOJA_FD,
+    HOJA_COMPENSACION_CENTRAL, HOJA_DICCIONARIO, HOJA_FD, HOJA_FMA,
     HOJA_MEDIDORES, HOJA_OFERTAS_SSCC, HOJA_PRORRATA_RETIROS,
     HOJA_RESUMEN, HOJA_RESUMEN_BESS, HOJA_SUBASTAS, ORDEN_HOJAS_SALIDA,
     PROBLEMA_NO_ENCONTRADO, PROBLEMA_SIN_INFORMACION,
@@ -647,7 +647,7 @@ def revisar_estructura(carpeta_base, aamm=None):
             filas.append(
                 _fila(
                     f"fma_{tipo}", archivo.name, 1, "ok",
-                    f"alimenta Subastas!FMA ({tipo.upper()}); se rehace "
+                    f"alimenta la hoja FMA ({tipo.upper()}); se rehace "
                     f"con el boton ->",
                     ruta=archivo,
                     origen=f"fma_{tipo}",
@@ -872,14 +872,20 @@ SECCIONES_CONSOLIDADO = (
         (HOJA_FD,),
     ),
     (
+        "fma",
+        HOJA_FMA,
+        f"Usa las salidas de FMA de {CARPETA_FD_FMA}/ (fma_cpf, fma_csf y "
+        f"fma_cft). No se aplica aca: Calculo RE545 lo multiplica en el "
+        f"momento.",
+        (HOJA_FMA,),
+    ),
+    (
         "subastas",
         "Subastas",
         f"Usa los Access de {CARPETA_SUBASTAS}/{CARPETA_DB_SUBASTAS}/ "
-        f"(su origen real), y de {CARPETA_FD_FMA}/ las salidas de FMA "
-        f"(fma_cpf/fma_csf/fma_cft) y el SSCC_Desempeño_* (columna FD y "
-        f"Vector de Participacion CSF, que necesitan la hoja CTF y las "
-        f"filas que la hoja 'FD' no guarda), mas la hoja "
-        f"'{HOJA_CENTRALES}' (Propietario + nomenclaturas).",
+        f"(su origen real) y la hoja '{HOJA_CENTRALES}' (Propietario). "
+        f"Llega hasta 'Energía SSCC': ya no lleva FD ni FMA, que se "
+        f"aplican recien en Calculo RE545.",
         (HOJA_SUBASTAS,),
     ),
 )
@@ -897,8 +903,10 @@ SECCIONES_PAGOS = (
     (
         "re545",
         "Calculo RE545",
-        f"Usa las hojas 'Medidores', 'Ofertas SSCC', 'CMg', 'Subastas' y "
-        f"'{HOJA_CENTRALES}' de esta misma planilla -- no necesita el FD.",
+        f"Usa las hojas 'Medidores', 'Ofertas SSCC', 'CMg', 'Subastas', "
+        f"'FD', '{HOJA_FMA}' y '{HOJA_CENTRALES}' de esta misma planilla: "
+        f"el FD y el FMA de cada fila de Subastas se calculan y se "
+        f"aplican aca (AI:AT y AU).",
         (HOJA_CALCULO_RE545,),
     ),
     (

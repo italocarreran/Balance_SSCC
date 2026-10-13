@@ -28,6 +28,7 @@ from openpyxl.styles import Font
 from .alertas import ALTA, Alerta
 
 from .ecostos import COLUMNAS_SALIDA_E_COSTOS, GRUPOS_CALCULO_E_COSTOS
+from .factores_subastas import TITULOS_FMA
 from .formato import formatear_libro
 from .lectura import TITULO_CENTRALES_DICCIONARIO, TITULO_CENTRALES_RESUMEN
 from .ofertas_sscc import (
@@ -35,7 +36,7 @@ from .ofertas_sscc import (
 )
 from .parametros import (
     HOJA_ALERTAS, HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545, HOJA_CENTRALES,
-    HOJA_CMG,
+    HOJA_CMG, HOJA_FMA,
     HOJA_COMPENSACION_CENTRAL, HOJA_EJECUCION, HOJA_FD, HOJA_LOG,
     HOJA_MEDIDORES, HOJA_PRORRATA_RETIROS, HOJA_RESUMEN, HOJA_SUBASTAS,
     ORDEN_HOJAS_CONTROL, ORDEN_HOJAS_SALIDA,
@@ -117,6 +118,7 @@ _FILAS_ENCABEZADO = {
     HOJA_PRORRATA_RETIROS: 3,
     HOJA_OFERTAS_SSCC: 2,
     HOJA_CENTRALES: 2,
+    HOJA_FMA: 2,
 }
 
 
@@ -570,7 +572,7 @@ def _copiar_hoja_existente(wb_origen, nombre_hoja, wb_destino):
 
 _HOJAS_CONSOLIDADO = (
     HOJA_MEDIDORES, HOJA_OFERTAS_SSCC, HOJA_CMG, HOJA_FD, HOJA_SUBASTAS,
-    HOJA_CENTRALES,
+    HOJA_CENTRALES, HOJA_FMA,
 )
 
 
@@ -617,6 +619,7 @@ def escribir_salida(
     registrar=print,
     ruta_control=None,
     centrales=None,
+    tablas_fma=None,
 ):
     """
     Escribe la MITAD DE ENTRADAS de la planilla de salida: la tabla
@@ -645,6 +648,9 @@ def escribir_salida(
 
     centrales: (resumen_bess, diccionario) de Centrales.xlsx, para la
     hoja "Centrales" (ver _escribir_hoja_centrales).
+
+    tablas_fma: el dict de cargar_tablas_fma(), para la hoja "FMA" (una
+    tabla al lado de la otra, cada una con su titulo de TITULOS_FMA).
     """
 
     ruta_salida = Path(ruta_salida)
@@ -766,6 +772,21 @@ def escribir_salida(
                 )
         else:
             _preservar_o_avisar(writer, HOJA_SUBASTAS)
+
+        if HOJA_FMA in regenerar:
+            if tablas_fma is not None:
+                columna = 0
+                for clave, titulo in TITULOS_FMA.items():
+                    tabla = tablas_fma.get(clave)
+                    _, columna = _escribir_tabla_con_titulo(
+                        writer, HOJA_FMA,
+                        tabla if tabla is not None else pd.DataFrame(),
+                        titulo, columna_inicio=columna,
+                    )
+            else:
+                _copiar_hoja_existente(wb_existente, HOJA_FMA, writer.book)
+        else:
+            _preservar_o_avisar(writer, HOJA_FMA)
 
         if HOJA_CENTRALES in regenerar and centrales is not None:
             _escribir_hoja_centrales(writer, *centrales)

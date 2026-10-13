@@ -178,6 +178,37 @@ def _sin_filas_vacias_al_final(df):
     return df.iloc[: ultimas[-1] + 1] if ultimas else df.iloc[:0]
 
 
+def leer_tabla_bajo_titulo(fuente, hoja, crudo, columna, ancho):
+    """
+    Una tabla escrita con _escribir_tabla_con_titulo(): titulo en la
+    fila 1, encabezados en la 2 y datos desde la 3, en las columnas
+    columna..columna+ancho-1.
+
+    Los datos se releen sin encabezado para que cada columna vuelva con
+    su tipo (numeros como numeros); los nombres salen tal cual de la
+    fila 2 de 'crudo' (la hoja leida con header=None). No se usa
+    header= de read_excel porque pandas renombra los encabezados que se
+    repiten en TODA la fila ("Año" de una tabla y "Año" de la de al
+    lado terminan como "Año" y "Año.1"), aunque se pida solo un rango
+    de columnas.
+    """
+
+    nombres = [_texto_seguro(crudo.iloc[1, columna + i]) for i in range(ancho)]
+
+    datos = pd.read_excel(
+        fuente, sheet_name=hoja, header=None, skiprows=2,
+        usecols=list(range(columna, columna + ancho)),
+    )
+
+    if datos.shape[1] != ancho:
+        # La tabla no tiene ninguna fila de datos.
+        return pd.DataFrame(columns=nombres)
+
+    datos.columns = nombres
+
+    return datos.dropna(how="all").reset_index(drop=True)
+
+
 def leer_centrales_planilla(ruta_salida, libro=None):
     """
     (resumen_bess, diccionario) desde la hoja "Centrales" de la
@@ -230,11 +261,8 @@ def leer_centrales_planilla(ruta_salida, libro=None):
     if not ancho:
         return None
 
-    # El resumen se relee con header= para que cada columna vuelva con
-    # su tipo (numeros como numeros), igual que desde Centrales.xlsx.
-    resumen = pd.read_excel(
-        fuente, sheet_name=HOJA_CENTRALES, header=1,
-        usecols=list(range(col_resumen, col_resumen + ancho)),
+    resumen = leer_tabla_bajo_titulo(
+        fuente, HOJA_CENTRALES, crudo, col_resumen, ancho
     )
     resumen = _sin_filas_vacias_al_final(resumen).reset_index(drop=True)
 

@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Subastas!Q (FMA) y Subastas!P (FD).
+El FMA y el FD de cada fila de Subastas (antes Subastas!Q y P).
+
+Desde 2026-10-13 ya no se escriben en la hoja Subastas: los llama
+factores_subastas.subastas_con_fd_y_fma() al calcular RE545, con las
+tablas de las hojas 'FD' y 'FMA' de la planilla. El calculo fila por
+fila de este modulo no cambio.
 """
 
 import pandas as pd

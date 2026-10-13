@@ -13,15 +13,18 @@ import pandas as pd
 from Script import nucleo
 
 
-def escribir_tabla(writer, titulo, df, columna):
-    """La hoja 'Ofertas SSCC': titulo, encabezado y datos, en columna."""
+def escribir_tabla(writer, titulo, df, columna, hoja=None):
+    """Una tabla con titulo ('Ofertas SSCC', 'FMA'): titulo, encabezado
+    y datos, en columna."""
+
+    hoja = hoja or nucleo.HOJA_OFERTAS_SSCC
 
     pd.DataFrame([[titulo]]).to_excel(
-        writer, sheet_name=nucleo.HOJA_OFERTAS_SSCC, index=False,
+        writer, sheet_name=hoja, index=False,
         header=False, startrow=0, startcol=columna,
     )
     df.to_excel(
-        writer, sheet_name=nucleo.HOJA_OFERTAS_SSCC, index=False,
+        writer, sheet_name=hoja, index=False,
         startrow=1, startcol=columna,
     )
 
@@ -353,6 +356,24 @@ class PagosBessEndToEndTest(unittest.TestCase):
             escribir_tabla(
                 w, nucleo.TITULO_RESUMEN_VENTANA, resumen_ventana,
                 len(ofertas_por_dia.columns) + 2,
+            )
+            # La hoja 'FMA': de ahi saca RE545 el FMA de cada fila de
+            # Subastas (la hoja Subastas ya no lo trae).
+            fma_cpf = pd.DataFrame({
+                "Central": ["SAE UNO"], "Año": [2026], "Mes": [7],
+                "Dia": [1], "Hora": [1],
+                "FMA_CPF_mas": [1.0], "FMA_CPF_menos": [1.0],
+            })
+            fma_csf = pd.DataFrame({
+                "Año": [2026], "Mes": [7], "Dia": [1], "Hora": [2],
+                "FMA_CSF_mas_base": [1.0], "FMA_CSF_menos_base": [1.0],
+            })
+            escribir_tabla(
+                w, nucleo.TITULOS_FMA["cpf"], fma_cpf, 0, hoja=nucleo.HOJA_FMA
+            )
+            escribir_tabla(
+                w, nucleo.TITULOS_FMA["csf"], fma_csf,
+                len(fma_cpf.columns) + 2, hoja=nucleo.HOJA_FMA,
             )
 
         return base, medidores

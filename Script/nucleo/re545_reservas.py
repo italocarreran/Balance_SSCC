@@ -6,6 +6,8 @@ RE545: los tres bloques de reservas (AC:AT) y AU.
 import pandas as pd
 
 from .alertas import ALTA, Alerta, anotar_muchas
+from .factores_subastas import COLUMNA_FD_SUBASTAS, COLUMNA_FMA_SUBASTAS
+from .hojas_entrada import NOMBRES_SUBASTAS
 from .utiles import (
     ErrorEntrada, _normaliza_valor_vba, _texto_seguro, _tiene_valor,
 )
@@ -52,6 +54,9 @@ TIPOS_RESERVA_RE545 = (
     "CPF(-)", "CSF(-)", "CTF(-)", "CPF(+)", "CSF(+)", "CTF(+)",
 )
 
+# La columna de Subastas que suma el bloque "Subastas" (AC:AH).
+COLUMNA_ENERGIA_SUBASTAS = NOMBRES_SUBASTAS["O"]
+
 # AC:AH, AI:AN, AO:AT -- las tres claves internas de cada bloque.
 _BLOQUES_RESERVA_RE545 = (
     ("AC", "AD", "AE", "AF", "AG", "AH"),
@@ -63,24 +68,36 @@ _BLOQUES_RESERVA_RE545 = (
 def construir_dic_reservas_subastas(df_subastas):
     """
     Arma los tres diccionarios (central, hora del mes, tipo) -> suma,
-    uno por cada columna de Subastas que suman los tres bloques de
-    RE545 (O, P y Q por posicion; ver el comentario de seccion).
+    uno por cada columna que suman los tres bloques de RE545:
+    "Energía SSCC" (la O de Subastas), y el FD y el FMA de cada fila.
+
+    El FD y el FMA ya no son columnas de la hoja Subastas (antes P y
+    Q): los agrega en memoria subastas_con_fd_y_fma() justo antes de
+    llamar a esta funcion, desde las hojas 'FD' y 'FMA'. Por eso se
+    buscan por nombre y no por posicion.
 
     Un SUMIFS sin coincidencias da 0, asi que el valor por defecto de
     los tres diccionarios es 0, no blanco.
     """
 
-    columnas = list(df_subastas.columns)
+    faltan = [
+        columna for columna in (
+            COLUMNA_ENERGIA_SUBASTAS, COLUMNA_FD_SUBASTAS,
+            COLUMNA_FMA_SUBASTAS,
+        )
+        if columna not in df_subastas.columns
+    ]
 
-    if len(columnas) < 16:
+    if faltan:
         raise ErrorEntrada(
-            f"La hoja Subastas tiene {len(columnas)} columna(s); hacen "
-            f"falta al menos 16 (B:Q) para las reservas de Calculo "
-            f"RE545."
+            f"A la hoja Subastas le faltan {faltan} para las reservas de "
+            f"Calculo RE545 (el FD y el FMA se calculan con "
+            f"subastas_con_fd_y_fma antes de llegar aca)."
         )
 
-    # B=0 ... N=12, O=13, P=14, Q=15.
-    columnas_suma = (columnas[13], columnas[14], columnas[15])
+    columnas_suma = (
+        COLUMNA_ENERGIA_SUBASTAS, COLUMNA_FD_SUBASTAS, COLUMNA_FMA_SUBASTAS,
+    )
 
     claves = [
         (

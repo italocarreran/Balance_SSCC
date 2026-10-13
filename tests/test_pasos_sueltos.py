@@ -407,3 +407,197 @@ class TestColumnaCentral(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def escribir_sscc_desempeno(ruta):
+    """
+    Un SSCC_Desempeño_* sintetico con el layout real: encabezados en la
+    fila 11 y datos desde la 12, CPF Horario en B:J y CSF Horario en
+    B:H. Trae una unidad BESS, una SAE y una termica (que la hoja FD
+    filtra), y horas en que la BESS "No Participó" en CSF.
+    """
+
+    filas_cpf, filas_csf = [], []
+
+    for dia in (1, 2):
+        for hora in range(24):
+            fecha = pd.Timestamp(2026, 7, dia)
+            for unidad, base in (
+                ("BESS PFV UNO", 0.9), ("SAE DOS", 0.8), ("TERMICA TG", 0.5),
+            ):
+                fd = round(base - hora / 1000 - dia / 100, 6)
+                filas_cpf.append(
+                    [None, fecha, hora, unidad, 1, 1, 1, 1, fd, "si"]
+                )
+                respuesta = (
+                    "No Participó" if unidad == "BESS PFV UNO" and hora in (3, 4)
+                    else "Participó"
+                )
+                filas_csf.append(
+                    [None, fecha, hora, unidad, respuesta, 1, 1, fd - 0.05]
+                )
+
+    vacias = [[None] * 10 for _ in range(11)]
+
+    with pd.ExcelWriter(ruta) as writer:
+        pd.DataFrame(vacias + filas_cpf).to_excel(
+            writer, sheet_name="CPF Horario", index=False, header=False
+        )
+        pd.DataFrame(
+            [fila[:8] for fila in vacias] + filas_csf
+        ).to_excel(
+            writer, sheet_name="CSF Horario", index=False, header=False
+        )
+
+
+class TestFdYFmaSeAplicanEnRe545(unittest.TestCase):
+    """
+    Pedido del usuario: el FD y el FMA salen de la hoja Subastas y se
+    calculan y aplican en el calculo que los usa (RE545), para que no
+    haya un descuento doble. El valor tiene que ser EXACTAMENTE el que
+    antes quedaba escrito en Subastas!P/Q: solo cambia de donde sale.
+    """
+
+    def test_el_fd_de_la_hoja_fd_es_el_mismo_que_el_del_archivo(self):
+        from Script.nucleo.externos import desempeno_fd
+
+        with tempfile.TemporaryDirectory() as carpeta:
+            archivo = Path(carpeta) / "SSCC_Desempeño_Julio_2026_V2.xlsx"
+            escribir_sscc_desempeno(archivo)
+
+            # Antes: Subastas leia el archivo entero.
+            del_archivo = desempeno_fd.construir_tablas_fd(
+                archivo, registrar=lambda *a: None
+            )
+
+            # Ahora: la hoja FD de la planilla (ida y vuelta por Excel).
+            csf, cpf = nucleo.construir_fd(archivo, registrar=lambda *a: None)
+            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            nucleo.escribir_salida(
+                None, ruta, [], [], df_fd_csf=csf, df_fd_cpf=cpf,
+                hojas_regenerar={nucleo.HOJA_FD}, registrar=lambda *a: None,
+            )
+            csf, cpf = nucleo.leer_fd_consolidado(
+                ruta, registrar=lambda *a: None
+            )
+            de_la_hoja = nucleo.tablas_fd_desde_hoja(
+                csf, cpf, registrar=lambda *a: None
+            )
+
+        # La hoja FD solo guarda BESS/SAE: la termica queda afuera, y
+        # es lo unico que cambia (las subastas tambien son solo BESS/SAE).
+        def solo_bess(dic):
+            return {
+                clave: valor for clave, valor in dic.items()
+                if "bess" in clave[0] or "sae" in clave[0]
+            }
+
+        for tabla in ("cpf", "csf", "participacion_csf"):
+            self.assertEqual(
+                solo_bess(del_archivo[tabla]), de_la_hoja[tabla], tabla
+            )
+            self.assertTrue(de_la_hoja[tabla], tabla)
+
+        # Las dos horas en que la BESS no participo quedan en 0.
+        self.assertEqual(
+            de_la_hoja["participacion_csf"][("bess pfv uno", 4)], 0
+        )
+
+    def test_subastas_vieja_con_fd_y_fma_escritos_no_se_usa(self):
+        """
+        Un libro de antes trae Subastas!FD y FMA ya calculados. RE545
+        los reemplaza por los que calcula: un solo origen, nunca dos.
+        """
+
+        subastas = pd.DataFrame({
+            "Concepto": ["CPF(+)", "CSF(-)"],
+            "Control": ["CPF", "CSF"],
+            "Sub_Baj": ["SUBIDA", "BAJADA"],
+            "Fecha": ["2026-07-01"] * 2,
+            "Año": [2026, 2026], "Mes": [7, 7], "Dia": [1, 1],
+            "Hora_dia": [1, 2], "Hora_mes": [1, 2],
+            "Configuración": ["SAE UNO"] * 2,
+            "Propietario": ["E1"] * 2,
+            "Clave horaria": ["x", "y"], "Ciclo": [1, 1],
+            "Energía SSCC": [10.0, 20.0],
+            "FD": [99.0, 99.0], "FMA": [99.0, 99.0],
+        })
+        csf = pd.DataFrame(
+            [["2SAE UNO", 2, 1, "2026-07-01", 1, "SAE UNO",
+              "Participó", 1.0, 1.0, 0.8, 0.8, 0.8, 2]]
+        ).set_axis(list(nucleo.NOMBRES_FD_CSF.values()), axis=1)
+        cpf = pd.DataFrame(
+            [["1SAE UNO", 1, 1, "2026-07-01", 0, "SAE UNO",
+              1.0, 1.0, 1.0, 1.0, 0.7, "si", 0.7, 0.7, 1]]
+        ).set_axis(list(nucleo.NOMBRES_FD_CPF.values()), axis=1)
+        tablas_fma = {
+            "cpf": pd.DataFrame({
+                "Central": ["SAE UNO"], "Año": [2026], "Mes": [7],
+                "Dia": [1], "Hora": [1],
+                "FMA_CPF_mas": [0.5], "FMA_CPF_menos": [0.4],
+            }),
+            "csf": pd.DataFrame({
+                "Año": [2026], "Mes": [7], "Dia": [1], "Hora": [2],
+                "FMA_CSF_mas_base": [0.3], "FMA_CSF_menos_base": [0.2],
+            }),
+            "ctf_unidad": None, "ctf_configuracion": None,
+        }
+
+        con_factores = nucleo.subastas_con_fd_y_fma(
+            subastas, csf, cpf, tablas_fma, None, registrar=lambda *a: None
+        )
+
+        self.assertEqual(con_factores["FD"].tolist(), [0.7, 0.8])
+        self.assertEqual(con_factores["FMA"].tolist(), [0.5, 0.2])
+
+        energia, fd, fma = nucleo.construir_dic_reservas_subastas(con_factores)
+        self.assertEqual(sorted(fd.values()), [0.7, 0.8])
+        self.assertEqual(sorted(energia.values()), [10.0, 20.0])
+
+    def test_la_hoja_fma_va_y_vuelve(self):
+        tablas = {
+            "cpf": pd.DataFrame({
+                "Central": ["A", "B"], "Año": [2026, 2026], "Mes": [7, 7],
+                "Dia": [1, 1], "Hora": [1, 2],
+                "FMA_CPF_mas": [0.5, 0.6], "FMA_CPF_menos": [0.4, 0.3],
+            }),
+            "csf": pd.DataFrame({
+                "Año": [2026], "Mes": [7], "Dia": [1], "Hora": [2],
+                "FMA_CSF_mas_base": [0.3], "FMA_CSF_menos_base": [0.2],
+            }),
+            "ctf_unidad": None,
+            "ctf_configuracion": None,
+        }
+
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            nucleo.escribir_salida(
+                None, ruta, [], [], hojas_regenerar={nucleo.HOJA_FMA},
+                tablas_fma=tablas, registrar=lambda *a: None,
+            )
+            leidas = nucleo.leer_fma_consolidado(
+                ruta, registrar=lambda *a: None
+            )
+
+        for clave in ("cpf", "csf"):
+            pd.testing.assert_frame_equal(
+                tablas[clave], leidas[clave], check_dtype=False
+            )
+        self.assertIsNone(leidas["ctf_unidad"])
+
+    def test_re545_sin_hoja_fma_dice_que_hay_que_generarla(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            base = armar_caso(carpeta)
+            ruta = base / nucleo.ARCHIVO_SALIDA
+            hojas = pd.read_excel(ruta, sheet_name=None, header=None)
+            del hojas[nucleo.HOJA_FMA]
+            with pd.ExcelWriter(ruta) as writer:
+                for nombre, df in hojas.items():
+                    df.to_excel(
+                        writer, sheet_name=nombre, index=False, header=False
+                    )
+
+            with self.assertRaises(nucleo.ErrorEntrada) as error:
+                correr_pagos(base, {"re545"}, [])
+
+            self.assertIn(nucleo.HOJA_FMA, str(error.exception))

@@ -17,9 +17,18 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
   `Centrales.xlsx` y avisa) y volver a importar `FD` y `Ofertas SSCC` para
   que traigan la columna `Central`. Confirmar que E Costos y RE545 dan lo
   mismo que antes y revisar el aviso de unidades de FD sin central.
-- Decidir si la hoja `Subastas` debe dejar de abrir el `SSCC_Desempeño_*`
-  (hoy lo necesita para `CTF Horario` y la alternativa TG/TV, que la hoja
-  `FD` no guarda): habría que agregar ese bloque a la hoja `FD`.
+- ~~Decidir si la hoja `Subastas` debe dejar de abrir el
+  `SSCC_Desempeño_*`~~ — resuelto (2026-10-13 (2)): `Subastas` ya no
+  lleva FD ni FMA; se aplican en RE545 desde las hojas `FD` y `FMA`.
+- **FD/FMA en RE545 (2026-10-13 (2)):** en el libro real, actualizar las
+  hojas `FMA` y `Subastas` y recalcular RE545; `AI:AT` y `AU` tienen que
+  dar lo mismo que antes. Si alguna vez una BESS tuviera FD **CTF**, la
+  hoja `FD` no trae `CTF Horario` y ese FD quedaría sin dato (hoy ya
+  quedaba así: el usuario confirmó que las BESS no tienen FD CTF).
+- **¿`Energía SSCC` ya viene ponderada?** Se toma `CANTIDAD PONDERADA MW`
+  del Access. Si esa "ponderación" ya incluyera FD o FMA, RE545 los
+  estaría aplicando dos veces. Confirmar con el usuario qué pondera esa
+  columna (la otra candidata es `CANTIDAD MW`, `COLUMNA_ENERGIA_SSCC_ACCDB`).
 
 - Crear casos de prueba con datos reales y comparar la salida Python
   contra `11_PAGOS_BESS_2607_Definitivo.xlsm` (Medidores, Ofertas SSCC,
@@ -4436,3 +4445,57 @@ Ofertas, y E Costos igual a la referencia con un Diccionario **sin**
 columna FD. Se ajustaron `test_orquestador` (la sección nueva) y
 `test_planillas_ordenadas` (la última hoja es `Centrales`). 212 pruebas,
 13 salteadas (tkinter). Compila. **Sin probar contra un libro real.**
+
+## 2026-10-13 (2) — FD y FMA salen de la hoja Subastas y se aplican en RE545
+
+Pedido del usuario: *"revisa lo del FD porque se aplica más adelante,
+hay que evitar que se genere un doble descuento: quitarlo de la hoja
+subastas y calcularlo y aplicarlo en los cálculos cuando corresponda"*, y
+*"lo mismo con el FMA"*.
+
+**Dónde se aplicaban (revisado):** `Subastas!P` (FD) y `Subastas!Q`
+(FMA) se calculaban al importar Subastas, y el único consumidor era
+RE545: `AI:AN`/`AO:AT` son el SUMIFS de esas columnas y
+`AU = Σ reserva × FD × FMA`. E Costos aplica su FD desde la hoja `FD`
+(`AM:AR`) y nunca leyó esas dos columnas; el FMA no se aplica en E Costos
+(igual que la planilla 11). En el código no había un FD aplicado dos
+veces, pero el dato vivía en dos lugares (hoja FD y Subastas!P), que es
+justo lo que permite el doble descuento si alguien lo usa de los dos.
+
+**Cambio:**
+- `Subastas` llega hasta `Energía SSCC` (B:O). `construir_subastas_desde_accdb`
+  ya no recibe tablas de FD/FMA, y la sección `subastas` ya no abre el
+  `SSCC_Desempeño_*` ni las salidas de FMA.
+- Hoja nueva **`FMA`** (sección `"fma"`, entre `Subastas` y `FD`): las
+  cuatro tablas de `cargar_tablas_fma()` (CPF, CSF, CTF por unidad y por
+  configuración), una al lado de la otra con su título (`TITULOS_FMA`).
+  No se aplica nada al importarla.
+- `factores_subastas.py` (nuevo): `tablas_fd_desde_hoja()` arma las
+  tablas de FD por unidad y hora desde la hoja `FD` (mismas claves y
+  mismo Vector de Participación CSF que `construir_tablas_fd`);
+  `leer_fma_consolidado()` lee la hoja `FMA`; `subastas_con_fd_y_fma()`
+  agrega en memoria las columnas `FD` y `FMA` a Subastas con las mismas
+  `calcular_fd_subastas`/`calcular_fma_subastas` de siempre. Si la hoja
+  es de antes y trae FD/FMA escritos, se reemplazan.
+- `construir_dic_reservas_subastas` suma por nombre (`Energía SSCC`,
+  `FD`, `FMA`), no por posición.
+- RE545 lee las hojas `FD` y `FMA`; sin la hoja `FMA`, error que dice
+  que hay que generarla (sin eso el FMA quedaría en 0 en silencio).
+- "Ejecutar todo": tarea `consolidado:fma` (las salidas de FMA son
+  dependencia opcional); `consolidado:subastas` ya no depende de
+  `fd_sscc` ni de FMA; `pagos:re545` depende de `consolidado:fd` y
+  `consolidado:fma`.
+- `leer_tabla_bajo_titulo()` (lectura.py): las tablas con título se
+  releen sin `header=` de pandas, que renombraba un encabezado repetido
+  en la fila (`Año` de CPF y `Año` de CSF → `Año.1`). Lo usan las hojas
+  `FMA` y `Centrales`.
+
+**Verificación:** `tests/test_pasos_sueltos.py` +4 pruebas: con un
+`SSCC_Desempeño_*` sintético (BESS, SAE y una térmica TG, dos horas "No
+Participó"), las tablas CPF, CSF y de participación armadas desde la hoja
+`FD` (ida y vuelta por Excel) son **idénticas** a las de leer el archivo,
+para todas las unidades BESS/SAE; una Subastas vieja con `FD`/`FMA` = 99
+no se usa (salen los de las hojas); la hoja `FMA` va y vuelve igual; RE545
+sin hoja `FMA` da error claro. El caso de `test_control_corrida` ganó su
+hoja `FMA`. 216 pruebas, 13 salteadas (tkinter). Compila. **Sin probar
+contra un libro real.**
