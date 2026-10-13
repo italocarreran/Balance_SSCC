@@ -526,8 +526,8 @@ def generar_pagos_bess(
     #
     #   Medidores / Ofertas SSCC / Subastas / CMg  -> solo si hay que
     #     recalcular alguna de las dos hojas de calculo;
-    #   Centrales.xlsx -> ademas para el Resumen (el Propietario de
-    #     cada central);
+    #   Centrales.xlsx -> ademas para COMPENSACION_CENTRAL y el
+    #     Resumen (el Propietario de cada central);
     #   la hoja 'FD' del consolidado -> solo para E Costos (RE545 no
     #     usa FD), como ya era.
     # ----------------------------------------------------------
@@ -589,7 +589,7 @@ def generar_pagos_bess(
 
     avanzar(10)
 
-    if quiere_calculo or quiere_resumen:
+    if quiere_calculo or quiere_resumen or quiere_compensacion:
 
         if not rutas["centrales"].is_file():
             raise ErrorEntrada(f"No se encontro {rutas['centrales']}")
