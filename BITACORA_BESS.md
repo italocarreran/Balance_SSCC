@@ -4611,3 +4611,26 @@ RE545 total por central, `T:U` total recibido por empresa (antes `H:K` y
 central y cierra con el total por empresa; sin detalle queda vacío con sus
 columnas); `tests/test_pasos_sueltos.py` revisa los cinco títulos de la
 hoja. 225 pruebas, 13 salteadas (tkinter).
+
+## 2026-10-15 (2) — Ofertas SSCC: la hora 1 del cambio de hora no se exige
+
+Pedido del usuario: en septiembre hay cambio de hora; la hora 1 del día 6
+no existe en las ofertas, así que no tiene que contar para decidir si la
+oferta del día está completa.
+
+`construir_resumen_ofertas_sscc` daba un servicio por completo solo con
+**24** periodos ofertados; el 6-09-2026 (23 horas) nunca llegaba y el día
+quedaba con `Oferta completa = 0`. Ahora exige los periodos que existen ese
+día local: `ofertas_sscc.horas_del_dia(anio, mes, dia)` los saca de
+`America/Santiago` (zoneinfo; un periodo `p` existe si `p-1:00` local hace
+ida y vuelta por UTC sin moverse). Si la máquina no tiene base de zonas
+horarias, cae a la regla vigente (primer domingo de septiembre sin hora 1).
+El día del cambio de vuelta (abril, 25 horas) se siguen exigiendo los 24
+periodos: las ofertas vienen en 1..24. Si se oferta la hora 1 del día 6
+igual, no molesta (se exige que estén las requeridas, no que sean
+exactamente esas).
+
+**Verificación:** `tests/test_ofertas_cambio_hora.py` (nuevo, 5 pruebas):
+horas del 6-09 y de días normales; el día 6 sin hora 1 queda completo, el
+5 sin hora 1 no, y el 6 al que le falta otra hora tampoco. Probada también
+la regla de respaldo sin zoneinfo. 230 pruebas, 13 salteadas (tkinter).
