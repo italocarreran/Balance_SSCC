@@ -4815,3 +4815,33 @@ hoja sin auxiliares, `Central` al final, una columna de separación, color,
 letra, marco y lectura con `id` rearmado. Revisada a ojo convertida a PDF
 con LibreOffice. 251 pruebas, 13 salteadas (tkinter). **Hay que regenerar
 FD** (y después E Costos / RE545) de septiembre.
+
+## 2026-10-15 (8) — Hoja Subastas sin auxiliares y Hora_mes en el cambio de hora
+
+Pedido del usuario: en Subastas, quitar las auxiliares (B, C, L, M de la
+hoja; "M no estoy seguro, me sale vacío"); y en el cambio de hora, en los
+Access la hora 25 de abril ya viene como 25 y la 1 de septiembre no existe
+(desde ahí, -1).
+
+**Hoja.** En la hoja (que empieza en A) B = `Control`, C = `Sub_Baj`,
+L = `Clave horaria`, M = `Ciclo` (vacía: el ciclo se calcula en E Costos).
+`Control` y `Sub_Baj` sí los usa el cálculo (prorratas, FD/FMA de
+subastas, ciclo), pero salen de `Concepto` (=LEFT(C,3) y el signo).
+`subastas_para_hoja` las saca al escribir y `reponer_auxiliares_subastas`
+las vuelve a armar al leer la hoja en `proceso` (único lector), en el
+orden de siempre; una hoja de antes, que las trae, queda igual.
+
+**Hora_mes.** Era `(DIA-1)*24 + HORA`, días de 24 horas, mientras
+Medidores es correlativo: desde el cambio, el cruce por Hora_mes quedaba
+corrido una hora. El cálculo correlativo que se hizo para FD pasó a
+`cambio_hora.hora_mes_correlativa(fechas, periodos)` y lo usan FD
+(periodo = hora + 1) y Subastas (periodo = HORA). Septiembre: 6-09 hora 2
+= 121, 7-09 hora 1 = 144; abril: sábado hora 25 = 97, domingo hora 1 = 98.
+El aviso "el día trae N horas" ahora compara contra lo que ese día tiene
+(25 el sábado de abril) en vez de 24 fijo, y el log dice el cambio del
+mes. `dia_cambio_hora` (el ajuste de la planilla 3) queda solo si se pasa
+explícito.
+
+**Verificación:** `tests/test_subastas_hoja_y_cambio_hora.py` (nuevo, 6
+pruebas). 257 pruebas, 13 salteadas (tkinter). **Hay que regenerar
+Subastas** (y después E Costos / RE545) de septiembre.

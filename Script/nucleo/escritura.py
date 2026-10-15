@@ -31,7 +31,7 @@ from .alertas import ALTA, Alerta
 from .ecostos import COLUMNAS_SALIDA_E_COSTOS, GRUPOS_CALCULO_E_COSTOS
 from .factores_subastas import TITULOS_FMA
 from .formato import formatear_libro
-from .hojas_entrada import fd_para_hoja
+from .hojas_entrada import fd_para_hoja, subastas_para_hoja
 from .lectura import TITULO_CENTRALES_DICCIONARIO, TITULO_CENTRALES_RESUMEN
 from .ofertas_sscc import (
     HOJA_OFERTAS_SSCC, TITULO_OFERTAS_POR_DIA, TITULO_RESUMEN_VENTANA,
@@ -863,7 +863,7 @@ def escribir_salida(
 
         if HOJA_SUBASTAS in regenerar:
             if df_subastas is not None:
-                df_subastas.to_excel(
+                subastas_para_hoja(df_subastas).to_excel(
                     writer,
                     sheet_name=HOJA_SUBASTAS,
                     index=False,

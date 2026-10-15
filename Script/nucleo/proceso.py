@@ -27,6 +27,7 @@ from .estructura import SECCIONES_CONSOLIDADO, SECCIONES_PAGOS
 from .fma import cargar_tablas_fma
 from .hojas_entrada import (
     construir_fd, leer_cmg, leer_cmg_consolidado, leer_fd_consolidado,
+    reponer_auxiliares_subastas,
 )
 from .lectura import (
     construir_homologacion, leer_centrales, leer_centrales_planilla,
@@ -507,6 +508,10 @@ def _leer_entradas_del_consolidado(
                 f"vacia. Genera esa hoja primero "
                 f"(tildando 'Subastas')."
             )
+
+        # La hoja no trae Control, Sub_Baj, Clave horaria ni Ciclo (se
+        # arman de las demas): se reponen para el calculo.
+        df_subastas = reponer_auxiliares_subastas(df_subastas)
 
         df_fd_csf = df_fd_cpf = None
 

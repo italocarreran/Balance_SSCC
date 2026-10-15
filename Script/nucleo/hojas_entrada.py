@@ -6,11 +6,11 @@ Hojas CMg, FD y Subastas del consolidado.
 import pandas as pd
 from pathlib import Path
 
-from .cambio_hora import cambios_de_hora
+from .cambio_hora import hora_mes_correlativa
 from .parametros import (
     COLUMNA_CENTRAL, HOJA_CMG_ORIGEN, HOJA_CPF_HORARIO, HOJA_CSF_HORARIO,
 )
-from .utiles import ErrorEntrada, _texto_seguro
+from .utiles import ErrorEntrada, _entero_a_texto, _texto_seguro
 
 
 # ============================================================
@@ -70,45 +70,19 @@ def _dia_hora_mes_fd(columna_fecha, columna_hora):
 
 def _hora_mes_fd_correlativa(columna_fecha, columna_hora):
     """
-    Hora Mes de FD contada igual que la de Medidores: la hora del mes,
-    correlativa, aunque un dia tenga 23 o 25 horas.
-
-    La formula del Excel ((dia-1)*24 + hora + 1) supone dias de 24
-    horas: el dia que se adelanta la hora (septiembre) deja desde ahi
-    el FD una hora adelante de Medidores, y el que se atrasa (abril)
-    una hora atras. E Costos busca el FD por Hora Mes + Unidad, asi
-    que todo el resto del mes cruzaba la hora equivocada.
+    Hora Mes de FD contada igual que la de Medidores (ver
+    cambio_hora.hora_mes_correlativa). La formula del Excel
+    ((dia-1)*24 + hora + 1) supone dias de 24 horas y, desde el dia del
+    cambio de hora, E Costos cruzaba el FD de la hora equivocada.
 
     Las horas del FD van de 0 a 23 (periodo = hora + 1); en abril el
     sabado del cambio llega a la 24 (periodo 25). La hora que no existe
-    (la 0 del dia que se adelanta) queda sin Hora Mes: no corresponde a
-    ninguna hora de Medidores.
+    (la 0 del dia que se adelanta) queda sin Hora Mes.
     """
 
-    fecha = pd.to_datetime(columna_fecha, errors="coerce")
-    periodo = pd.to_numeric(columna_hora, errors="coerce") + 1
-    base = (fecha.dt.day - 1) * 24 + periodo
-
-    resultado = base.astype("Float64")
-    meses = {
-        (int(f.year), int(f.month)) for f in fecha.dropna()
-    }
-    for anio, mes in meses:
-        for cambio in cambios_de_hora(anio, mes):
-            dia_cambio = pd.Timestamp(cambio.fecha)
-            del_mes = (fecha.dt.year == anio) & (fecha.dt.month == mes)
-            despues = del_mes & (fecha.dt.normalize() > dia_cambio)
-            mismo_dia = del_mes & (fecha.dt.normalize() == dia_cambio)
-            for q in cambio.periodos_inexistentes:
-                resultado = resultado.where(
-                    ~(despues | (mismo_dia & (periodo > q))), resultado - 1
-                )
-                resultado = resultado.mask(mismo_dia & (periodo == q))
-            if cambio.periodos_repetidos:
-                resultado = resultado.where(
-                    ~despues, resultado + len(cambio.periodos_repetidos)
-                )
-    return resultado.round().astype("Int64")
+    return hora_mes_correlativa(
+        columna_fecha, pd.to_numeric(columna_hora, errors="coerce") + 1
+    )
 
 
 def _poner_en_cero_hora_inexistente(df, columna_hora_mes, columna_fecha,
@@ -510,6 +484,55 @@ def leer_cmg_consolidado(ruta_consolidado, registrar=print, libro=None):
     registrar(f"  filas de CMg: {len(df):,}")
 
     return df
+
+
+# La hoja 'Subastas' del consolidado: sin las columnas que se arman de
+# las otras (Control y Sub_Baj salen de Concepto, la Clave horaria de
+# Configuración + Dia + Hora_dia) ni la de Ciclo, que va vacia (el ciclo
+# se calcula en Calculo E Costos). Pedido del usuario: antes B, C, L y M
+# de la hoja. Se reponen al leerla.
+COLUMNAS_SUBASTAS_AUXILIARES = ("Control", "Sub_Baj", "Clave horaria", "Ciclo")
+
+
+def subastas_para_hoja(df_subastas):
+    """La hoja Subastas como se escribe: sin las auxiliares."""
+
+    if df_subastas is None:
+        return None
+    return df_subastas.drop(
+        columns=[c for c in COLUMNAS_SUBASTAS_AUXILIARES if c in df_subastas],
+    )
+
+
+def reponer_auxiliares_subastas(df_subastas):
+    """
+    Vuelve a armar Control, Sub_Baj, Clave horaria y Ciclo (vacia) de
+    una hoja Subastas que no las trae, y deja las columnas en el orden
+    de siempre (NOMBRES_SUBASTAS). Una hoja de antes, que si las trae,
+    queda igual.
+    """
+
+    df = df_subastas.copy()
+    concepto = df["Concepto"].map(_texto_seguro) if "Concepto" in df else None
+
+    if "Control" not in df and concepto is not None:
+        df["Control"] = concepto.str[:3]
+    if "Sub_Baj" not in df and concepto is not None:
+        # =IF(LEFT(RIGHT(C,2),1)="+","SUBIDA","BAJADA")
+        df["Sub_Baj"] = concepto.map(
+            lambda t: "SUBIDA" if t[-2:-1] == "+" else "BAJADA"
+        )
+    if "Clave horaria" not in df and {"Configuración", "Dia", "Hora_dia"} <= set(df):
+        df["Clave horaria"] = (
+            df["Configuración"].map(_texto_seguro)
+            + df["Dia"].map(_entero_a_texto)
+            + df["Hora_dia"].map(_entero_a_texto)
+        )
+    if "Ciclo" not in df:
+        df["Ciclo"] = pd.NA
+
+    orden = [n for n in NOMBRES_SUBASTAS.values() if n in df]
+    return df[orden + [c for c in df.columns if c not in orden]]
 
 
 # La hoja 'FD' del consolidado: los dos bloques quedan separados por

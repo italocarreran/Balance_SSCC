@@ -5,6 +5,7 @@ Subastas desde su origen: los Access OfertasSSCCAdj*.
 
 import pandas as pd
 
+from .cambio_hora import cambios_de_hora, hora_mes_correlativa
 from .externos import ofertas_adj
 from .hojas_entrada import (
     NOMBRES_SUBASTAS, _contiene_bess_o_sae_sin_bat,
@@ -183,18 +184,29 @@ def construir_subastas_desde_accdb(
             f"{', '.join(str(d) for d in resumen['dias_sin_archivo'])}"
         )
 
-    # Diagnostico de cambio de hora: si algun dia no trae 24 horas, el
-    # Hora_mes corrido deja de ser (Dia-1)*24+Hora para los dias
-    # siguientes. No se corrige solo (ver calcular_hora_mes_subastas),
-    # pero el usuario tiene que enterarse.
-    horas_por_dia = df_crudo.groupby("DIA")["HORA"].max()
-    dias_raros = horas_por_dia[horas_por_dia != 24]
+    # Cambio de hora: el Hora_mes se cuenta correlativo (como Medidores)
+    # con los cambios del mes (cambio_hora). Se avisa si algun dia trae
+    # una hora mas alta que la que ese dia tiene.
+    anio_mes = (2000 + int(str(aamm)[:2]), int(str(aamm)[2:]))
+    maximo_esperado = {
+        cambio.fecha.day: 24 + len(cambio.periodos_repetidos)
+        for cambio in cambios_de_hora(*anio_mes)
+    }
+    for cambio in cambios_de_hora(*anio_mes):
+        registrar(f"  Cambio de hora {cambio.descripcion()}")
 
-    for dia, maximo in dias_raros.items():
-        registrar(
-            f"  [AVISO] el dia {int(dia)} trae {int(maximo)} horas, no 24 "
-            f"(cambio de hora?): revisar Hora_mes."
-        )
+    horas_por_dia = pd.to_numeric(df_crudo["HORA"], errors="coerce").groupby(
+        pd.to_numeric(df_crudo["DIA"], errors="coerce")
+    ).max()
+    for dia, maximo in horas_por_dia.items():
+        if pd.isna(dia) or pd.isna(maximo):
+            continue
+        esperado = maximo_esperado.get(int(dia), 24)
+        if int(maximo) != esperado:
+            registrar(
+                f"  [AVISO] el dia {int(dia)} llega a la hora {int(maximo)} "
+                f"y ese dia tiene {esperado}: revisar Hora_mes."
+            )
 
     # Mismo filtro BESS/SAE de siempre, ahora por nombre de columna.
     textos = df_crudo["CONFIGURACIÓN"].map(_texto_seguro)
@@ -216,9 +228,15 @@ def construir_subastas_desde_accdb(
         dict(year=df["F"], month=df["G"], day=df["H"]), errors="coerce"
     )
 
-    df["J"] = calcular_hora_mes_subastas(
-        df["H"], df["I"], dia_cambio_hora=dia_cambio_hora
-    )
+    # HORA es el periodo 1..24 (abril: el sabado llega a 25; septiembre:
+    # el domingo no trae la 1). Correlativo como Medidores; con
+    # dia_cambio_hora explicito se usa el ajuste de la planilla 3.
+    if dia_cambio_hora is None:
+        df["J"] = hora_mes_correlativa(df["E"], df["I"])
+    else:
+        df["J"] = calcular_hora_mes_subastas(
+            df["H"], df["I"], dia_cambio_hora=dia_cambio_hora
+        )
 
     df["K"] = filtrado["CONFIGURACIÓN"].map(_texto_seguro)
 

@@ -226,3 +226,42 @@ def horas_del_dia(anio, mes, dia):
         if cambio.fecha == fecha:
             return _TODOS_LOS_PERIODOS - frozenset(cambio.periodos_inexistentes)
     return _TODOS_LOS_PERIODOS
+
+
+def hora_mes_correlativa(fechas, periodos):
+    """
+    Hora del mes correlativa (como la de Medidores) para fechas y
+    periodos 1..24 (abril: el sabado del cambio llega al 25).
+
+    La cuenta (dia-1)*24 + periodo supone dias de 24 horas: despues del
+    dia que se adelanta la hora queda una hora adelante de Medidores, y
+    despues del que se atrasa, una atras. Aca se corrige con los cambios
+    del mes. La hora que no existe queda sin valor (<NA>): no
+    corresponde a ninguna hora de Medidores.
+
+    fechas, periodos: Series alineadas. Devuelve una Series Int64.
+    """
+
+    import pandas as pd
+
+    fecha = pd.to_datetime(fechas, errors="coerce").dt.normalize()
+    periodo = pd.to_numeric(periodos, errors="coerce")
+    resultado = ((fecha.dt.day - 1) * 24 + periodo).astype("Float64")
+
+    meses = {(int(f.year), int(f.month)) for f in fecha.dropna()}
+    for anio, mes in meses:
+        del_mes = (fecha.dt.year == anio) & (fecha.dt.month == mes)
+        for cambio in _cambios_del_mes(anio, mes):
+            dia = pd.Timestamp(cambio.fecha)
+            despues = del_mes & (fecha > dia)
+            mismo_dia = del_mes & (fecha == dia)
+            for q in cambio.periodos_inexistentes:
+                corre = despues | (mismo_dia & (periodo > q))
+                resultado = resultado.where(~corre, resultado - 1)
+                resultado = resultado.mask(mismo_dia & (periodo == q))
+            if cambio.periodos_repetidos:
+                resultado = resultado.where(
+                    ~despues, resultado + len(cambio.periodos_repetidos)
+                )
+    return resultado.round().astype("Int64")
+
