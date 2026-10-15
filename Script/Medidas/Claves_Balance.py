@@ -20,6 +20,8 @@ en el cambio de hora y desordenaria la numeracion), el signo sale de
 `Flujo`, y la agrupacion final es por clave.
 """
 
+import warnings
+
 import pandas as pd
 
 from .comun import ErrorMedidas
@@ -63,9 +65,13 @@ def parse_fecha_mixta(serie):
     )
 
     try:
-        fechas = pd.to_datetime(
-            serie, dayfirst=dayfirst, errors="coerce", format="mixed"
-        )
+        with warnings.catch_warnings():
+            # Ofsets mezclados: pandas avisa que en el futuro va a
+            # fallar; ya se cubre abajo, valor por valor.
+            warnings.simplefilter("ignore", FutureWarning)
+            fechas = pd.to_datetime(
+                serie, dayfirst=dayfirst, errors="coerce", format="mixed"
+            )
     except (TypeError, ValueError):
         fechas = None
 
@@ -103,16 +109,65 @@ def _exigir_columnas(df, columnas, origen):
         )
 
 
-def normalizar_fechas(df):
-    """Deja `intervalo` e `intervaloUtc` como datetime."""
+def utc_desde_local(serie):
+    """
+    El instante UTC de cada `intervalo`, si TODOS traen su desfase de
+    Chile ('2026-09-05T20:00:00.000-04:00'); si no, None.
+
+    Por que: la API v2 entrega `dateRange` con el desfase correcto en
+    cada fila, pero su `utcRange` viene corrido una hora justo despues
+    del cambio de septiembre (le aplica el horario de Chile a la hora
+    UTC: la 00:xx UTC del 6-09 cae en la hora que en Chile no existe y
+    la pasa a la 01:xx). Asi las 20:xx y las 21:xx del 5-09 quedaban con
+    el mismo `utcRange`, se tomaban por la hora fantasma y se perdia la
+    hora 22 del 5-09 en todas las centrales (visto con la API real).
+
+    Un desfase 0 ('Z') no cuenta: en Chile nunca es 0, asi que es una
+    hora local con la marca equivocada y no sirve para sacar el UTC.
+    """
+
+    utc = []
+    for valor in serie:
+        if valor is None or (not isinstance(valor, str) and pd.isna(valor)):
+            utc.append(pd.NaT)
+            continue
+        try:
+            marca = pd.Timestamp(valor)
+        except (TypeError, ValueError):
+            return None
+        if marca.tzinfo is None or marca.utcoffset() == pd.Timedelta(0):
+            return None
+        utc.append(marca.tz_convert("UTC").tz_localize(None))
+    return pd.to_datetime(pd.Series(utc, index=serie.index))
+
+
+def normalizar_fechas(df, registrar=None):
+    """
+    Deja `intervalo` (hora local, sin zona) e `intervaloUtc` como
+    datetime. Si `intervalo` trae su desfase en cada fila, el UTC sale
+    de ahi (ver utc_desde_local) y no del `intervaloUtc` de la API.
+    """
 
     _exigir_columnas(
         df, [COL_INTERVALO_LOCAL, COL_INTERVALO_UTC], "La descarga de medidas"
     )
 
     df = df.copy()
+    utc_real = utc_desde_local(df[COL_INTERVALO_LOCAL])
     df[COL_INTERVALO_LOCAL] = parse_fecha_mixta(df[COL_INTERVALO_LOCAL])
     df[COL_INTERVALO_UTC] = parse_fecha_mixta(df[COL_INTERVALO_UTC])
+
+    if utc_real is not None:
+        distintas = int(
+            (utc_real.notna() & utc_real.ne(df[COL_INTERVALO_UTC])).sum()
+        )
+        if distintas and registrar:
+            registrar(
+                f"  la API trae {distintas:,} fila(s) con intervaloUtc "
+                f"distinto del instante de su hora local (cambio de hora); "
+                f"se usa el de la hora local"
+            )
+        df[COL_INTERVALO_UTC] = utc_real
 
     return df
 
@@ -408,7 +463,7 @@ def construir_por_clave(df, df_homol, registrar=print):
     archivo -- quien llama las resume en el log.
     """
 
-    df = normalizar_fechas(df)
+    df = normalizar_fechas(df, registrar=registrar)
 
     df, descartadas = descartar_hora_inexistente(df)
     if not descartadas.empty:

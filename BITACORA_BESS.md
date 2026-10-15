@@ -4876,3 +4876,33 @@ sintéticos con la misma forma; los reales no se suben al repo). 261
 pruebas, 13 salteadas (tkinter). Hay que regenerar el FMA de abril y
 septiembre.
 
+
+## 2026-10-15 (10) — Medidores: faltaba la hora 22 del 5-09 (utcRange corrido en la API v2)
+
+Reporte del usuario: a Medidores le falta la hora 22 del 5-09, en todas
+las centrales. Con un script de prueba de una vez (`probar_hora_22.py`,
+fuera del repo) se consultó la API v2 real (ARENA_220_JT1_ARE, 202609):
+
+- `dateRange` viene bien: cada fila con su desfase (-04:00 hasta el 5-09,
+  -03:00 desde el 6-09 01:00) y **sin** la hora que no existe (la v1 sí
+  la traía);
+- `utcRange` viene corrido una hora en las 20:xx del 5-09: le aplica el
+  horario de Chile a la hora UTC, y la 00:xx UTC del 6-09 (que en Chile
+  no existe) la pasa a 01:xx. Las 20:xx y las 21:xx del 5-09 quedan con
+  el mismo `utcRange`; `descartar_hora_inexistente` las tomaba por la
+  hora fantasma de la v1 y descartaba las 21:xx (hora 22): 2.872 cuartos
+  en vez de 2.876.
+
+**Arreglo** (`Claves_Balance.normalizar_fechas` / `utc_desde_local`): si
+todos los `intervalo` traen desfase (y no es 0/'Z', que en Chile no
+existe), el UTC se calcula de ahí y no se usa el `intervaloUtc` de la API;
+el log dice cuántas filas difieren. Sin desfase (o 'Z'), como antes. La
+hora fantasma de la v1 se sigue resolviendo igual. De paso se silencia el
+FutureWarning de pandas por ofsets mezclados (ya se cubría valor por
+valor).
+
+**Verificación:** `tests/test_api_v2_utc_corrido.py` (nuevo, 2 pruebas)
+reproduce la respuesta real: con el código anterior da 2.872 (falla), con
+el nuevo 2.876, 5-09 1..24 con la 22 en las 21:00, 6-09 2..24 y Hora Mes
+correlativo (118 / 121). 263 pruebas, 13 salteadas (tkinter). Hay que
+volver a traer `Medidas_SAE.xlsx` y después Medidores.
