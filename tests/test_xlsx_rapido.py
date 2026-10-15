@@ -177,7 +177,11 @@ class TestEscrituraDeLaPlanilla(unittest.TestCase):
             self.assertIn(nucleo.HOJA_CENTRALES, despues)
             # sin restos del libro temporal
             self.assertEqual(
-                sorted(p.name for p in Path(carpeta).iterdir()),
+                sorted(
+                    p.name for p in Path(carpeta).iterdir()
+                    # los sellos de cuando se escribio cada hoja
+                    if not p.name.startswith(".sellos_")
+                ),
                 [nucleo.ARCHIVO_SALIDA],
             )
 

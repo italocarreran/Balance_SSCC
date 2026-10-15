@@ -31,6 +31,7 @@ from .alertas import ALTA, Alerta
 from .ecostos import COLUMNAS_SALIDA_E_COSTOS, GRUPOS_CALCULO_E_COSTOS
 from .factores_subastas import TITULOS_FMA
 from .formato import formatear_libro
+from .sellos import sellar
 from .hojas_entrada import fd_para_hoja, subastas_para_hoja
 from .lectura import TITULO_CENTRALES_DICCIONARIO, TITULO_CENTRALES_RESUMEN
 from .ofertas_sscc import (
@@ -546,6 +547,8 @@ def escribir_pagos_bess(
         relleno = _asegurar_una_hoja(writer)
 
     _pegar_en_salida(ruta_temporal, ruta_salida, wb_existente, relleno)
+    # Cuando se escribio cada hoja (ver sellos.py / vigencia.py).
+    sellar(ruta_salida, escritas)
 
     escribir_control(
         ruta_control,
@@ -902,6 +905,20 @@ def escribir_salida(
         relleno = _asegurar_una_hoja(writer)
 
     _pegar_en_salida(ruta_temporal, ruta_salida, wb_existente, relleno)
+    # Cuando se escribio cada hoja (ver sellos.py / vigencia.py).
+    sellar(ruta_salida, [
+        hoja for hoja, escrita in (
+            (HOJA_MEDIDORES, df is not None),
+            (HOJA_OFERTAS_SSCC,
+             df_wxy is not None or df_resumen_ventana is not None),
+            (HOJA_CMG, df_cmg is not None),
+            (HOJA_FD, df_fd_csf is not None or df_fd_cpf is not None),
+            (HOJA_SUBASTAS, df_subastas is not None),
+            (HOJA_FMA, tablas_fma is not None),
+            (HOJA_CENTRALES, centrales is not None),
+        )
+        if escrita and hoja in regenerar
+    ])
 
     escribir_control(ruta_control, df_log=_armar_log())
 

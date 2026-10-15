@@ -841,6 +841,11 @@ def revisar_estructura(carpeta_base, aamm=None):
         )
     )
 
+    # Lo que quedo viejo porque cambio algo de lo que usa: de "ok" a
+    # "pendiente", en cadena (ver vigencia.py).
+    from .vigencia import aplicar_vigencia
+    aplicar_vigencia(rutas, filas)
+
     return rutas, filas
 
 

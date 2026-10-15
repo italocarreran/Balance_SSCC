@@ -4953,3 +4953,36 @@ hojas. En el contenedor se instaló `python3-tk` para Python 3.12: con
 `xvfb-run -a python3.12 -m unittest discover` corren las 267 sin saltear
 ninguna. Captura de la ventana revisada a ojo. Falta verla en Windows.
 
+
+## 2026-10-15 (12) — Lo que quedó viejo pasa a "pendiente" en la ventana
+
+Pedido del usuario: *"si yo modifico las medidas, todo lo que está ok pase
+a pendiente, si es que depende de medidas. Así con todo."*
+
+- **`Script/nucleo/vigencia.py`** (nuevo), llamado al final de
+  `revisar_estructura`: con el **mismo grafo de "Ejecutar todo"**
+  (`orquestador.TAREAS`: requisitos, depende y depende_opcional), una fila
+  "ok" pasa a "pendiente" si algo de lo que usa es más nuevo que ella, o si
+  algo de lo que usa quedó viejo (en cadena; TAREAS está en orden de
+  dependencia, así que sale en una pasada). El detalle dice el motivo:
+  "desactualizado: cambió cmg.xlsx después de generarlo" o "usa hoja
+  'CMg', que está desactualizado". Como `planificar` toma "hecho" = fila
+  "ok", "Ejecutar todo" propone rehacer justo eso.
+- **Fechas:** archivos, su fecha de modificación; `DB subastas/`, el Access
+  más nuevo del período; sub-hojas de un archivo de entrada (Centrales,
+  homologación), la del archivo; **hojas del libro**, cuándo se escribieron:
+  **`Script/nucleo/sellos.py`** (nuevo) anota la hora de cada hoja escrita
+  en `.sellos_Balance_BESS.json`, al lado del libro (`escribir_salida` y
+  `escribir_pagos_bess`, solo las que esa pasada escribió). Solo cuentan
+  filas que existen ("ok"). Margen de 2 s.
+- **Libros de antes:** una hoja sin sello no tiene fecha y no avisa hasta
+  que se vuelva a generar. Se probó usar la fecha del libro y daba falsas
+  alarmas (cambia con cualquier hoja que se escriba).
+
+**Verificación:** `tests/test_vigencia.py` (nuevo, 4 pruebas): se sellan las
+hojas escritas; todo al día no marca nada; tocar `cmg.xlsx` deja viejas
+justo `hoja 'CMg'` → E Costos, RE545 y COMPENSACION_CENTRAL (y no
+Medidores ni Subastas), "Ejecutar todo" las propone, rehacer la hoja CMg
+la deja ok pero el cálculo sigue viejo, y rehacer el cálculo deja todo al
+día; un libro sin sellos no avisa. `test_xlsx_rapido` ignora el archivo de
+sellos. 271 pruebas, 0 salteadas con tkinter.
