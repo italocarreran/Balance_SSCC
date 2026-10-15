@@ -156,7 +156,8 @@ def traer_csv_15min(carpeta_cmg, aamm, raiz=None, registrar=print):
 # EL PROCESO EN SI
 # ============================================================
 
-def construir_cmg_desde_csv(ruta_csv, barras, registrar=print):
+def construir_cmg_desde_csv(ruta_csv, barras, registrar=print,
+                            horas_inexistentes=()):
     """
     Lee el CSV 15-minutal, numera el "Cuarto de Hora" global segun los
     bloques que el archivo realmente trae (no asume 96 por dia: los
@@ -167,6 +168,13 @@ def construir_cmg_desde_csv(ruta_csv, barras, registrar=print):
     Devuelve (df_salida, resumen_dias). El orden de columnas del
     resultado es el del CSV + "Cuarto de Hora" + el promedio horario,
     que es justo el layout A:I que nucleo.leer_cmg() espera despues.
+
+    horas_inexistentes: pares (fecha, periodo 1..24) que el reloj se
+    salta el dia que se adelanta la hora (nucleo los saca de
+    cambio_hora). El CSV trae igual esa hora, en cero; si se queda, el
+    "Cuarto de Hora" queda 4 cuartos adelante del de Medidores desde
+    ese momento y todo el resto del mes cruza corrido una hora. Se
+    sacan antes de numerar.
     """
 
     ruta_csv = Path(ruta_csv)
@@ -195,6 +203,8 @@ def construir_cmg_desde_csv(ruta_csv, barras, registrar=print):
         df[COLUMNA_VALOR].astype(str).str.replace(",", ".", regex=False),
         errors="coerce",
     )
+
+    df = _sacar_horas_inexistentes(df, horas_inexistentes, registrar)
 
     # Bloques reales del archivo (fecha + hora + minuto distintos),
     # numerados dentro de cada dia y despues acumulados: asi el
@@ -268,6 +278,46 @@ def construir_cmg_desde_csv(ruta_csv, barras, registrar=print):
     )
 
     return df_filtrado, resumen_dias
+
+
+def _sacar_horas_inexistentes(df, horas_inexistentes, registrar):
+    """Saca las filas de las horas que no existieron (ver arriba)."""
+
+    pares = {
+        (pd.Timestamp(fecha).normalize(), int(periodo))
+        for fecha, periodo in horas_inexistentes
+    }
+    if not pares or df.empty:
+        return df
+
+    # HORA en el CSV es el periodo 1..24 (abril llega a 25); si viniera
+    # 0..23 se corre en uno para comparar.
+    desfase = 1 if df["HORA"].min() == 0 else 0
+    periodo = df["HORA"].astype("float") + desfase
+    sobra = pd.Series(
+        [
+            (fecha, int(p)) in pares if pd.notna(p) else False
+            for fecha, p in zip(df["FECHA_DT"], periodo)
+        ],
+        index=df.index,
+    )
+    if not sobra.any():
+        return df
+
+    valores = df.loc[sobra, COLUMNA_VALOR]
+    con_valor = int(valores.fillna(0).ne(0).sum())
+    detalle = ", ".join(
+        f"{fecha:%d-%m} hora {p}" for fecha, p in sorted(pares)
+    )
+    registrar(
+        f"  cambio de hora: se sacan {int(sobra.sum()):,} fila(s) de la "
+        f"hora que no existe ({detalle})"
+        + (
+            "; venian todas en cero." if con_valor == 0 else
+            f"; OJO: {con_valor:,} traian CMg distinto de cero."
+        )
+    )
+    return df[~sobra].copy()
 
 
 def validar_layout(df, registrar=print):

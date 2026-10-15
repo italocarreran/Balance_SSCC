@@ -8,6 +8,7 @@ from pathlib import Path
 from .externos import (
     extrae_cmg, indicadores_dco, indices_fma, ofertas_adj,
 )
+from .cambio_hora import cambios_del_periodo
 from .diccionarios import construir_mapa_barra
 from .lectura import obtener_centrales
 from .parametros import (
@@ -279,11 +280,24 @@ def generar_cmg(
 
     avanzar(25)
 
+    # Cambio de hora del mes (cambio_hora): la hora que el reloj se
+    # salta viene en el CSV y no en Medidores; se saca para que el
+    # Cuarto de Hora de los dos calce.
+    cambios = cambios_del_periodo(aamm)
+    horas_inexistentes = [
+        (cambio.fecha, periodo)
+        for cambio in cambios
+        for periodo in cambio.periodos_inexistentes
+    ]
+    for cambio in cambios:
+        registrar(f"  Cambio de hora {cambio.descripcion()}")
+
     registrar(f"Leyendo {ruta_csv.name}...")
 
     try:
         df_salida, resumen_dias = extrae_cmg.construir_cmg_desde_csv(
-            ruta_csv, barras, registrar=registrar
+            ruta_csv, barras, registrar=registrar,
+            horas_inexistentes=horas_inexistentes,
         )
         avanzar(70)
         extrae_cmg.validar_layout(df_salida, registrar=registrar)
@@ -310,6 +324,23 @@ def generar_cmg(
         registrar("  dias que NO tienen 24 horas (cambio de hora):")
         for linea in anomalos:
             registrar(f"    {linea}")
+
+    # Lo que el CSV trae el dia del cambio tiene que ser lo que tiene
+    # ese dia de verdad (23 o 25 horas): si no, el Cuarto de Hora no
+    # calza con el de Medidores desde ahi en adelante.
+    cuartos_por_dia = dict(zip(
+        resumen_dias["FECHA_DT"].dt.date, resumen_dias["QH_DEL_DIA"]
+    ))
+    for cambio in cambios:
+        trae = cuartos_por_dia.get(cambio.fecha)
+        esperado = cambio.horas_del_dia * 4
+        if trae is not None and int(trae) != esperado:
+            registrar(
+                f"  AVISO: el {cambio.fecha:%d-%m-%Y} el CSV trae "
+                f"{int(trae)} cuartos de hora y ese dia tiene {esperado}: "
+                f"el Cuarto de Hora del CMg no va a calzar con el de "
+                f"Medidores desde ese dia. Revisar el CSV."
+            )
 
     avanzar(100)
     registrar(f"Listo: {rutas['cmg']}")

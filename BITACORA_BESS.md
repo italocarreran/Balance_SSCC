@@ -4734,3 +4734,40 @@ dos casos.
 
 **Verificación:** `tests/test_soc_cambio_hora.py` (nuevo, 3 pruebas). 241
 pruebas, 13 salteadas (tkinter).
+
+## 2026-10-15 (6) — CMg: la hora que no existe y la FECHA con separador de miles
+
+Reporte del usuario sobre los CMg de septiembre/abril: (a) la FECHA
+`AAAAMMDD` se ve como número con separador de miles; (b) el CSV trae la
+hora que se elimina, toda en cero ("no creo que afecte, verifica"); (c) la
+hora 25 de abril ya viene como 25.
+
+**(b) sí afectaba, y mucho.** El CMg se cruza con E Costos / RE545 por
+`barra + Cuarto de Hora` del mes (`_buscar_cmg`). `construir_cmg_desde_csv`
+numera el Cuarto de Hora con los bloques que trae el CSV: con la hora 1 del
+6-09 adentro, septiembre quedaba con 2.880 cuartos y Medidores con 2.876, así
+que **desde el 6-09 00:00 todo el resto del mes tomaba el CMg de una hora
+antes**. Ahora `generar_cmg` saca de `cambio_hora` las horas que no existen
+y `construir_cmg_desde_csv(..., horas_inexistentes=...)` las borra antes de
+numerar: el 6-09 empieza en la hora 2 con el cuarto 481, igual que
+Medidores, y el mes cierra en 2.876. El log dice cuántas filas se sacaron y
+si venían en cero (si alguna trae CMg ≠ 0, avisa con "OJO"). Además, si el
+día del cambio el CSV no trae los cuartos que corresponden (92 / 100),
+avisa que no va a calzar con Medidores. `Extrae_CMG_barras` sigue sin
+importar `nucleo`: las horas se las pasa quien llama.
+
+**(c) abril:** con HORA 25 el sábado queda con 100 cuartos, 24 y después 25
+en orden, igual que Medidores (entrada (4)). Sin cambios.
+
+**(a) formato:** `formato.formatear_hoja` ponía `#,##0` a toda columna
+entera. Ahora una columna de fechas `AAAAMMDD` (todos los valores) o con
+título `Año`/`FECHA`/`AAMM`… va con formato `0`. Solo aspecto, el valor no
+cambia.
+
+**Verificación:** `tests/test_cmg_cambio_hora.py` (nuevo, 5 pruebas):
+septiembre 2.876 cuartos, el 6-09 arranca en la hora 2 = cuarto 481 y el
+7-09 calza; sin las horas queda en 2.880 (el bug); aviso si la hora sacada
+traía valores; abril con hora 25 sin cambios; FECHA y Año con formato `0`.
+Corrido además `generar_cmg` sobre un caso sintético. 246 pruebas, 13
+salteadas (tkinter). **Hay que regenerar `cmg.xlsx` y la hoja `CMg`** (y
+después E Costos / RE545) de septiembre.

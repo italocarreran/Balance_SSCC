@@ -41,13 +41,34 @@ MAXIMO_CELDAS_FORMATO = 8_000_000
 FORMATO_ENTERO = "#,##0"
 FORMATO_DECIMAL = "#,##0.00"
 FORMATO_FECHA = "yyyy-mm-dd hh:mm"
+# Numeros que son claves y no cantidades (una fecha AAAAMMDD, un año):
+# sin separador de miles, que 20260905 no se lea 20.260.905.
+FORMATO_CLAVE = "0"
+
+TITULOS_CLAVE = ("año", "ano", "anio", "year", "aamm", "fecha")
+
+
+def _es_fecha_aaaammdd(valor):
+    entero = int(valor)
+    if float(valor) != entero or not 19000101 <= entero <= 21001231:
+        return False
+    mes, dia = (entero // 100) % 100, entero % 100
+    return 1 <= mes <= 12 and 1 <= dia <= 31
+
+
+def _es_titulo_clave(titulos):
+    for titulo in titulos:
+        texto = str(titulo or "").strip().lower()
+        if texto in TITULOS_CLAVE:
+            return True
+    return False
 
 
 def _es_numero(valor):
     return isinstance(valor, (int, float)) and not isinstance(valor, bool)
 
 
-def _formato_de_columna(valores):
+def _formato_de_columna(valores, titulos=()):
     """
     Decide el formato de numero de una columna a partir de una
     muestra de sus valores. Devuelve None si no hay que tocarla
@@ -67,6 +88,9 @@ def _formato_de_columna(valores):
 
     if any(float(v) != int(v) for v in con_valor):
         return FORMATO_DECIMAL
+
+    if all(_es_fecha_aaaammdd(v) for v in con_valor) or _es_titulo_clave(titulos):
+        return FORMATO_CLAVE
 
     return FORMATO_ENTERO
 
@@ -150,7 +174,7 @@ def formatear_hoja(ws, fila_encabezado=1):
             ANCHO_MAXIMO, max(ANCHO_MINIMO, max(anchos, default=0) + 2)
         )
 
-        formato = _formato_de_columna(columna)
+        formato = _formato_de_columna(columna, titulos)
         if formato:
             formatos[indice + 1] = formato
 
