@@ -48,6 +48,7 @@ Script/
         re545_componentes.py   <- RE545 BI:CE
         prorrata_retiros.py    <- prorrata 15-min: quien paga, cuarto a cuarto
         compensacion.py        <- quien recibe: por central/ciclo, por central y por empresa
+        cambio_hora.py         <- cambios de hora del mes (America/Santiago), detectados solos
         medidores.py           <- la hoja Medidores
         escritura.py           <- los dos libros de salida
         xlsx_rapido.py         <- pegar hojas en el .xlsx a nivel zip (sin abrir el libro)

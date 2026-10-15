@@ -59,6 +59,10 @@ python Balance_BESS.py
    año+mes simplificado (ej. `2607` para julio de 2026). No se adivina del
    nombre de ningún archivo — es el dato con el que el programa ubica el
    SoC del período dentro de `Medidas/` y el CSV de CMg dentro de `Cmg/`.
+   Debajo del recuadro se muestra si el mes tiene **cambio de hora** y
+   cuándo (se detecta solo, con la zona `America/Santiago`; ver
+   `Script/nucleo/cambio_hora.py`). Hoy lo usan las Ofertas SSCC: el día
+   de 23 horas no se exige la hora que no existe.
 3. La ventana detecta automáticamente las entradas y las dibuja como un
    diagrama de carpetas (`OK` / `FALTA` / `PENDIENTE` por cada una). El
    nombre de cada archivo y de cada carpeta es un **link**: el click abre

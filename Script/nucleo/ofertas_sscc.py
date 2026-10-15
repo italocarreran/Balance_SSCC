@@ -4,11 +4,10 @@ Ofertas SSCC y las columnas R, S, T, V de Medidores.
 """
 
 import calendar
-import datetime
-from functools import lru_cache
 import pandas as pd
 from pathlib import Path
 
+from .cambio_hora import cambios_de_hora, horas_del_dia
 from .lectura import (
     ROL_BALANCE_BESS, ROL_OFERTAS, ROL_SUBASTAS, filas_diccionario,
 )
@@ -119,57 +118,9 @@ def _valor_oferta_binario(valor):
     return 1 if str(valor).strip() == "1" else 0
 
 
-ZONA_HORARIA = "America/Santiago"
-
-
-def _primer_domingo(anio, mes):
-    dia = datetime.date(anio, mes, 1)
-    return dia + datetime.timedelta(days=(6 - dia.weekday()) % 7)
-
-
-@lru_cache(maxsize=None)
-def _zona_chile():
-    try:
-        from zoneinfo import ZoneInfo
-        return ZoneInfo(ZONA_HORARIA)
-    except Exception:  # sin base de zonas horarias (Windows sin tzdata)
-        return None
-
-
-@lru_cache(maxsize=None)
-def horas_del_dia(anio, mes, dia):
-    """Periodos 1..24 que existen en el dia local de Chile.
-
-    El dia del cambio a horario de verano (septiembre) el reloj salta
-    de 00:00 a 01:00: la hora 1 no existe y las ofertas no la traen, asi
-    que no se le puede exigir para dar la oferta por completa. El dia
-    del cambio de vuelta (abril, 25 horas) las ofertas siguen viniendo
-    en 24 periodos: se exigen los 24.
-    """
-
-    anio, mes, dia = int(anio), int(mes), int(dia)
-    zona = _zona_chile()
-    if zona is None:
-        # Regla vigente en Chile: el cambio es la noche del primer
-        # sabado de septiembre al domingo, a las 24:00.
-        if (
-            mes == 9
-            and datetime.date(anio, mes, dia) == _primer_domingo(anio, 9)
-        ):
-            return frozenset(range(2, 25))
-        return frozenset(range(1, 25))
-
-    utc = datetime.timezone.utc
-    existen = set()
-    for periodo in range(1, 25):
-        local = datetime.datetime(anio, mes, dia, periodo - 1, tzinfo=zona)
-        ida_y_vuelta = local.astimezone(utc).astimezone(zona)
-        if ida_y_vuelta.replace(tzinfo=None) == local.replace(tzinfo=None):
-            existen.add(periodo)
-    return frozenset(existen)
-
-
 def _horas_exigidas(anio, mes, dia):
+    """Las horas que tiene que traer un servicio para estar completo."""
+
     try:
         return horas_del_dia(anio, mes, dia)
     except (TypeError, ValueError):
@@ -186,7 +137,8 @@ def construir_resumen_ofertas_sscc(ruta_ofertas, registrar=print):
     Día). Para cada grupo, una columna por cada servicio _RS
     encontrado en TODO el archivo (1 si en ese grupo el servicio tiene
     ofertado ("Sí") todas las horas del dia, 0 si no; el dia del cambio
-    a horario de verano son 23, ver horas_del_dia) y una columna final "Oferta
+    a horario de verano son 23,
+    ver cambio_hora.horas_del_dia) y una columna final "Oferta
     completa" (1 solo si todos los servicios del grupo estan
     completos).
 
@@ -254,6 +206,20 @@ def construir_resumen_ofertas_sscc(ruta_ofertas, registrar=print):
         )
 
     lista_servicios = sorted(servicios_globales, key=str.upper)
+
+    # Cambio de hora: se detecta solo por los meses que traen las
+    # ofertas y se deja dicho en el log que hora no se exige.
+    meses = {
+        (int(anio), int(mes))
+        for _, anio, mes, _ in datos_grupo.values()
+        if _es_numero(anio) and _es_numero(mes)
+    }
+    for anio_mes in sorted(meses):
+        for cambio in cambios_de_hora(*anio_mes):
+            detalle = cambio.descripcion()
+            if cambio.periodos_inexistentes:
+                detalle += " Esa hora no se exige para la oferta completa."
+            registrar(f"  Cambio de hora {detalle}")
 
     filas_salida = []
 

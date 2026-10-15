@@ -549,13 +549,16 @@ def main():
     )
     frame_periodo.pack(fill="x", padx=20, pady=6)
 
+    fila_aamm = tk.Frame(frame_periodo)
+    fila_aamm.pack(fill="x")
+
     validador_aamm = (
         root.register(lambda s: s == "" or (s.isdigit() and len(s) <= 4)),
         "%P",
     )
 
     entry_aamm = tk.Entry(
-        frame_periodo,
+        fila_aamm,
         textvariable=var_aamm,
         width=10,
         justify="center",
@@ -566,7 +569,7 @@ def main():
     entry_aamm.pack(side="left")
 
     tk.Label(
-        frame_periodo,
+        fila_aamm,
         text=(
             "4 digitos: año+mes simplificado. Ej. 2607 para julio de "
             "2026. Con el se buscan el archivo de SoC dentro de "
@@ -577,6 +580,35 @@ def main():
         wraplength=820,
         justify="left",
     ).pack(side="left", padx=(10, 0))
+
+    # Cambio de hora del mes: se detecta solo con el AAMM (ver
+    # nucleo.cambio_hora) y queda a la vista mientras se trabaja.
+    var_cambio_hora = tk.StringVar(value="")
+    label_cambio_hora = tk.Label(
+        frame_periodo,
+        textvariable=var_cambio_hora,
+        font=("Segoe UI", 9, "bold"),
+        fg=COLOR_NEUTRO,
+        wraplength=900,
+        justify="left",
+        anchor="w",
+    )
+    label_cambio_hora.pack(fill="x", pady=(6, 0))
+
+    def mostrar_cambio_hora(*_):
+        aamm = var_aamm.get().strip()
+        try:
+            nucleo.validar_aamm(aamm)
+            texto = nucleo.describir_periodo(aamm)
+            hay = bool(nucleo.cambios_del_periodo(aamm))
+        except (nucleo.ErrorEntrada, ValueError):
+            texto, hay = "", False
+        var_cambio_hora.set(texto)
+        label_cambio_hora.config(fg=COLOR_AVISO if hay else COLOR_NEUTRO)
+        return texto, hay
+
+    var_aamm.trace_add("write", mostrar_cambio_hora)
+    mostrar_cambio_hora()
 
     # --------------------------------------------------------
     # DIAGRAMA DE LA ESTRUCTURA DEL CASO
@@ -1308,6 +1340,10 @@ def main():
 
         anterior = ultimo_aamm["valor"]
         ultimo_aamm["valor"] = aamm
+
+        texto_cambio, hay_cambio = mostrar_cambio_hora()
+        if hay_cambio:
+            log(f"Periodo {aamm}: {texto_cambio}")
 
         # 1. Si este periodo ya tuvo carpeta, se vuelve a ella sola:
         #    cambiar de mes es cambiar de carpeta.

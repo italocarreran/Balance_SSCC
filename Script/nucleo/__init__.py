@@ -140,6 +140,10 @@ from .soc import (
     _extraer_nombre_desde_ruta_scada, detectar_bloques,
     detectar_fila_nombres, extraer_soc,
 )
+from .cambio_hora import (
+    CambioHora, cambios_de_hora, cambios_del_periodo, describir_periodo,
+    horas_del_dia,
+)
 from .ofertas_sscc import (
     _contiene_bess_o_sae, _es_respuesta_si, _homologar_fge,
     _limpiar_nombre_mostrar, _mapas_homologacion_fge,
@@ -303,7 +307,9 @@ __all__ = [
     "COLUMNAS_ORIGEN", "HOJA_ORIGEN",
     "buscar_archivo_prorrata", "leer_prorrata_retiros",
     "construir_prorrata_retiros", "construir_compensacion_total",
-    "construir_compensacion_central", "total_por_central", "construir_resumen",
+    "construir_compensacion_central", "total_por_central",
+    "CambioHora", "cambios_de_hora", "cambios_del_periodo",
+    "describir_periodo", "horas_del_dia", "construir_resumen",
     "_filas_de_hojas", "hojas_con_datos", "hojas_de",
     "revisar_estructura", "ROL_BALANCE_BESS", "ROL_FD", "ROL_FMA_CPF",
     "ROL_OFERTAS", "ROL_SUBASTAS", "TITULOS_DICCIONARIO",

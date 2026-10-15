@@ -12,6 +12,13 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **Cambio de hora en la ventana (2026-10-15 (3)):** abrir `Balance_BESS.py`
+  en Windows y revisar la línea nueva bajo el AAMM con 2609, 2604 y 2607 (no
+  se pudo probar: sin tkinter en la máquina de desarrollo). Los demás
+  cálculos que dependan del cambio de hora (el FMA CPF de abajo, Hora_mes de
+  subastas, etc.) pueden usar `nucleo.cambio_hora`; el usuario los está
+  revisando.
+
 - **FMA CPF en el cambio de hora (septiembre, visto 2026-10-13, en
   pausa a pedido del usuario):** el `tabla_resumen_6_9_2026.xlsx` real
   trae **24 filas (00..23) con datos medidos** en un día de 23 horas (el
@@ -4634,3 +4641,38 @@ exactamente esas).
 horas del 6-09 y de días normales; el día 6 sin hora 1 queda completo, el
 5 sin hora 1 no, y el 6 al que le falta otra hora tampoco. Probada también
 la regla de respaldo sin zoneinfo. 230 pruebas, 13 salteadas (tkinter).
+
+## 2026-10-15 (3) — Cambios de hora detectados solos (`cambio_hora.py`)
+
+Pedido del usuario: que los cambios de hora se detecten automáticamente
+(pasó un script que recorre las horas en UTC y avisa donde cambia el
+desfase de `America/Santiago`), y que al elegir el AAMM en la ventana se vea
+si el mes tiene cambio y cuándo. Por ahora lo usan solo las ofertas; hay
+otros casos del cálculo que el usuario está revisando.
+
+**Módulo nuevo `Script/nucleo/cambio_hora.py`**, con el método del usuario:
+recorre el mes (un día antes y uno después, para no perder un cambio en el
+borde) hora a hora en UTC y, donde cambia el desfase, arma un `CambioHora`
+con el día afectado, el desfase anterior/nuevo, el tipo (`adelanta` /
+`atrasa`) y los periodos 1..24 que no existen o que se repiten.
+- Septiembre (adelanta): el domingo tiene 23 horas, no existe la hora 1
+  (6-09-2026, 5-09-2027, 2-09-2029...).
+- Abril (atrasa): el **sábado** tiene 25 horas, la hora 24 se repite
+  (4-04-2026, 3-04-2027, 7-04-2029...).
+- `horas_del_dia(anio, mes, dia)` (las ofertas) salió de `ofertas_sscc.py`
+  y vive acá. El día que se atrasa exige las 24 (los archivos vienen 1..24).
+- Sin base de zonas horarias (Windows sin `tzdata`) cae a la regla vigente
+  (primer sábado de septiembre/abril a las 24:00) y lo dice en el texto.
+  Se agregó `tzdata` a `requirements.txt`. La primera versión de la regla
+  usaba "primer domingo", que fallaba en abril 2029: la prueba compara la
+  regla contra tzdata en 2026-2035.
+
+**Ventana:** debajo del recuadro AAMM, una línea con el cambio del mes (en
+naranja si hay) o "Sin cambio de hora en el mes"; se actualiza al tipear y
+al confirmar el AAMM se escribe también en el log. **Ofertas SSCC:** el log
+del resumen dice el cambio del mes y qué hora no se exige.
+
+**Verificación:** `tests/test_cambio_hora.py` (nuevo, 6 pruebas). 236
+pruebas, 13 salteadas (tkinter). **La ventana no se probó**: en esta
+máquina no hay tkinter; falta abrirla en Windows y mirar la línea nueva con
+2609, 2604 y 2607.
