@@ -12,6 +12,13 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **Hojas de cálculo sin auxiliares (pedido 2026-10-15 (11), "para
+  después"):** en `Calculo E Costos` y `Calculo RE545` (y las demás de
+  cálculo) dejar solo lo relevante para ver, revisar y entender el paso a
+  paso; las auxiliares se quitan de la hoja (como se hizo con FD y
+  Subastas: se reponen al leer si algo las necesita). Hay que revisar
+  columna por columna con el usuario qué es auxiliar.
+
 - **Cambio de hora en la ventana (2026-10-15 (3)):** abrir `Balance_BESS.py`
   en Windows y revisar la línea nueva bajo el AAMM con 2609, 2604 y 2607 (no
   se pudo probar: sin tkinter en la máquina de desarrollo). Los demás
@@ -4906,3 +4913,43 @@ reproduce la respuesta real: con el código anterior da 2.872 (falla), con
 el nuevo 2.876, 5-09 1..24 con la 22 en las 21:00, 6-09 2..24 y Hora Mes
 correlativo (118 / 121). 263 pruebas, 13 salteadas (tkinter). Hay que
 volver a traer `Medidas_SAE.xlsx` y después Medidores.
+
+## 2026-10-15 (11) — "Ejecutar todo" con el árbol, y subastas consolidadas afuera
+
+Pedidos del usuario: (1) en la ventana de "Ejecutar todo" tienen que
+aparecer todas las cosas con botón de la ventana principal y las hojas del
+Excel como sub-ítems dentro del libro, con cuadro selector; (2) las
+subastas se consolidan afuera y después el botón de su hoja se las lleva;
+(3) para después: hojas de cálculo sin auxiliares (anotado en pendientes).
+
+**(2) Subastas consolidadas.** Paso nuevo, como CSV de CMg → `cmg.xlsx`:
+botón **Consolidar** en la fila nueva `Subastas/subastas_AAMM.xlsx`
+(`nucleo.consolidar_subastas`): junta los Access de `DB subastas/` con
+`Ofertas_Adjudicadas.construir_crudo` (PO + PID desde su hora, sin
+CANTIDAD MW = 0; el mismo archivo que dejaba `entradas_sscc.py`). La hoja
+`Subastas` ahora se arma desde ese Excel
+(`construir_subastas_desde_consolidado` → `construir_subastas_desde_crudo`)
+y ya no abre los Access; sin el consolidado, el error dice que hay que
+consolidar. `construir_subastas_desde_accdb` queda para pruebas. En el
+orquestador: grupo/tarea `subastas_xlsx` (recurso "subastas", depende de
+`subastas_db`) y la hoja `Subastas` pasa a depender de `subastas_xlsx`.
+
+**(1) La ventana de "Ejecutar todo"** se arma con el orden y la sangría
+del árbol (`revisar_estructura`): cada paso bajo el título de su carpeta
+(solo carpetas que tienen algo con botón), y `Balance_BESS.xlsx` con su
+propio cuadro que tilda/destilda todas sus hojas ("N de 12 hoja(s)
+tildada(s)"), con las hojas debajo, en el orden del libro. Tildar sigue
+arrastrando lo que sale de ahí, y lo que espera el Excel de prorrata sigue
+quedando fuera con su aviso.
+
+**Verificación:** `tests/test_subastas_hoja_y_cambio_hora.py` +2
+(consolidar escribe `Subastas/subastas_2609.xlsx`, la hoja que sale de ahí
+es igual a la del crudo, Hora_mes 121 el 6-09, fila del árbol "ok"; sin
+consolidado el error dice "Consolidar"); `tests/test_orquestador.py`
+ajustado al grafo nuevo; `tests/test_ventana_ejecutar_todo.py` (nuevo,
+ventana real): botón "Consolidar" en su fila, todas las tareas en la
+lista, el orden del árbol, y el cuadro del libro tilda y destilda las
+hojas. En el contenedor se instaló `python3-tk` para Python 3.12: con
+`xvfb-run -a python3.12 -m unittest discover` corren las 267 sin saltear
+ninguna. Captura de la ventana revisada a ojo. Falta verla en Windows.
+

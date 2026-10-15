@@ -112,6 +112,61 @@ def traer_subastas(carpeta_base, aamm, registrar=print, progreso=None):
     return rutas["db_subastas_dir"]
 
 
+def consolidar_subastas(carpeta_base, aamm, registrar=print, progreso=None):
+    """
+    Junta los Access de subastas del periodo (los de Subastas/DB
+    subastas/) en Subastas/subastas_AAMM.xlsx (boton "Consolidar"). Es
+    el mismo archivo que dejaba entradas_sscc.py: por cada dia el PO y,
+    desde la hora de cada PID, lo que dice el PID (Hora_PID), sin las
+    filas de CANTIDAD MW = 0. La hoja 'Subastas' del libro se lleva de
+    aca. Devuelve la ruta del archivo.
+    """
+
+    aamm = validar_aamm(aamm)
+    rutas = resolver_rutas(carpeta_base)
+
+    if not rutas["subastas_dir"].is_dir():
+        raise ErrorEntrada(
+            f"No se encontro la carpeta {rutas['subastas_dir']}"
+        )
+
+    if progreso:
+        progreso(5)
+
+    registrar(
+        f"Consolidando los Access de {ofertas_adj.CARPETA_DB_SUBASTAS}/ "
+        f"(periodo {aamm})..."
+    )
+    try:
+        df_crudo, resumen = ofertas_adj.construir_crudo(
+            rutas["subastas_dir"], aamm, registrar=registrar
+        )
+    except ofertas_adj.ErrorSubastas as error:
+        raise ErrorEntrada(str(error)) from error
+
+    if resumen["dias_sin_archivo"]:
+        registrar(
+            f"  [AVISO] sin Access de subastas para el/los dia(s): "
+            f"{', '.join(str(d) for d in resumen['dias_sin_archivo'])}"
+        )
+
+    if progreso:
+        progreso(85)
+
+    destino = ofertas_adj.ruta_consolidado(rutas["subastas_dir"], aamm)
+    registrar(f"Escribiendo {destino.name}...")
+    df_crudo.to_excel(
+        destino, sheet_name=ofertas_adj.HOJA_CONSOLIDADO, index=False
+    )
+
+    if progreso:
+        progreso(100)
+
+    registrar(f"Listo: {len(df_crudo):,} fila(s) en {destino}")
+
+    return destino
+
+
 def traer_fd(carpeta_base, aamm, version=None, registrar=print, progreso=None):
     """
     Copia el FD del periodo (lo que el DCO publica como

@@ -276,7 +276,10 @@ class TestPlan(unittest.TestCase):
         filas = caso_vacio()
         plan = nucleo.planificar(
             "/caso", "2607",
-            seleccion={"subastas_db", "fd_sscc", "consolidado:subastas"},
+            seleccion={
+                "subastas_db", "subastas_xlsx", "fd_sscc",
+                "consolidado:subastas",
+            },
             filas=filas,
         )
 
@@ -289,7 +292,8 @@ class TestPlan(unittest.TestCase):
         con_fma = nucleo.planificar(
             "/caso", "2607",
             seleccion={
-                "subastas_db", "fd_sscc", "fma_cpf", "consolidado:subastas",
+                "subastas_db", "subastas_xlsx", "fd_sscc", "fma_cpf",
+                "consolidado:subastas",
             },
             filas=filas,
         )
@@ -307,7 +311,8 @@ class TestPlan(unittest.TestCase):
             ("cmg_xlsx", "consolidado"),
             ("medidas_sae", "consolidado"),
             ("fd_sscc", "consolidado"),
-            ("subastas_db", "consolidado"),
+            ("subastas_db", "subastas_xlsx"),
+            ("subastas_xlsx", "consolidado"),
             ("consolidado", "pagos"),
         ):
             self.assertLess(
@@ -447,7 +452,7 @@ class TestCorrida(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual(simultaneos, 1)
         ids = [g for g, _ in corridos]
-        self.assertEqual(len(ids), 8)
+        self.assertEqual(len(ids), 9)
         self.assertLess(ids.index("consolidado"), ids.index("pagos"))
 
     def test_no_se_ejecuta_un_plan_bloqueado(self):

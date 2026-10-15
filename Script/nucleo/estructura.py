@@ -729,6 +729,48 @@ def revisar_estructura(carpeta_base, aamm=None):
         )
     )
 
+    # El consolidado de los Access (boton "Consolidar"): la hoja
+    # 'Subastas' del libro se lleva de aca.
+    if aamm_valido:
+        consolidado = ofertas_adj.ruta_consolidado(
+            rutas["subastas_dir"], aamm_valido
+        )
+        rutas["subastas_xlsx"] = consolidado
+        if consolidado.is_file():
+            estado_consolidado = "ok"
+            detalle_consolidado = (
+                f"consolidado de los Access de {CARPETA_DB_SUBASTAS}/ - "
+                f"se rehace con el boton ->"
+            )
+        elif accdb:
+            estado_consolidado = "pendiente"
+            detalle_consolidado = (
+                f"se arma con el boton -> juntando los Access de "
+                f"{CARPETA_DB_SUBASTAS}/"
+            )
+        else:
+            estado_consolidado = "pendiente"
+            detalle_consolidado = (
+                f"primero hay que traer los Access a {CARPETA_DB_SUBASTAS}/"
+            )
+        filas.append(
+            _fila(
+                "subastas_xlsx", consolidado.name, 1, estado_consolidado,
+                detalle_consolidado,
+                ruta=consolidado if consolidado.is_file() else rutas["subastas_dir"],
+                es_carpeta=not consolidado.is_file(),
+            )
+        )
+    else:
+        rutas["subastas_xlsx"] = None
+        filas.append(
+            _fila(
+                "subastas_xlsx", "subastas_AAMM.xlsx", 1, "pendiente",
+                "ingresa el periodo (AAMM) arriba para buscarlo",
+                ruta=rutas["subastas_dir"], es_carpeta=True,
+            )
+        )
+
     # ---- Prorrata de retiros --------------------------------------
     agregar(
         "prorrata_dir", f"{CARPETA_PRORRATA_RETIROS}/", 0,
@@ -882,8 +924,9 @@ SECCIONES_CONSOLIDADO = (
     (
         "subastas",
         "Subastas",
-        f"Usa los Access de {CARPETA_SUBASTAS}/{CARPETA_DB_SUBASTAS}/ "
-        f"(su origen real) y la hoja '{HOJA_CENTRALES}' (Propietario). "
+        f"Usa {CARPETA_SUBASTAS}/subastas_AAMM.xlsx (el consolidado de "
+        f"los Access, boton 'Consolidar') y la hoja '{HOJA_CENTRALES}' "
+        f"(Propietario). "
         f"Llega hasta 'Energía SSCC': ya no lleva FD ni FMA, que se "
         f"aplican recien en Calculo RE545.",
         (HOJA_SUBASTAS,),

@@ -246,8 +246,10 @@ Ver `MAPA.md` para qué hace cada módulo.
 ├── SSCC_Desempeño/
 │   └── <algún archivo Excel cuyo nombre empiece con "SSCC_Desempeño_">
 ├── Subastas/
-│   └── DB subastas/                  (botón "Traer")
-│       └── OfertasSSCCAdj*.accdb     <- el origen real de las subastas
+│   ├── DB subastas/                  (botón "Traer")
+│   │   └── OfertasSSCCAdj*.accdb     <- el origen real de las subastas
+│   └── subastas_AAMM.xlsx            (botón "Consolidar": junta los Access;
+│                                      la hoja 'Subastas' se lleva de aquí)
 ├── Prorrata retiros/
 │   └── Prorrata_Retiros_<AAMM>_pre.xlsx o _def.xlsx
 │       (hoja "Prorrata 15min")
@@ -410,7 +412,8 @@ botón), y la que escribe **preserva** las hojas de la otra: actualizar
   sus columnas calculadas, con sus nombres reales de columna (replica
   `Cargar_SSCC_Desempeno_En_FD`). Los bloques CSF (A:M) y CPF (Q:AE) son dos
   tablas de distinto largo, lado a lado en la misma hoja.
-- `Subastas` — datos de los Access de `Subastas/DB subastas/` filtrados por
+- `Subastas` — datos de `Subastas/subastas_AAMM.xlsx` (el consolidado de los
+  Access de `Subastas/DB subastas/`, botón "Consolidar") filtrados por
   "Configuración" contiene BESS/SAE (funcionalmente equivalente a filtrar
   por Propietario: los nombres de central BESS empiezan con "SAE-"), más la
   columna "Clave horaria" calculada, con sus nombres reales de columna

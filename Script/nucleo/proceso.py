@@ -63,7 +63,7 @@ from .rutas import (
 )
 from .soc import extraer_soc
 from .subastas_accdb import (
-    construir_mapa_propietario, construir_subastas_desde_accdb,
+    construir_mapa_propietario, construir_subastas_desde_consolidado,
 )
 from .utiles import ErrorEntrada, _texto_seguro
 
@@ -316,16 +316,14 @@ def generar_consolidado(
     if "subastas" in secciones_activas:
 
         aamm_val = validar_aamm(aamm)
-        hay_accdb = bool(
-            ofertas_adj.accdb_presentes(rutas["subastas_dir"], aamm_val)
+        consolidado_subastas = ofertas_adj.ruta_consolidado(
+            rutas["subastas_dir"], aamm_val
         )
 
-        if hay_accdb:
-            # Camino normal desde ahora: el origen real de las
-            # subastas son los Access, no la planilla 3. Ya no se
-            # calculan ni FD ni FMA aca (se aplican en Calculo RE545),
-            # asi que ni el SSCC_Desempeño_* ni las salidas de FMA se
-            # abren para importar esta hoja.
+        if consolidado_subastas.is_file():
+            # La hoja se lleva del consolidado Subastas/subastas_AAMM.xlsx
+            # (boton "Consolidar"): no se abren los Access. Ya no se
+            # calculan ni FD ni FMA aca (se aplican en Calculo RE545).
             mapa_propietarios = {}
 
             try:
@@ -338,11 +336,7 @@ def generar_consolidado(
             else:
                 mapa_propietarios = construir_mapa_propietario(resumen_bess)
 
-            registrar(
-                f"Leyendo las subastas de {CARPETA_DB_SUBASTAS}/ "
-                f"(periodo {aamm_val})..."
-            )
-            df_subastas = construir_subastas_desde_accdb(
+            df_subastas = construir_subastas_desde_consolidado(
                 rutas["subastas_dir"],
                 aamm_val,
                 mapa_propietarios=mapa_propietarios,
@@ -350,15 +344,11 @@ def generar_consolidado(
             )
 
         else:
-            # La planilla 3 (3_REMUNERACIÓN_SUBASTAS_E_ID_*) dejo de
-            # ser un respaldo: el usuario confirmo que ya no se usa, y
-            # tampoco era el origen (se arma pegando lo que sale de
-            # estos mismos Access). Sin Access no hay subastas.
             raise ErrorEntrada(
-                f"No hay de donde sacar las subastas del periodo "
-                f"{aamm_val}: {rutas['db_subastas_dir']} no tiene "
-                f"ningun Access del periodo. Traelos con el boton "
-                f"'Traer' de esa fila."
+                f"No esta {consolidado_subastas.name} en "
+                f"{rutas['subastas_dir']}: consolidalo primero con el "
+                f"boton 'Consolidar' de su fila (junta los Access de "
+                f"{CARPETA_DB_SUBASTAS}/)."
             )
 
     avanzar(92)

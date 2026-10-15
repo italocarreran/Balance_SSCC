@@ -83,6 +83,21 @@ SQL_SUBASTAS = (
 
 CONTROLADOR_ACCESS = "Microsoft Access Driver (*.mdb, *.accdb)"
 
+# El consolidado de los Access del mes (boton "Consolidar"): el mismo
+# subastas_AAMM.xlsx que dejaba entradas_sscc.py, en Subastas/. La hoja
+# 'Subastas' del libro se arma desde aca, sin volver a abrir los Access.
+PLANTILLA_CONSOLIDADO = "subastas_{aamm}.xlsx"
+HOJA_CONSOLIDADO = "Subastas"
+
+
+def ruta_consolidado(carpeta_subastas, aamm):
+    """<CARPETA_BASE>/Subastas/subastas_AAMM.xlsx"""
+
+    return Path(carpeta_subastas) / PLANTILLA_CONSOLIDADO.format(
+        aamm=_validar_aamm(aamm)
+    )
+
+
 # Las 10 que trae la consulta, mas Hora_PID que se agrega al leer.
 COLUMNAS_CRUDAS = [
     "CONFIGURACIÓN",

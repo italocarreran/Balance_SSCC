@@ -108,3 +108,69 @@ class TestHoraMesSubastas(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSubastasConsolidadas(unittest.TestCase):
+    """Los Access se consolidan afuera (Subastas/subastas_AAMM.xlsx, boton
+    'Consolidar') y la hoja 'Subastas' se lleva de ese archivo."""
+
+    def _crudo(self):
+        return pd.DataFrame({
+            "CONFIGURACIÓN": ["BESS UNO", "BESS UNO", "TERMICA X"],
+            "SERVICIO": ["CSF(+)", "CPF(-)", "CSF(+)"],
+            "AÑO": [2026, 2026, 2026], "MES": [9, 9, 9],
+            "DIA": [6, 6, 6], "HORA": [2, 3, 2], "BANDA": [1, 1, 1],
+            "CANTIDAD MW": [5.0, 3.0, 9.0],
+            "PRECIO USD/MW": [1.0, 1.0, 1.0],
+            "CANTIDAD PONDERADA MW": [5.0, 3.0, 9.0],
+            "Hora_PID": [0, 0, 0],
+        })
+
+    def test_consolidar_escribe_el_archivo_y_la_hoja_sale_de_ahi(self):
+        from unittest import mock
+        from Script.nucleo import traer
+        from Script.Subastas import Ofertas_Adjudicadas as ofertas_adj
+
+        with tempfile.TemporaryDirectory() as carpeta:
+            base = Path(carpeta)
+            for sub in nucleo.SUBCARPETAS_CASO:
+                (base / sub).mkdir(parents=True, exist_ok=True)
+            resumen = {"archivos_leidos": 2, "dias_sin_archivo": []}
+            with mock.patch.object(
+                ofertas_adj, "construir_crudo",
+                lambda *a, **k: (self._crudo(), resumen),
+            ):
+                destino = nucleo.consolidar_subastas(
+                    base, "2609", registrar=lambda *_: None
+                )
+            self.assertEqual(destino.name, "subastas_2609.xlsx")
+            self.assertEqual(destino.parent, base / "Subastas")
+            self.assertEqual(len(pd.read_excel(destino)), 3)
+
+            hoja = nucleo.construir_subastas_desde_consolidado(
+                base / "Subastas", "2609", registrar=lambda *_: None
+            )
+            directo = nucleo.construir_subastas_desde_crudo(
+                self._crudo(), "2609", registrar=lambda *_: None
+            )
+            pd.testing.assert_frame_equal(
+                hoja.reset_index(drop=True), directo.reset_index(drop=True),
+                check_dtype=False,
+            )
+            self.assertEqual(hoja["Configuración"].tolist(), ["BESS UNO"] * 2)
+            # 6-09 hora 2 = Hora_mes 121 (cambio de hora)
+            self.assertEqual(int(hoja["Hora_mes"].iloc[0]), 121)
+
+            # La fila del arbol queda "ok" con el archivo
+            _, filas = nucleo.revisar_estructura(base, "2609")
+            fila = next(f for f in filas if f["id"] == "subastas_xlsx")
+            self.assertEqual(fila["estado"], "ok")
+            self.assertEqual(fila["etiqueta"], "subastas_2609.xlsx")
+
+    def test_sin_consolidado_el_error_dice_que_hay_que_consolidar(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            with self.assertRaises(nucleo.ErrorEntrada) as caso:
+                nucleo.construir_subastas_desde_consolidado(
+                    Path(carpeta), "2609", registrar=lambda *_: None
+                )
+        self.assertIn("Consolidar", str(caso.exception))

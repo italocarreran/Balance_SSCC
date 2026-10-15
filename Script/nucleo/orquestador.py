@@ -48,7 +48,8 @@ from .proceso import generar_consolidado, generar_pagos_bess
 from .medidas_sae import generar_medidas_sae
 from .rutas import validar_aamm
 from .traer import (
-    generar_cmg, generar_fma, traer_csv_cmg, traer_fd, traer_subastas,
+    consolidar_subastas, generar_cmg, generar_fma, traer_csv_cmg, traer_fd,
+    traer_subastas,
 )
 from .utiles import ErrorEntrada
 
@@ -106,6 +107,13 @@ def _correr_traer_subastas(carpeta_base, aamm, secciones, registrar, progreso):
     )
 
 
+def _correr_consolidar_subastas(carpeta_base, aamm, secciones, registrar,
+                                progreso):
+    return consolidar_subastas(
+        carpeta_base, aamm, registrar=registrar, progreso=progreso
+    )
+
+
 def _correr_consolidado(carpeta_base, aamm, secciones, registrar, progreso):
     return generar_consolidado(
         carpeta_base, secciones_activas=set(secciones), aamm=aamm,
@@ -128,6 +136,8 @@ GRUPOS = (
     Grupo("fma", "Salidas de FMA", "fd_fma", _correr_fma),
     Grupo("subastas_db", "Access de subastas", "subastas",
           _correr_traer_subastas),
+    Grupo("subastas_xlsx", "Consolidado de subastas", "subastas",
+          _correr_consolidar_subastas),
     # Los dos escriben el MISMO archivo (una sola planilla), asi que
     # comparten recurso: nunca pueden correr a la vez.
     Grupo(
@@ -186,6 +196,11 @@ TAREAS = (
         "subastas_db", None, "db_subastas",
         (), (), (),
     ),
+    Tarea(
+        "subastas_xlsx", "Consolidar subastas_AAMM.xlsx",
+        "subastas_xlsx", None, "subastas_xlsx",
+        (), ("subastas_db",), (),
+    ),
     # --- Las hojas de entrada de la planilla (en UNA escritura) ------
     Tarea(
         # La foto de Centrales.xlsx dentro de la planilla: es lo unico
@@ -232,7 +247,7 @@ TAREAS = (
         # Ya no lleva FD ni FMA (se aplican en RE545): solo los Access.
         "consolidado:subastas", "hoja 'Subastas'",
         "consolidado", "subastas", "consolidado:subastas",
-        _REQ_CENTRALES, ("subastas_db",), ("consolidado:centrales",),
+        _REQ_CENTRALES, ("subastas_xlsx",), ("consolidado:centrales",),
     ),
     # --- Las hojas de calculo de la planilla (en UNA escritura) ------
     # Ninguna abre un archivo de entrada: todo sale de las hojas de

@@ -166,6 +166,7 @@ from .subastas_accdb import (
     COLUMNA_ENERGIA_SSCC_ACCDB, _control_desde_servicio,
     _sub_baj_desde_servicio, calcular_hora_mes_subastas,
     construir_mapa_propietario, construir_subastas_desde_accdb,
+    construir_subastas_desde_consolidado, construir_subastas_desde_crudo,
 )
 from .fma import (
     CTF_MAS_BUSCA_EN_LAS_DOS_TABLAS, TITULO_BLOQUE_FD,
@@ -247,7 +248,7 @@ from .orquestador import (
 )
 from .traer import (
     barras_desde_resumen_bess, generar_cmg, generar_fma, traer_csv_cmg,
-    traer_fd, traer_subastas,
+    traer_fd, traer_subastas, consolidar_subastas,
 )
 from .medidas_sae import (
     _resumir_diagnostico_medidas, generar_medidas_sae,
@@ -336,7 +337,8 @@ __all__ = [
     "leer_cmg", "leer_fd_consolidado", "COLUMNA_ENERGIA_SSCC_ACCDB",
     "_control_desde_servicio", "_sub_baj_desde_servicio",
     "calcular_hora_mes_subastas", "construir_mapa_propietario",
-    "construir_subastas_desde_accdb", "CTF_MAS_BUSCA_EN_LAS_DOS_TABLAS",
+    "construir_subastas_desde_accdb", "construir_subastas_desde_consolidado",
+    "construir_subastas_desde_crudo", "CTF_MAS_BUSCA_EN_LAS_DOS_TABLAS",
     "TITULO_BLOQUE_FD", "TITULO_BLOQUE_FMA_CPF",
     "VECTOR_PARTICIPACION_CSF_SIN_DATO", "_clave_numerica_o_texto",
     "_dic_desde_tabla", "_numero_o_cero", "calcular_fd_subastas",
@@ -379,6 +381,6 @@ __all__ = [
     "_escribir_encabezados_grupo", "_escribir_tabla_con_titulo",
     "escribir_pagos_bess", "escribir_salida", "generar_consolidado",
     "generar_pagos_bess", "barras_desde_resumen_bess", "generar_cmg",
-    "generar_fma", "traer_csv_cmg", "traer_fd", "traer_subastas",
+    "generar_fma", "traer_csv_cmg", "traer_fd", "traer_subastas", "consolidar_subastas",
     "_resumir_diagnostico_medidas", "generar_medidas_sae",
 ]

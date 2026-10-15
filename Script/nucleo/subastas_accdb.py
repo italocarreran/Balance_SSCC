@@ -157,18 +157,11 @@ def construir_subastas_desde_accdb(
     registrar=print,
 ):
     """
-    Arma la hoja "Subastas" del consolidado (las mismas columnas B:Q
-    que construir_subastas) leyendo los Access de
-    <CARPETA_BASE>/Subastas/DB subastas/ en vez de la planilla 3.
-
-    El filtro es el mismo de siempre: se quedan solo las filas cuya
-    Configuración contiene "BESS" o "SAE".
-
-    La hoja llega hasta "Energía SSCC" (B:O). El FD y el FMA ya NO se
-    escriben aca (eran P y Q): se calculan y se aplican recien en
-    Calculo RE545, desde las hojas 'FD' y 'FMA' de la planilla (ver
-    factores_subastas.py). Asi la hoja trae lo que dice el Access, sin
-    ningun descuento, y no puede haber un FD aplicado dos veces.
+    La hoja "Subastas" leyendo directo los Access de
+    <CARPETA_BASE>/Subastas/DB subastas/. El programa ya no la usa (la
+    hoja sale del consolidado subastas_AAMM.xlsx, ver
+    construir_subastas_desde_consolidado); queda para pruebas y para
+    quien la llame suelta.
     """
 
     try:
@@ -183,6 +176,76 @@ def construir_subastas_desde_accdb(
             f"  [AVISO] sin Access de subastas para el/los dia(s): "
             f"{', '.join(str(d) for d in resumen['dias_sin_archivo'])}"
         )
+
+    return construir_subastas_desde_crudo(
+        df_crudo, aamm, mapa_propietarios=mapa_propietarios,
+        dia_cambio_hora=dia_cambio_hora, registrar=registrar,
+        origen=f"{resumen['archivos_leidos']} Access",
+    )
+
+
+def construir_subastas_desde_consolidado(
+    carpeta_subastas,
+    aamm,
+    mapa_propietarios=None,
+    dia_cambio_hora=None,
+    registrar=print,
+):
+    """
+    La hoja "Subastas" desde Subastas/subastas_AAMM.xlsx (el consolidado
+    de los Access que arma el boton "Consolidar", pedido del usuario:
+    las subastas se consolidan afuera y la hoja se lleva de ahi).
+    """
+
+    ruta = ofertas_adj.ruta_consolidado(carpeta_subastas, aamm)
+    if not ruta.is_file():
+        raise ErrorEntrada(
+            f"No esta {ruta.name} en {ruta.parent}. Consolidalo primero "
+            f"con el boton 'Consolidar' de su fila (necesita los Access "
+            f"del periodo en {ofertas_adj.CARPETA_DB_SUBASTAS}/)."
+        )
+
+    registrar(f"Leyendo {ruta.name}...")
+    try:
+        df_crudo = pd.read_excel(ruta, sheet_name=ofertas_adj.HOJA_CONSOLIDADO)
+    except ValueError:
+        df_crudo = pd.read_excel(ruta)
+
+    faltan = [c for c in ofertas_adj.COLUMNAS_CRUDAS if c not in df_crudo]
+    if faltan:
+        raise ErrorEntrada(
+            f"{ruta.name} no trae la(s) columna(s) {faltan}. Volve a "
+            f"consolidarlo con su boton."
+        )
+
+    return construir_subastas_desde_crudo(
+        df_crudo, aamm, mapa_propietarios=mapa_propietarios,
+        dia_cambio_hora=dia_cambio_hora, registrar=registrar,
+        origen=ruta.name,
+    )
+
+
+def construir_subastas_desde_crudo(
+    df_crudo,
+    aamm,
+    mapa_propietarios=None,
+    dia_cambio_hora=None,
+    registrar=print,
+    origen="los Access",
+):
+    """
+    Del crudo de los Access (COLUMNAS_CRUDAS de Ofertas_Adjudicadas) a
+    la hoja "Subastas" del consolidado.
+
+    El filtro es el mismo de siempre: se quedan solo las filas cuya
+    Configuración contiene "BESS" o "SAE".
+
+    La hoja llega hasta "Energía SSCC". El FD y el FMA NO se escriben
+    aca: se calculan y se aplican recien en Calculo RE545, desde las
+    hojas 'FD' y 'FMA' de la planilla (ver factores_subastas.py). Asi la
+    hoja trae lo que dice el Access, sin ningun descuento, y no puede
+    haber un FD aplicado dos veces.
+    """
 
     # Cambio de hora: el Hora_mes se cuenta correlativo (como Medidores)
     # con los cambios del mes (cambio_hora). Se avisa si algun dia trae
@@ -282,9 +345,8 @@ def construir_subastas_desde_accdb(
         )
 
     registrar(
-        f"  Subastas: {len(df):,} fila(s) desde "
-        f"{resumen['archivos_leidos']} Access (filtro Configuración "
-        f"contiene BESS/SAE), en el orden del origen."
+        f"  Subastas: {len(df):,} fila(s) desde {origen} (filtro "
+        f"Configuración contiene BESS/SAE), en el orden del origen."
     )
 
     return df

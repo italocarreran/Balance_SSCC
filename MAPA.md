@@ -154,6 +154,7 @@ importable como cualquier módulo.
   | `FD y FMA/fma_csf_<AAMM>.xlsx` | **Generar** | `nucleo.generar_fma` con `{"csf"}` — trae los reportes del AGC a `agcface/` y los concatena |
   | `FD y FMA/fma_cft_<AAMM>.xlsx` | **Generar** | `nucleo.generar_fma` con `{"ctf"}` — desde el `CTF_<AAAA><MM>.csv` del DCO |
   | `Subastas/DB subastas/` | **Traer** | `nucleo.traer_subastas` — copia los `OfertasSSCCAdj*.accdb` del período desde la unidad de red |
+  | `Subastas/subastas_AAMM.xlsx` | **Consolidar** | `nucleo.consolidar_subastas` — junta los Access del período (PO + PID desde su hora) en un Excel; la hoja `Subastas` se lleva de ahí |
   | `Balance_BESS.xlsx` | **Actualizar** | las dos mitades de un viaje: `generar_consolidado` con todas las secciones y después `generar_pagos_bess` con todas |
   | `Balance_BESS.xlsx/Centrales` | **Actualizar** | copia `Resumen BESS` y `Diccionario` de `Centrales.xlsx` a la planilla: es lo único que abre ese archivo |
   | cada `hoja '...'` de entrada | **Actualizar** | `generar_consolidado` con esa sola sección |

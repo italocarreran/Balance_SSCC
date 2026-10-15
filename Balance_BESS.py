@@ -897,6 +897,9 @@ def main():
         if id_fila == "db_subastas":
             return ("Traer", traer_subastas)
 
+        if id_fila == "subastas_xlsx":
+            return ("Consolidar", consolidar_subastas)
+
         # Los botones dicen SOLO el verbo (pedido del usuario): de que
         # hoja se trata ya lo dice la fila en la que esta el boton.
         if id_fila == "pagos:compensacion_central":
@@ -1583,6 +1586,31 @@ def main():
             f"{nucleo.CARPETA_DB_SUBASTAS}/",
         )
 
+    def consolidar_subastas():
+        """
+        Junta los Access de Subastas/DB subastas/ en
+        Subastas/subastas_AAMM.xlsx. La hoja 'Subastas' del libro se
+        lleva despues de ahi, con su propio boton.
+        """
+
+        ruta = caso_listo()
+        if ruta is None:
+            return
+
+        aamm = var_aamm.get().strip()
+
+        try:
+            nucleo.validar_aamm(aamm)
+        except nucleo.ErrorEntrada as error:
+            messagebox.showwarning("Falta el periodo", str(error))
+            return
+
+        lanzar(
+            nucleo.consolidar_subastas,
+            dict(carpeta_base=ruta, aamm=aamm),
+            f"subastas_{aamm}.xlsx",
+        )
+
     def generar_cmg():
         """Arma cmg.xlsx con el CSV que ya esta en Cmg/."""
 
@@ -1987,41 +2015,55 @@ def main():
 
         def repintar():
 
-            plan = nucleo.planificar(ruta, aamm, seleccion["ids"])
+            # La lista se arma con el mismo orden y la misma sangria que
+            # el arbol de la ventana principal (pedido del usuario): cada
+            # cosa con boton bajo su carpeta, y las hojas del libro
+            # adentro de Balance_BESS.xlsx, que tiene su propio cuadro
+            # para tildarlas o destildarlas todas juntas.
+            _, filas_arbol = nucleo.revisar_estructura(ruta, aamm)
+            plan = nucleo.planificar(
+                ruta, aamm, seleccion["ids"], filas=filas_arbol
+            )
             estado_plan["plan"] = plan
 
             for hijo in lista.winfo_children():
                 hijo.destroy()
 
+            tarea_de_fila = {}
             for tarea in plan["tareas"]:
+                fila_estado = nucleo.TAREA_POR_ID[tarea["id"]].fila_estado
+                tarea_de_fila.setdefault(fila_estado, tarea)
+
+            seleccionadas = {
+                t["id"] for t in plan["tareas"] if t["seleccionada"]
+            }
+            deshabilitado = "disabled" if corriendo["activo"] else "normal"
+
+            def cambiar(ids, tildar):
+                actual = set(seleccionadas)
+                if tildar:
+                    # Tildar algo arrastra lo que sale de ahi: si no,
+                    # queda mezclado con la corrida anterior.
+                    actual |= nucleo.propagar_seleccion(set(ids))
+                else:
+                    actual -= set(ids)
+                seleccion["ids"] = actual
+                repintar()
+
+            def pintar_tarea(tarea, sangria):
 
                 fila = tk.Frame(lista)
                 fila.pack(fill="x", pady=1)
 
                 var = tk.BooleanVar(value=tarea["seleccionada"])
-
-                def alternar(id_tarea=tarea["id"], var=var):
-                    actual = {
-                        t["id"] for t in estado_plan["plan"]["tareas"]
-                        if t["seleccionada"]
-                    }
-                    if var.get():
-                        # Tildar algo arrastra lo que sale de ahi: si
-                        # no, queda mezclado con la corrida anterior.
-                        actual |= nucleo.propagar_seleccion({id_tarea})
-                    else:
-                        actual.discard(id_tarea)
-                    seleccion["ids"] = actual
-                    repintar()
-
                 tk.Checkbutton(
-                    fila, variable=var, command=alternar,
-                    state="disabled" if corriendo["activo"] else "normal",
-                ).pack(side="left")
+                    fila, variable=var, state=deshabilitado,
+                    command=lambda i=tarea["id"], v=var: cambiar({i}, v.get()),
+                ).pack(side="left", padx=(sangria, 0))
 
                 tk.Label(
-                    fila, text=tarea["etiqueta"], width=44, anchor="w",
-                    font=("Consolas", 9),
+                    fila, text=tarea["etiqueta"], width=44 - sangria // 8,
+                    anchor="w", font=("Consolas", 9),
                 ).pack(side="left")
 
                 color = {
@@ -2046,6 +2088,73 @@ def main():
                     text=(f"falta: {motivo}" if motivo else ""),
                     anchor="w", fg=COLOR_NEUTRO, font=("Segoe UI", 8),
                 ).pack(side="left", fill="x", expand=True)
+
+            def pintar_titulo(texto, sangria):
+                tk.Label(
+                    lista, text=texto, anchor="w",
+                    font=("Segoe UI", 9, "bold"), fg=COLOR_NEUTRO,
+                ).pack(fill="x", padx=(sangria, 0), pady=(6, 0))
+
+            def pintar_libro(etiqueta, hojas):
+                fila = tk.Frame(lista)
+                fila.pack(fill="x", pady=(6, 1))
+                ids = {t["id"] for t in hojas}
+                todas = ids <= seleccionadas
+                var = tk.BooleanVar(value=todas)
+                tk.Checkbutton(
+                    fila, variable=var, state=deshabilitado,
+                    command=lambda v=var: cambiar(ids, v.get()),
+                ).pack(side="left")
+                tildadas = len(ids & seleccionadas)
+                tk.Label(
+                    fila, text=etiqueta, anchor="w",
+                    font=("Segoe UI", 9, "bold"),
+                ).pack(side="left")
+                tk.Label(
+                    fila,
+                    text=f"  {tildadas} de {len(ids)} hoja(s) tildada(s)",
+                    anchor="w", fg=COLOR_NEUTRO, font=("Segoe UI", 8),
+                ).pack(side="left")
+
+            pintadas = set()
+            titulo_pendiente = None
+
+            for fila_arbol in filas_arbol:
+                id_fila = fila_arbol["id"]
+
+                if id_fila == "salida":
+                    hojas = [
+                        tarea_de_fila[f["id"]] for f in filas_arbol
+                        if f["id"] in tarea_de_fila
+                        and f["id"].split(":", 1)[0] in ("consolidado", "pagos")
+                    ]
+                    if hojas:
+                        pintar_libro(fila_arbol["etiqueta"], hojas)
+                    titulo_pendiente = None
+                    continue
+
+                if fila_arbol["nivel"] == 0:
+                    # Una carpeta: se escribe solo si tiene algo con
+                    # boton adentro.
+                    titulo_pendiente = fila_arbol["etiqueta"]
+                    continue
+
+                tarea = tarea_de_fila.get(id_fila)
+                if tarea is None or tarea["id"] in pintadas:
+                    continue
+
+                if titulo_pendiente:
+                    pintar_titulo(titulo_pendiente, 0)
+                    titulo_pendiente = None
+
+                pintar_tarea(tarea, 20 * fila_arbol["nivel"])
+                pintadas.add(tarea["id"])
+
+            # Lo que no tenga fila en el arbol (no deberia pasar): al
+            # final, para que nunca quede una tarea sin mostrar.
+            for tarea in plan["tareas"]:
+                if tarea["id"] not in pintadas:
+                    pintar_tarea(tarea, 0)
 
             txt_avisos.delete("1.0", "end")
 
