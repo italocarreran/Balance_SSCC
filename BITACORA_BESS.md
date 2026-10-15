@@ -4676,3 +4676,33 @@ del resumen dice el cambio del mes y qué hora no se exige.
 pruebas, 13 salteadas (tkinter). **La ventana no se probó**: en esta
 máquina no hay tkinter; falta abrirla en Windows y mirar la línea nueva con
 2609, 2604 y 2607.
+
+## 2026-10-15 (4) — Medidores: faltaba la hora 24 del 5-09 y del 6-09
+
+Reporte del usuario: en la hoja `Medidores` de septiembre falta la hora 24
+del día 5 y del 6. Las dos salían de `Claves_Balance` (de ahí viene `Hora`
+de `Medidas_SAE.xlsx` → `Medidores`):
+
+1. **6-09 numerado 1..23.** `construir_calendario()` contaba las horas del
+   día (`cumcount // 4 + 1`): el día de 23 horas empezaba en la 01:00 con
+   `Hora = 1` y terminaba en la 23. Ofertas SSCC, Subastas y FMA usan el
+   periodo de la hora local (00:00 = 1 … 23:00 = 24), donde ese día no
+   existe la 1. Ahora `Hora = hora local + 1`: el 6-09 va de 2 a 24. En
+   abril la hora local que se repite (23:00 del sábado) toma 24 la primera
+   vez y 25 la segunda, igual que antes y que la planilla.
+2. **5-09 sin la 24 cuando los valores venían en la hora que no existe.**
+   `descartar_hora_inexistente()` deja, por cada UTC repetido, la hora local
+   con más valores; si ganaba la falsa (00:xx del 6-09), se quedaba con esa
+   etiqueta y el 5-09 perdía sus 23:xx (y el SoC de las 23:xx no cruzaba).
+   Ahora conserva esos valores pero con la hora local que sí existió (la
+   más temprana del par, que es la del UTC).
+
+Sigue sin fechas fijas: todo sale de la descarga. **Hay que volver a
+generar `Medidas_SAE.xlsx` y después `Medidores`** para que el libro tome
+el cambio. `Hora Mes` (cuartos acumulados / 4) no se tocó.
+
+**Verificación:** `tests/test_claves_balance.py` +2 pruebas (5-09 1..24
+con valor en la 24 y 6-09 2..24, ganen los valores la hora real o la
+falsa; abril 1..25). Reproducidos los dos síntomas con el código anterior.
+238 pruebas, 13 salteadas (tkinter). **Sin datos reales de septiembre en
+el contenedor**: confirmar en el libro del usuario.

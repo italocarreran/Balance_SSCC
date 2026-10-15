@@ -138,6 +138,11 @@ def descartar_hora_inexistente(df):
          hora que no existe (p. ej. 00:00-00:59) el UTC de la hora
          anterior al salto (23:00-23:59), que es la que si existio.
 
+    Si gana la hora que no existe (es la que trae los valores), sus
+    filas se quedan pero con la hora local de la que si existio: el
+    UTC es el de esa hora, y con la etiqueta falsa el dia anterior
+    perdia su hora 24.
+
     En abril (se repite la hora LOCAL pero no la UTC) y en los meses
     normales no se descarta nada. Tambien se sacan las filas sin
     `intervaloUtc`.
@@ -180,8 +185,16 @@ def descartar_hora_inexistente(df):
     sobra = pd.MultiIndex.from_frame(df[claves]).isin(
         pd.MultiIndex.from_frame(sobran[claves])
     )
+    descartadas = pd.concat([descartadas, df[sobra]])
+    df = df[~sobra].copy()
 
-    return df[~sobra], pd.concat([descartadas, df[sobra]])
+    # La hora que existio es la mas temprana de cada UTC repetido.
+    hora_real = dudosos.groupby(COL_INTERVALO_UTC)[COL_INTERVALO_LOCAL].min()
+    real = df[COL_INTERVALO_UTC].map(hora_real)
+    reetiquetar = real.notna() & real.ne(df[COL_INTERVALO_LOCAL])
+    df.loc[reetiquetar, COL_INTERVALO_LOCAL] = real[reetiquetar]
+
+    return df, descartadas
 
 
 COLUMNAS_HUECOS = [
@@ -308,9 +321,17 @@ def construir_calendario(df):
     el balance.
 
     Devuelve un DataFrame con intervalo, intervaloUtc, Cuarto de Hora,
-    Mes, Dia, Hora, Minutos y Hora Mes. `Hora` se cuenta dentro del
-    dia local, asi que en un dia de cambio de hora llega a 23 o a 25 en
-    vez de a 24 -- igual que en la planilla.
+    Mes, Dia, Hora, Minutos y Hora Mes.
+
+    `Hora` es el periodo de la hora LOCAL (00:00-00:59 = 1 ... 23:00-
+    23:59 = 24), el mismo que usan Ofertas SSCC, Subastas y FMA:
+
+      - el dia que se adelanta la hora (septiembre) no hay hora 1: van
+        de la 2 a la 24. Antes se contaban las horas del dia y salian
+        1..23, corridas una hora y sin la 24;
+      - el dia que se atrasa (abril) la hora local que se repite toma
+        la primera vez su periodo y la segunda 25, 26... -- igual que
+        en la planilla, que llega a 25.
     """
 
     cal = (
@@ -342,8 +363,25 @@ def construir_calendario(df):
     cal["Dia"] = cal[COL_INTERVALO_LOCAL].dt.day
     cal["Minutos"] = cal[COL_INTERVALO_LOCAL].dt.minute
 
-    cal["QH_Dia"] = cal.groupby("Fecha_Local").cumcount() + 1
-    cal["Hora"] = ((cal["QH_Dia"] - 1) // 4) + 1
+    cal["Hora"] = (cal[COL_INTERVALO_LOCAL].dt.hour + 1).astype("int64")
+    # Una hora local que vuelve a aparecer con otro UTC (abril) es una
+    # hora de mas del dia: se numera despues de la 24.
+    inicio_hora = cal[COL_INTERVALO_LOCAL].dt.floor("h")
+    hora_utc = cal[COL_INTERVALO_UTC].dt.floor("h")
+    vez = (
+        pd.DataFrame({"local": inicio_hora, "utc": hora_utc})
+        .groupby("local")["utc"].rank(method="dense").astype(int)
+    )
+    repetida = vez.gt(1)
+    if repetida.any():
+        extra = (
+            pd.DataFrame({
+                "fecha": cal.loc[repetida, "Fecha_Local"],
+                "utc": hora_utc[repetida],
+            })
+            .groupby("fecha")["utc"].rank(method="dense").astype(int)
+        )
+        cal.loc[repetida, "Hora"] = 24 + extra
 
     return cal[
         [

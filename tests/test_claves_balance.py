@@ -185,6 +185,51 @@ class TestCambioDeHora(unittest.TestCase):
         self.assertTrue(diagnostico["incompletos"].empty)
         self.assertEqual(diagnostico["cuartos_esperados"], 2876)
 
+    def test_hora_del_dia_en_el_cambio_de_hora(self):
+        """Medidores!Hora: el 5-09 llega a la 24 y el 6-09 va de 2 a 24.
+
+        Antes el 6-09 salia 1..23 (se contaban las horas del dia) y, si
+        los valores venian en la hora que no existe, el 5-09 perdia su
+        hora 24.
+        """
+
+        def horas(salida, dia):
+            del_dia = salida[(salida["clave"] == "A") & (salida["Dia"] == dia)]
+            return sorted(del_dia["Hora"].unique()), del_dia
+
+        for real_con_valor in (True, False):
+            with self.subTest(real_con_valor=real_con_valor):
+                salida, _, _ = self.correr(descarga(
+                    "2026-09-01", "2026-10-01", "2026-09-06 00:00",
+                    real_con_valor=real_con_valor,
+                ))
+                h5, dia5 = horas(salida, 5)
+                h6, dia6 = horas(salida, 6)
+                self.assertEqual(h5, list(range(1, 25)))
+                self.assertEqual(h6, list(range(2, 25)))
+                # la hora 24 del 5-09 es la de las 23:00 y trae su valor
+                ultima = dia5[dia5["Hora"] == 24]
+                self.assertEqual(
+                    ultima["intervalo"].min(), pd.Timestamp("2026-09-05 23:00")
+                )
+                self.assertEqual(len(ultima), 4)
+                self.assertTrue((ultima["Gen_Unidad"] != 0).all())
+                self.assertEqual(len(dia6), 23 * 4)
+
+    def test_hora_del_dia_en_abril_llega_a_25(self):
+        salida, _, _ = self.correr(descarga(
+            "2026-04-01", "2026-05-01", "2026-04-05 00:00",
+            ofset_antes=-3, ofset_despues=-4,
+        ))
+        del_dia = salida[(salida["clave"] == "A") & (salida["Dia"] == 4)]
+        self.assertEqual(sorted(del_dia["Hora"].unique()), list(range(1, 26)))
+        # la segunda vez de las 23:00 es la 25, la primera la 24
+        segunda = del_dia[del_dia["Hora"] == 25]
+        self.assertEqual(len(segunda), 4)
+        self.assertTrue(
+            (segunda["intervalo"].dt.hour == 23).all()
+        )
+
     def test_mes_a_medio_publicar_se_genera_igual(self):
         # Antes: error "no quedo ningun registro principal". Ahora los
         # puntos incompletos entran con lo que traen, y el hueco queda
