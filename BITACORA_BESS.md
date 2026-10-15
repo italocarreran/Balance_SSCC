@@ -4706,3 +4706,31 @@ con valor en la 24 y 6-09 2..24, ganen los valores la hora real o la
 falsa; abril 1..25). Reproducidos los dos síntomas con el código anterior.
 238 pruebas, 13 salteadas (tkinter). **Sin datos reales de septiembre en
 el contenedor**: confirmar en el libro del usuario.
+
+## 2026-10-15 (5) — SoC en los días de cambio de hora
+
+Pedido del usuario: verificar que el SoC no tenga problemas con el cambio
+de hora. El SoC del SCADA viene en hora local sin zona y se cruza con
+Medidores por `clave + intervalo` (`construir_medidores`).
+
+- **Septiembre:** con el arreglo de la entrada (4) cruza completo: el 5-09
+  tiene las 23:xx con su SoC y el 6-09 empieza en la 01:00, como el SCADA.
+  Con el código anterior (si los valores venían en la hora que no existe)
+  quedaban 4 cuartos sin SoC por central (00:xx del 6-09, aviso "4 de
+  2,876 intervalos sin SoC") y el SoC de las 23:xx del 5-09 no se usaba.
+- **Abril (ya existía, arreglado):** (1) Medidores se ordenaba por
+  `clave, intervalo` (hora local) y la hora repetida quedaba intercalada
+  24, 25, 24, 25…; las columnas recursivas (Ventana, ciclos) dependen del
+  orden. Ahora se ordena por `clave, Cuarto de Hora` (numerado en UTC).
+  (2) Las dos pasadas de las 23:xx tomaban el mismo SoC (el último del
+  SCADA). Ahora, si el SCADA trae la hora dos veces, la primera pasada va
+  con la primera y la segunda con la segunda; si la trae una vez, las dos
+  usan ese valor. El aviso de timestamps duplicados de `extraer_soc` dice
+  que en abril los de la hora repetida son normales.
+
+**Supuesto sin confirmar:** cómo trae el SCADA real la hora repetida de
+abril (una o dos veces) y si en septiembre salta la 00:xx. Cubiertos los
+dos casos.
+
+**Verificación:** `tests/test_soc_cambio_hora.py` (nuevo, 3 pruebas). 241
+pruebas, 13 salteadas (tkinter).

@@ -295,7 +295,8 @@ def extraer_soc(ruta_soc, mapa_homologacion=None):
         if duplicados:
             incidencias.append(
                 f"{nombre_origen}: {duplicados} timestamps "
-                f"duplicados."
+                f"duplicados (en abril, los de la hora que se repite "
+                f"por el cambio de hora son normales)."
             )
 
         sub["central"] = canonico

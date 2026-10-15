@@ -142,9 +142,14 @@ def construir_medidores(
     # --------------------------------------------------------
 
     # Excel trae los datos ordenados por central y tiempo, y las
-    # columnas recursivas dependen de ese orden.
+    # columnas recursivas dependen de ese orden. El tiempo es el
+    # "Cuarto de Hora" (numerado en UTC): por la hora local, la hora
+    # que se repite en abril quedaba intercalada (24, 25, 24, 25...).
+    orden_tiempo = (
+        "Cuarto de Hora" if "Cuarto de Hora" in df.columns else "intervalo"
+    )
     df = (
-        df.sort_values(["clave", "intervalo"])
+        df.sort_values(["clave", orden_tiempo, "intervalo"], kind="stable")
         .reset_index(drop=True)
     )
 
@@ -168,26 +173,33 @@ def construir_medidores(
 
     soc["timestamp"] = pd.to_datetime(soc["timestamp"])
 
-    soc = (
-        soc
-        .dropna(subset=["timestamp"])
-        .drop_duplicates(
-            subset=["central", "timestamp"],
-            keep="last",
-        )
+    soc = soc.dropna(subset=["timestamp"])
+
+    # El SCADA trae la hora LOCAL sin zona. En abril la hora que se
+    # repite (23:xx del sabado) puede venir dos veces: la primera vez
+    # va con la primera pasada de Medidores y la segunda con la
+    # segunda. Si el SCADA la trae una sola vez, las dos pasadas usan
+    # ese valor. Un mismo timestamp repetido por un error del archivo
+    # (no por el cambio de hora) se sigue avisando en extraer_soc().
+    soc["_vez"] = soc.groupby(["central", "timestamp"]).cumcount()
+    df["_vez"] = df.groupby(["clave", "intervalo"]).cumcount()
+
+    soc_cruce = soc.rename(
+        columns={"central": "clave", "timestamp": "intervalo", "soc": "SoC"}
+    )
+    por_vez = soc_cruce[["clave", "intervalo", "_vez", "SoC"]]
+    unico = (
+        soc_cruce.drop_duplicates(subset=["clave", "intervalo"], keep="last")
+        [["clave", "intervalo", "SoC"]]
+        .rename(columns={"SoC": "_soc_unico"})
     )
 
-    df = df.merge(
-        soc[["central", "timestamp", "soc"]].rename(
-            columns={
-                "central": "clave",
-                "timestamp": "intervalo",
-                "soc": "SoC",
-            }
-        ),
-        on=["clave", "intervalo"],
-        how="left",
+    df = (
+        df.merge(por_vez, on=["clave", "intervalo", "_vez"], how="left")
+        .merge(unico, on=["clave", "intervalo"], how="left")
     )
+    df["SoC"] = df["SoC"].fillna(df["_soc_unico"])
+    df = df.drop(columns=["_vez", "_soc_unico"])
 
     # Reporte de cobertura
     centrales_sae = set(df["clave"].unique())
