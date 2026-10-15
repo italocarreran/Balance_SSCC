@@ -13,7 +13,7 @@ que revisar 100.000 filas obligaba a formatear a mano cada vez que se
 regeneraba el libro.
 """
 
-from openpyxl.styles import Alignment, Font
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 
@@ -37,6 +37,18 @@ FILAS_MUESTRA = 200
 # tenga que tocar -- si lo toca, el libro sale igual, solo que sin
 # separador de miles.
 MAXIMO_CELDAS_FORMATO = 8_000_000
+
+# Encabezados: "Azul, Enfasis 1, Oscuro 50%" de Excel, letra blanca en
+# negrita (pedido del usuario, para todas las hojas). Cada tabla va
+# con su contorno enmarcado (borde fino), asi dos tablas de una misma hoja (CSF y CPF
+# en FD, los cuadros de PRORRATA_RETIROS...) se distinguen solas.
+COLOR_ENCABEZADO = "244062"
+RELLENO_ENCABEZADO = PatternFill(
+    fill_type="solid", start_color=COLOR_ENCABEZADO, end_color=COLOR_ENCABEZADO
+)
+LETRA_ENCABEZADO = Font(bold=True, color="FFFFFF")
+_LINEA = Side(style="thin", color="808080")
+BORDE = Border(left=_LINEA, right=_LINEA, top=_LINEA, bottom=_LINEA)
 
 FORMATO_ENTERO = "#,##0"
 FORMATO_DECIMAL = "#,##0.00"
@@ -110,7 +122,10 @@ def formatear_hoja(ws, fila_encabezado=1):
     Deja una hoja lista para leer:
 
       - las filas 1..fila_encabezado (titulos de cuadro, encabezados
-        de grupo y nombres de columna) en negrita y centradas;
+        de grupo y nombres de columna) con fondo azul oscuro (#244062),
+        letra blanca en negrita y centradas;
+      - el contorno de cada tabla enmarcado (borde fino), hasta su
+        ultima fila;
       - panel inmovilizado justo debajo del encabezado, para que los
         nombres de columna sigan a la vista al bajar;
       - ancho de columna segun lo que realmente hay adentro;
@@ -129,14 +144,35 @@ def formatear_hoja(ws, fila_encabezado=1):
         # Hoja vacia o sin filas de datos: no hay nada que ordenar.
         return
 
+    # Las columnas de las tablas: las que traen nombre en la fila de
+    # encabezado. Una columna sin nombre es la separacion entre dos
+    # tablas y no se pinta ni se enmarca.
+    columnas_tabla = [
+        celda.column
+        for celda in ws[fila_encabezado]
+        if celda.value is not None and str(celda.value).strip() != ""
+    ]
+
+    combinadas = set()
+    for rango in ws.merged_cells.ranges:
+        for fila in range(rango.min_row, rango.max_row + 1):
+            for columna in range(rango.min_col, rango.max_col + 1):
+                combinadas.add((fila, columna))
+
     for fila in ws.iter_rows(min_row=1, max_row=fila_encabezado):
         for celda in fila:
-            if celda.value is None:
-                # Tambien son las celdas "de adentro" de un merge, que
-                # no aceptan estilo.
+            en_combinada = (celda.row, celda.column) in combinadas
+            if celda.value is None and not en_combinada:
                 continue
-            celda.font = Font(bold=True)
-            celda.alignment = Alignment(horizontal="center", vertical="center")
+            if celda.value is not None:
+                celda.font = LETRA_ENCABEZADO
+                celda.alignment = Alignment(
+                    horizontal="center", vertical="center", wrap_text=True
+                )
+            # El titulo de un cuadro o de un grupo (filas de arriba) se
+            # pinta igual, combinado o no.
+            celda.fill = RELLENO_ENCABEZADO
+            celda.border = BORDE
 
     ws.freeze_panes = ws.cell(row=fila_encabezado + 1, column=1)
 
@@ -178,22 +214,63 @@ def formatear_hoja(ws, fila_encabezado=1):
         if formato:
             formatos[indice + 1] = formato
 
-    if not formatos:
+    if not columnas_tabla:
         return
 
-    celdas = (ws.max_row - fila_encabezado) * len(formatos)
+    celdas = (ws.max_row - fila_encabezado) * len(columnas_tabla)
     if celdas > MAXIMO_CELDAS_FORMATO:
         return
 
+    # Una pasada por los datos: formato de numero y, para el marco, la
+    # ultima fila con dato de cada tabla (las tablas de una hoja tienen
+    # distinto largo; la corta no se enmarca hasta el fondo de la larga).
+    tabla_de = _tablas_contiguas(columnas_tabla)
+    ultima_de_tabla = {}
     for fila in ws.iter_rows(
         min_row=primera_fila_datos,
-        min_col=min(formatos),
-        max_col=max(formatos),
+        min_col=min(columnas_tabla),
+        max_col=max(columnas_tabla),
     ):
         for celda in fila:
+            if celda.value is None:
+                continue
             formato = formatos.get(celda.column)
-            if formato and celda.value is not None:
+            if formato:
                 celda.number_format = formato
+            tabla = tabla_de.get(celda.column)
+            if tabla is not None:
+                ultima_de_tabla[tabla] = celda.row
+
+    # Solo el contorno de cada tabla: enmarcar celda por celda multiplica
+    # por diez el tiempo de una hoja grande (medido: 3 s -> 28 s en
+    # 30.000 x 60), y el contorno ya separa una tabla de la otra.
+    for tabla, ultima in ultima_de_tabla.items():
+        columnas = [c for c, t in tabla_de.items() if t == tabla]
+        izquierda, derecha = min(columnas), max(columnas)
+        for fila in range(primera_fila_datos, ultima + 1):
+            for columna in {izquierda, derecha}:
+                celda = ws.cell(row=fila, column=columna)
+                celda.border = Border(
+                    left=_LINEA if columna == izquierda else None,
+                    right=_LINEA if columna == derecha else None,
+                    bottom=_LINEA if fila == ultima else None,
+                )
+        for columna in range(izquierda + 1, derecha):
+            ws.cell(row=ultima, column=columna).border = Border(bottom=_LINEA)
+
+
+def _tablas_contiguas(columnas):
+    """{columna: numero de tabla}: columnas seguidas son una tabla."""
+
+    tabla_de = {}
+    tabla = -1
+    anterior = None
+    for columna in sorted(columnas):
+        if anterior is None or columna != anterior + 1:
+            tabla += 1
+        tabla_de[columna] = tabla
+        anterior = columna
+    return tabla_de
 
 
 def formatear_libro(wb, filas_encabezado=None):

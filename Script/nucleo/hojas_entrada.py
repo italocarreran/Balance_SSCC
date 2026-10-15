@@ -6,6 +6,7 @@ Hojas CMg, FD y Subastas del consolidado.
 import pandas as pd
 from pathlib import Path
 
+from .cambio_hora import cambios_de_hora
 from .parametros import (
     COLUMNA_CENTRAL, HOJA_CMG_ORIGEN, HOJA_CPF_HORARIO, HOJA_CSF_HORARIO,
 )
@@ -65,6 +66,81 @@ def _dia_hora_mes_fd(columna_fecha, columna_hora):
     ajuste_dia_mayor_100 = (dia > 100).astype("Int64")
 
     return (dia - 1) * 24 + hora + 1 + ajuste_dia_mayor_100
+
+
+def _hora_mes_fd_correlativa(columna_fecha, columna_hora):
+    """
+    Hora Mes de FD contada igual que la de Medidores: la hora del mes,
+    correlativa, aunque un dia tenga 23 o 25 horas.
+
+    La formula del Excel ((dia-1)*24 + hora + 1) supone dias de 24
+    horas: el dia que se adelanta la hora (septiembre) deja desde ahi
+    el FD una hora adelante de Medidores, y el que se atrasa (abril)
+    una hora atras. E Costos busca el FD por Hora Mes + Unidad, asi
+    que todo el resto del mes cruzaba la hora equivocada.
+
+    Las horas del FD van de 0 a 23 (periodo = hora + 1); en abril el
+    sabado del cambio llega a la 24 (periodo 25). La hora que no existe
+    (la 0 del dia que se adelanta) queda sin Hora Mes: no corresponde a
+    ninguna hora de Medidores.
+    """
+
+    fecha = pd.to_datetime(columna_fecha, errors="coerce")
+    periodo = pd.to_numeric(columna_hora, errors="coerce") + 1
+    base = (fecha.dt.day - 1) * 24 + periodo
+
+    resultado = base.astype("Float64")
+    meses = {
+        (int(f.year), int(f.month)) for f in fecha.dropna()
+    }
+    for anio, mes in meses:
+        for cambio in cambios_de_hora(anio, mes):
+            dia_cambio = pd.Timestamp(cambio.fecha)
+            del_mes = (fecha.dt.year == anio) & (fecha.dt.month == mes)
+            despues = del_mes & (fecha.dt.normalize() > dia_cambio)
+            mismo_dia = del_mes & (fecha.dt.normalize() == dia_cambio)
+            for q in cambio.periodos_inexistentes:
+                resultado = resultado.where(
+                    ~(despues | (mismo_dia & (periodo > q))), resultado - 1
+                )
+                resultado = resultado.mask(mismo_dia & (periodo == q))
+            if cambio.periodos_repetidos:
+                resultado = resultado.where(
+                    ~despues, resultado + len(cambio.periodos_repetidos)
+                )
+    return resultado.round().astype("Int64")
+
+
+def _poner_en_cero_hora_inexistente(df, columna_hora_mes, columna_fecha,
+                                    columnas_valor):
+    """La hora que no existe (sin Hora Mes) queda con sus valores en 0.
+
+    El FD la trae ("No participó", y alguna unidad con valores): se
+    descarta lo que traiga y se deja en 0, pedido del usuario. Devuelve
+    (df, filas, filas que traian algun valor distinto de 0).
+    """
+
+    inexistente = (
+        df[columna_hora_mes].isna()
+        & pd.to_datetime(df[columna_fecha], errors="coerce").notna()
+    )
+    if not inexistente.any():
+        return df, 0, 0
+
+    numeros = df.loc[inexistente, columnas_valor].apply(
+        pd.to_numeric, errors="coerce"
+    )
+    con_valor = int(numeros.fillna(0).ne(0).any(axis=1).sum())
+    df[columnas_valor] = df[columnas_valor].astype(object)
+    df.loc[inexistente, columnas_valor] = 0
+    return df, int(inexistente.sum()), con_valor
+
+
+def _id_fd(hora_mes, unidad):
+    """Hora Mes & Unidad; vacio si la fila no tiene Hora Mes."""
+
+    texto = hora_mes.astype("Int64").astype(str) + unidad.map(_texto_seguro)
+    return texto.where(hora_mes.notna(), "")
 
 
 # --------------------------------------------------------------
@@ -196,15 +272,16 @@ def _construir_bloque_fd_csf(df_filtrado):
     df.columns = ["D", "E", "F", "G", "H", "I", "J"]
     df = df.reset_index(drop=True)
 
-    df["B"] = _dia_hora_mes_fd(df["D"], df["E"])
+    df["B"] = _hora_mes_fd_correlativa(df["D"], df["E"])
     df["C"] = pd.to_datetime(df["D"], errors="coerce").dt.day
-    df["A"] = (
-        df["B"].astype("Int64").astype(str)
-        + df["F"].map(_texto_seguro)
-    )
+    df["A"] = _id_fd(df["B"], df["F"])
     df["K"] = df["J"]
     df["L"] = df["K"]
     df["M"] = df["B"]
+    df, filas, con_valor = _poner_en_cero_hora_inexistente(
+        df, "B", "D", list("GHIJKL")
+    )
+    df.attrs["hora_inexistente"] = (filas, con_valor)
 
     df = df[list("ABCDEFGHIJKLM")]
 
@@ -226,15 +303,16 @@ def _construir_bloque_fd_cpf(df_filtrado):
     df.columns = ["T", "U", "V", "W", "X", "Y", "Z", "AA", "AB"]
     df = df.reset_index(drop=True)
 
-    df["R"] = _dia_hora_mes_fd(df["T"], df["U"])
+    df["R"] = _hora_mes_fd_correlativa(df["T"], df["U"])
     df["S"] = pd.to_datetime(df["T"], errors="coerce").dt.day
-    df["Q"] = (
-        df["R"].astype("Int64").astype(str)
-        + df["V"].map(_texto_seguro)
-    )
+    df["Q"] = _id_fd(df["R"], df["V"])
     df["AC"] = df["AA"]
     df["AD"] = df["AC"]
     df["AE"] = df["R"]
+    df, filas, con_valor = _poner_en_cero_hora_inexistente(
+        df, "R", "T", ["W", "X", "Y", "Z", "AA", "AC", "AD"]
+    )
+    df.attrs["hora_inexistente"] = (filas, con_valor)
 
     df = df[list("QRSTUVWXYZ") + ["AA", "AB", "AC", "AD", "AE"]]
 
@@ -289,6 +367,18 @@ def construir_fd(ruta_sscc, registrar=print):
 
     df_csf = _construir_bloque_fd_csf(filtrado_csf)
     df_cpf = _construir_bloque_fd_cpf(filtrado_cpf)
+
+    for nombre, df in (("CSF", df_csf), ("CPF", df_cpf)):
+        filas, con_valor = df.attrs.get("hora_inexistente", (0, 0))
+        if filas:
+            registrar(
+                f"  FD {nombre}: {filas:,} fila(s) en la hora que no existe "
+                f"por el cambio de hora; quedan en 0 y sin Hora Mes"
+                + (
+                    f" ({con_valor:,} traian valores y se descartaron)."
+                    if con_valor else "."
+                )
+            )
 
     registrar(
         f"  FD: {len(df_csf):,} fila(s) CSF Horario, "
@@ -423,8 +513,47 @@ def leer_cmg_consolidado(ruta_consolidado, registrar=print, libro=None):
 
 
 # La hoja 'FD' del consolidado: los dos bloques quedan separados por
-# columnas vacias (escritura.py escribe el CSF en A y el CPF en Q).
+# una columna vacia. En la hoja NO van las columnas auxiliares (el "id"
+# = Hora Mes & Unidad, y la copia de "Hora Mes" del final de cada
+# bloque, antes A, M, Q y AE): se reponen al leer, asi que el calculo
+# sigue viendo los mismos bloques. 'Central' queda al final.
 HOJA_FD_CONSOLIDADO = "FD"
+
+
+def fd_para_hoja(df_fd):
+    """El bloque FD como va en la hoja: sin 'id' ni la copia de Hora Mes."""
+
+    if df_fd is None:
+        return None
+    if len(df_fd.columns) == 0 or df_fd.columns[0] != "id":
+        return df_fd
+    nombres = list(df_fd.columns)
+    # La copia de "Hora Mes" es la segunda aparicion del nombre.
+    copia = [i for i, n in enumerate(nombres) if n == "Hora Mes"][1:]
+    quedan = [i for i in range(1, len(nombres)) if i not in copia]
+    return df_fd.iloc[:, quedan]
+
+
+def _reponer_auxiliares_fd(bloque, nombres_completos, con_central):
+    """De un bloque compacto (sin id ni copia) al bloque completo."""
+
+    hora_mes = pd.to_numeric(bloque["Hora Mes"], errors="coerce")
+    completo = pd.DataFrame(index=bloque.index)
+    completo["id"] = _id_fd(hora_mes, bloque["Unidad"])
+    for nombre in bloque.columns:
+        if nombre == COLUMNA_CENTRAL:
+            continue
+        completo[nombre] = bloque[nombre]
+    columnas = list(completo.columns) + ["Hora Mes (copia)"]
+    completo = pd.concat(
+        [completo, bloque["Hora Mes"].rename("Hora Mes (copia)")], axis=1
+    ).set_axis(columnas, axis=1)
+    if con_central:
+        completo[COLUMNA_CENTRAL] = bloque[COLUMNA_CENTRAL]
+    return completo.set_axis(
+        nombres_completos + ([COLUMNA_CENTRAL] if con_central else []),
+        axis=1,
+    )
 
 
 def _bloques_de_columnas(df):
@@ -499,9 +628,15 @@ def leer_fd_consolidado(ruta_consolidado, registrar=print, libro=None):
         if len(columnas) > 1
     ]
 
+    # Dos formas de bloque: la de antes (con 'id' y la copia de Hora
+    # Mes, empieza con "id") y la actual (sin las dos, empieza con
+    # "Hora Mes"). Un CSF de antes y un CPF de ahora tienen el mismo
+    # largo: se distinguen por la primera columna.
     esperados = {
-        len(NOMBRES_FD_CSF): ("csf", NOMBRES_FD_CSF),
-        len(NOMBRES_FD_CPF): ("cpf", NOMBRES_FD_CPF),
+        ("id", len(NOMBRES_FD_CSF)): ("csf", NOMBRES_FD_CSF, False),
+        ("id", len(NOMBRES_FD_CPF)): ("cpf", NOMBRES_FD_CPF, False),
+        ("Hora Mes", len(NOMBRES_FD_CSF) - 2): ("csf", NOMBRES_FD_CSF, True),
+        ("Hora Mes", len(NOMBRES_FD_CPF) - 2): ("cpf", NOMBRES_FD_CPF, True),
     }
 
     encontrados = {}
@@ -515,19 +650,25 @@ def leer_fd_consolidado(ruta_consolidado, registrar=print, libro=None):
         con_central = (
             _texto_seguro(crudo.iloc[0, columnas[-1]]) == COLUMNA_CENTRAL
         )
-        esperado = esperados.get(len(columnas) - int(con_central))
+        primera = _texto_seguro(crudo.iloc[0, columnas[0]])
+        esperado = esperados.get((primera, len(columnas) - int(con_central)))
 
         if esperado is None:
             continue
 
-        tipo, nombres = esperado
+        tipo, nombres, compacto = esperado
 
         if tipo in encontrados:
             continue
 
-        nombres = list(nombres.values()) + (
+        nombres_completos = list(nombres.values())
+        nombres = nombres_completos + (
             [COLUMNA_CENTRAL] if con_central else []
         )
+        if compacto:
+            nombres = [
+                _texto_seguro(crudo.iloc[0, c]) for c in columnas
+            ]
 
         bloque = crudo.iloc[1:, columnas].reset_index(drop=True)
 
@@ -541,7 +682,12 @@ def leer_fd_consolidado(ruta_consolidado, registrar=print, libro=None):
             if pd.notna(ultima) else bloque.iloc[:0]
         )
 
-        encontrados[tipo] = bloque.set_axis(nombres, axis=1)
+        bloque = bloque.set_axis(nombres, axis=1)
+        if compacto:
+            bloque = _reponer_auxiliares_fd(
+                bloque, nombres_completos, con_central
+            )
+        encontrados[tipo] = bloque
 
     faltan = [t for t in ("csf", "cpf") if t not in encontrados]
 
@@ -550,7 +696,8 @@ def leer_fd_consolidado(ruta_consolidado, registrar=print, libro=None):
             f"La hoja '{HOJA_FD_CONSOLIDADO}' de "
             f"{ruta_consolidado.name} no trae el/los bloque(s) "
             f"{[t.upper() for t in faltan]} (se esperaban dos bloques de "
-            f"{len(NOMBRES_FD_CSF)} y {len(NOMBRES_FD_CPF)} columnas, "
+            f"{len(NOMBRES_FD_CSF) - 2} y {len(NOMBRES_FD_CPF) - 2} columnas "
+            f"mas 'Central', "
             f"separados por columnas vacias; se encontraron bloques de "
             f"{[len(c) for c in bloques]} columnas). Volve a generar la "
             f"hoja 'FD' con su boton 'Actualizar'."

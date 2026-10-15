@@ -4771,3 +4771,47 @@ traía valores; abril con hora 25 sin cambios; FECHA y Año con formato `0`.
 Corrido además `generar_cmg` sobre un caso sintético. 246 pruebas, 13
 salteadas (tkinter). **Hay que regenerar `cmg.xlsx` y la hoja `CMg`** (y
 después E Costos / RE545) de septiembre.
+
+## 2026-10-15 (7) — Hoja FD ordenada, encabezados con color y FD en el cambio de hora
+
+Pedido del usuario: (1) ordenar la hoja FD, quitar las auxiliares (A, M,
+N, Q, AE, AF), separar bien las tablas CSF y CPF; (2) en **todas** las hojas,
+encabezados "Azul, Énfasis 1, Oscuro 50%" `#244062`, letra blanca en negrita,
+y enmarcar ("si aumenta mucho el tiempo, dejalo sin enmarcar"); (3) FD en
+el cambio de hora: la hora 0 del 6-09 viene ("No participó", una unidad con
+valores) → descartarla y dejarla en 0; en abril las horas van de 0 a 24.
+
+**(1) Hoja FD.** Se preguntó por N y AF: son `Central`, que E Costos usa
+para cruzar sin homologar; el usuario eligió dejarla al final. Salen `id`
+(Hora Mes & Unidad) y la copia de `Hora Mes` de cada tabla
+(`hojas_entrada.fd_para_hoja`), y CPF va a una columna de CSF (antes fijo
+en Q). `leer_fd_consolidado` lee las dos formas (la de antes empieza con
+`id`, la nueva con `Hora Mes`; un CSF viejo y un CPF nuevo miden lo mismo y
+se distinguen por eso) y **repone** `id` y la copia: el cálculo ve los
+mismos bloques que antes.
+
+**(2) Formato** (`formato.formatear_hoja`, todas las hojas de los dos
+libros): las filas de encabezado (títulos de cuadro, grupos y nombres de
+columna) con relleno `#244062`, letra blanca en negrita, centradas y con
+ajuste de texto; cada tabla (columnas contiguas con nombre) con su
+**contorno** enmarcado hasta su última fila. Se probó enmarcar celda por
+celda: 30.000 × 60 pasaba de 3 s a 28 s, así que quedó solo el contorno
+(4,5 s).
+
+**(3) Cambio de hora — y un error de cruce que no se había visto.** El
+`Hora Mes` de FD era `(día-1)*24 + hora + 1` (días de 24 horas) y E Costos
+busca el FD por `Hora Mes & Unidad` con el `Hora Mes` de Medidores, que es
+correlativo. Desde el 6-09 el FD cruzaba una hora corrida (y en abril, al
+revés). Ahora `_hora_mes_fd_correlativa` cuenta igual que Medidores usando
+`cambio_hora`: el 6-09 la hora 1 es la 121; en abril la hora 24 del sábado
+(periodo 25) es la 97 y el domingo 0 la 98. La hora que no existe queda
+**sin Hora Mes ni id** (no cruza con nada) y con sus valores en 0 (CSF
+G:L; CPF W:AA, AC, AD; no se toca "Cuenta con equipo registrador"); el log
+dice cuántas filas y cuántas traían valores.
+
+**Verificación:** `tests/test_fd_hoja_y_cambio_hora.py` (nuevo, 5
+pruebas): septiembre CSF y CPF, abril, mes normal igual que la fórmula;
+hoja sin auxiliares, `Central` al final, una columna de separación, color,
+letra, marco y lectura con `id` rearmado. Revisada a ojo convertida a PDF
+con LibreOffice. 251 pruebas, 13 salteadas (tkinter). **Hay que regenerar
+FD** (y después E Costos / RE545) de septiembre.

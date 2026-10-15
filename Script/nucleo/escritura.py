@@ -31,6 +31,7 @@ from .alertas import ALTA, Alerta
 from .ecostos import COLUMNAS_SALIDA_E_COSTOS, GRUPOS_CALCULO_E_COSTOS
 from .factores_subastas import TITULOS_FMA
 from .formato import formatear_libro
+from .hojas_entrada import fd_para_hoja
 from .lectura import TITULO_CENTRALES_DICCIONARIO, TITULO_CENTRALES_RESUMEN
 from .ofertas_sscc import (
     HOJA_OFERTAS_SSCC, TITULO_OFERTAS_POR_DIA, TITULO_RESUMEN_VENTANA,
@@ -834,20 +835,28 @@ def escribir_salida(
 
         if HOJA_FD in regenerar:
 
-            if df_fd_csf is not None:
-                df_fd_csf.to_excel(
+            # Sin las auxiliares (id y la copia de Hora Mes, ver
+            # fd_para_hoja) y con una sola columna vacia entre CSF y CPF.
+            hoja_csf = fd_para_hoja(df_fd_csf)
+            hoja_cpf = fd_para_hoja(df_fd_cpf)
+
+            if hoja_csf is not None:
+                hoja_csf.to_excel(
                     writer,
                     sheet_name=HOJA_FD,
                     index=False,
                     startcol=0,
                 )
 
-            if df_fd_cpf is not None:
-                df_fd_cpf.to_excel(
+            if hoja_cpf is not None:
+                hoja_cpf.to_excel(
                     writer,
                     sheet_name=HOJA_FD,
                     index=False,
-                    startcol=_COLUMNA_Q_INDICE,
+                    startcol=(
+                        len(hoja_csf.columns) + 1 if hoja_csf is not None
+                        else 0
+                    ),
                 )
         else:
             _preservar_o_avisar(writer, HOJA_FD)
