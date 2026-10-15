@@ -351,8 +351,12 @@ def tablas_ctf(ruta, registrar=print):
         "Año": t0.dt.year,
         "Mes": t0.dt.month,
         "Dia": t0.dt.day,
-        # 0..23 -> 1..24
-        "Hora": t0.dt.hour + 1,
+        # 0..23 -> 1..24; si el archivo trae la hora local de t0 (con
+        # la segunda pasada de abril como 25, ver Indices_FMA), esa.
+        "Hora": (
+            pd.to_numeric(df["Hora t0"], errors="coerce")
+            if "Hora t0" in df.columns else t0.dt.hour + 1
+        ),
         "FMA_CTF_mas": duracion.where(variacion > 0, 0),
         "FMA_CTF_menos": duracion.where(variacion < 0, 0),
     })

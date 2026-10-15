@@ -44,7 +44,9 @@ No importa nada de nucleo (solo pandas). Los errores previsibles
 salen como ErrorIndicesFma.
 """
 
+import datetime
 import os
+import re
 import shutil
 from pathlib import Path
 
@@ -402,6 +404,107 @@ def buscar_ctf(carpeta_version, aamm):
     return _buscar_en([carpeta_version], prefijo, (".csv",), recursivo=True)
 
 
+# ============================================================
+# CAMBIO DE HORA
+#
+# Los reportes del DCO traen 24 filas por dia en un desfase FIJO. Con
+# los reportes reales de 2026 (huella de las columnas de frecuencia
+# T-/T+, que son del sistema y no de la unidad):
+#
+#   - el archivo sin sufijo va en el desfase vigente al EMPEZAR el dia:
+#     sabado 4-04 en UTC-3 (filas 0..23 = horas 1..24 locales), domingo
+#     6-09 en UTC-4 (filas 0..22 = horas 2..24, la 23 ya es la 00:00
+#     del 7-09);
+#   - el `_UTC-4` del 4-04 es el mismo dia una hora corrido: su fila k
+#     es la k+1 del otro, y su ultima fila es la SEGUNDA pasada de las
+#     23:00 (hora 25), que el archivo sin sufijo no trae.
+#
+# Asi que cada fila se lleva a la hora local real (America/Santiago):
+# hora = periodo 1..24, y 25 para la segunda pasada de abril, igual que
+# Medidores y Subastas. Lo que cae en otro dia se descarta (ese dia
+# tiene su propio reporte) y, entre varios archivos del mismo dia, manda
+# el sin sufijo y los otros solo agregan las horas que le faltan.
+# ============================================================
+
+ZONA_HORARIA = "America/Santiago"
+_PATRON_UTC = re.compile(r"utc\s*([+-]?\d{1,2})")
+
+
+def _zona():
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(ZONA_HORARIA)
+    except Exception:  # sin tzdata
+        return None
+
+
+def _desfase_del_nombre(nombre):
+    """'..._UTC-4' -> -4 (horas); None si el nombre no lo dice."""
+
+    encontrado = _PATRON_UTC.search(dco._normalizar(nombre))
+    return int(encontrado.group(1)) if encontrado else None
+
+
+def _periodo_local(instante_utc, zona):
+    """(fecha local, periodo 1..24, o 25 si es la segunda pasada)."""
+
+    local = instante_utc.astimezone(zona)
+    periodo = 25 if local.fold else local.hour + 1
+    return local.date(), periodo
+
+
+def _periodos_del_reporte(anio, mes, dia, filas, desfase_horas, zona):
+    """
+    Fila k del reporte (k:00 en el desfase del archivo) -> periodo local
+    del dia, o None si esa fila cae en otro dia. desfase_horas None = el
+    vigente al empezar el dia.
+    """
+
+    if desfase_horas is None:
+        desfase = datetime.datetime(anio, mes, dia, tzinfo=zona).utcoffset()
+    else:
+        desfase = datetime.timedelta(hours=desfase_horas)
+
+    fecha = datetime.date(anio, mes, dia)
+    periodos = []
+    for fila in filas:
+        if pd.isna(fila):
+            periodos.append(None)
+            continue
+        instante = (
+            datetime.datetime(anio, mes, dia, tzinfo=datetime.timezone.utc)
+            + datetime.timedelta(hours=int(fila))
+            - desfase
+        )
+        fecha_local, periodo = _periodo_local(instante, zona)
+        periodos.append(periodo if fecha_local == fecha else None)
+    return periodos
+
+
+def buscar_tablas_resumen(carpeta_respuesta, anio, mes, dia):
+    """
+    Todos los `tabla_resumen_<D>_<M>_<AAAA>*.xlsx` del dia: primero el
+    sin sufijo y despues las variantes por zona horaria (`_UTC-4`, ...),
+    la mas reciente primero.
+    """
+
+    prefijo = dco._normalizar(
+        PLANTILLA_TABLA_RESUMEN.format(dia=dia, mes=mes, anio=anio)
+    )
+    exactos = [
+        r for stem, r in _indice_excels(carpeta_respuesta) if stem == prefijo
+    ]
+    # Solo variantes de zona horaria: tabla_resumen_4_4_2026 no tiene
+    # que llevarse a tabla_resumen_4_4_20260 ni a otro dia.
+    variantes = [
+        r for stem, r in _indice_excels(carpeta_respuesta)
+        if stem.startswith(prefijo) and stem != prefijo
+        and _desfase_del_nombre(stem[len(prefijo):]) is not None
+    ]
+    variantes.sort(key=lambda r: r.stat().st_mtime, reverse=True)
+    return exactos[:1] + variantes
+
+
 def construir_fma_cpf(carpeta_respuesta, aamm, registrar=print):
     """
     Arma el equivalente de `fma_cpf_AAMM.xlsx` recorriendo los reportes
@@ -410,25 +513,86 @@ def construir_fma_cpf(carpeta_respuesta, aamm, registrar=print):
 
     anio, mes = dco.periodo_desde_aamm(aamm)
     dias_del_mes = _dias_del_mes(anio, mes)
+    zona = _zona()
+
+    if zona is None:
+        registrar(
+            "  [AVISO] sin base de zonas horarias (instalar tzdata con "
+            "pip): la hora del FMA CPF sale de la fila + 1, sin ajustar "
+            "el cambio de hora."
+        )
 
     partes = []
     dias_sin_archivo = []
 
     for dia in range(1, dias_del_mes + 1):
 
-        ruta = buscar_tabla_resumen(carpeta_respuesta, anio, mes, dia)
+        rutas = (
+            buscar_tablas_resumen(carpeta_respuesta, anio, mes, dia)
+            if zona is not None
+            else [r for r in [
+                buscar_tabla_resumen(carpeta_respuesta, anio, mes, dia)
+            ] if r is not None]
+        )
 
-        if ruta is None:
+        if not rutas:
             dias_sin_archivo.append(dia)
             continue
 
-        try:
-            excel = pd.ExcelFile(ruta)
-        except Exception as error:
-            raise ErrorIndicesFma(
-                f"No se pudo abrir {ruta.name}: {error}"
-            ) from error
+        del_dia = [
+            parte for ruta in rutas
+            for parte in _leer_reporte_cpf(
+                ruta, anio, mes, dia, zona, registrar
+            )
+        ]
+        partes.extend(_combinar_reportes_del_dia(del_dia))
 
+    if not partes:
+        raise ErrorIndicesFma(
+            f"No se encontro ningun 'tabla_resumen_<dia>_{mes}_{anio}' en "
+            f"{carpeta_respuesta}."
+        )
+
+    return _cerrar_fma_cpf(partes, dias_sin_archivo, dias_del_mes, registrar)
+
+
+def _combinar_reportes_del_dia(partes):
+    """
+    Entre varios reportes del mismo dia (el sin sufijo y un `_UTC-4`),
+    el primero manda; los otros solo agregan las horas (Central + Hora)
+    que el primero no trae -- la hora 25 de abril.
+    """
+
+    if len(partes) <= 1:
+        return partes
+
+    vistas = set()
+    salida = []
+    for parte in partes:
+        claves = list(zip(parte["Central"], parte["Hora"]))
+        nuevas = [c not in vistas for c in claves]
+        vistas.update(claves)
+        parte = parte[nuevas]
+        if not parte.empty:
+            salida.append(parte)
+    return salida
+
+
+def _leer_reporte_cpf(ruta, anio, mes, dia, zona, registrar):
+    """Las hojas de un tabla_resumen, con la hora local de cada fila."""
+
+    try:
+        excel = pd.ExcelFile(ruta)
+    except Exception as error:
+        raise ErrorIndicesFma(
+            f"No se pudo abrir {ruta.name}: {error}"
+        ) from error
+
+    desfase = _desfase_del_nombre(ruta.stem)
+    partes = []
+    fuera_del_dia = 0
+
+    try:
         for hoja in excel.sheet_names:
 
             if dco._normalizar(hoja) == HOJA_A_SALTEAR_CPF:
@@ -443,10 +607,18 @@ def construir_fma_cpf(carpeta_respuesta, aamm, registrar=print):
             df_hoja["Año"] = anio
             df_hoja["Mes"] = mes
             df_hoja["Día"] = dia
-            # La hora sale del indice de fila del reporte (0..23) + 1.
-            df_hoja["Hora"] = pd.to_numeric(
-                df_hoja.iloc[:, 0], errors="coerce"
-            ) + 1
+            filas = pd.to_numeric(df_hoja.iloc[:, 0], errors="coerce")
+            if zona is None:
+                # Sin zonas horarias: la fila del reporte (0..23) + 1.
+                df_hoja["Hora"] = filas + 1
+            else:
+                df_hoja["Hora"] = pd.array(
+                    _periodos_del_reporte(anio, mes, dia, filas, desfase, zona),
+                    dtype="Int64",
+                )
+                fuera = df_hoja["Hora"].isna() & filas.notna()
+                fuera_del_dia = max(fuera_del_dia, int(fuera.sum()))
+                df_hoja = df_hoja[~fuera]
             df_hoja["Central"] = hoja
 
             if df_hoja.shape[1] != len(NOMBRES_CPF):
@@ -461,14 +633,21 @@ def construir_fma_cpf(carpeta_respuesta, aamm, registrar=print):
 
             df_hoja.columns = NOMBRES_CPF
             partes.append(df_hoja)
-
+    finally:
         excel.close()
 
-    if not partes:
-        raise ErrorIndicesFma(
-            f"No se encontro ningun 'tabla_resumen_<dia>_{mes}_{anio}' en "
-            f"{carpeta_respuesta}."
+    if fuera_del_dia:
+        registrar(
+            f"  {ruta.name}: {fuera_del_dia} fila(s) por unidad caen en "
+            f"otro dia por el cambio de hora (van en el reporte de ese "
+            f"dia) y se descartan."
         )
+
+    return partes
+
+
+def _cerrar_fma_cpf(partes, dias_sin_archivo, dias_del_mes, registrar):
+    """Une los reportes del mes y arma las columnas de salida."""
 
     df = pd.concat(partes, ignore_index=True)
 
@@ -715,6 +894,13 @@ def construir_fma_ctf(ruta_csv, registrar=print):
                 f"Columnas encontradas: {list(df.columns)}"
             )
 
+    # Antes de sacarle la zona horaria a t0: la hora local de cada
+    # activacion (1..24, y 25 para la segunda pasada de la hora que se
+    # repite en abril). Sin la zona, las dos pasadas de las 23:xx del
+    # sabado quedaban en la misma hora 24 y se sumaban.
+    df[COLUMNA_HORA_CTF] = _periodo_desde_marca(df["t0"])
+
+    for columna in ("t0", "tfin"):
         df[columna] = _sacar_zona_horaria(df[columna])
 
     registrar(f"  FMA CTF: {len(df):,} activacion(es) de {ruta_csv.name}")
@@ -725,6 +911,34 @@ def construir_fma_ctf(ruta_csv, registrar=print):
 # ============================================================
 # TRAER LAS TRES
 # ============================================================
+
+COLUMNA_HORA_CTF = "Hora t0"
+
+
+def _periodo_desde_marca(serie):
+    """
+    Periodo 1..24 de la hora local de cada marca ('2026-04-04
+    23:15:00-04:00' -> 25 si es la segunda pasada de las 23:00). Una
+    marca sin zona horaria se toma como hora local: hora + 1.
+    """
+
+    zona = _zona()
+
+    def periodo(valor):
+        if valor is None or (not isinstance(valor, str) and pd.isna(valor)):
+            return pd.NA
+        try:
+            marca = pd.Timestamp(valor)
+        except (TypeError, ValueError):
+            return pd.NA
+        if marca is pd.NaT:
+            return pd.NA
+        if marca.tzinfo is None or zona is None:
+            return marca.hour + 1
+        return _periodo_local(marca.to_pydatetime(), zona)[1]
+
+    return pd.array([periodo(v) for v in serie], dtype="Int64")
+
 
 def _sacar_zona_horaria(serie):
     """

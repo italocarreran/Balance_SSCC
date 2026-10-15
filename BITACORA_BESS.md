@@ -19,19 +19,10 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
   subastas, etc.) pueden usar `nucleo.cambio_hora`; el usuario los está
   revisando.
 
-- **FMA CPF en el cambio de hora (septiembre, visto 2026-10-13, en
-  pausa a pedido del usuario):** el `tabla_resumen_6_9_2026.xlsx` real
-  trae **24 filas (00..23) con datos medidos** en un día de 23 horas (el
-  6-09 no existe la hora local 00). `Indices_FMA.construir_fma_cpf` pone
-  `Hora = fila + 1` sin ajuste, así que salen valores en la hora 1
-  (inexistente) y en la 24 del día 6. Los tiempos de frecuencia de las 24
-  filas son todos distintos y la fila 00 no repite la 23 del día 5:
-  hipótesis, el reporte va en UTC-4 fijo (fila 00 = 01:00 local = hora 2
-  de subastas; fila 23 = 00:00-01:00 del día 7), lo que podría correr
-  también los días siguientes. Para confirmar: cruzar los tiempos de
-  frecuencia contra `tabla_resumen_7_9_2026.xlsx` o contra el
-  `2026.09_Respuesta_CPF.xlsx` mensual (donde, según el usuario, la hora
-  1 del día 6 sale en cero). Recién ahí corregir la asignación de hora.
+- **FMA CSF de abril (2026-10-15 (9)):** el usuario no tiene el
+  `csf_` del sábado de cambio de abril. Septiembre ya calza (no trae la
+  hora 0). Cuando haya uno de abril, ver si trae dos veces la hora 23 y,
+  si es así, mandar la segunda a la 25 como en CPF y CTF.
 
 - **Escritura rápida (2026-10-13 (3)):** abrir en **Excel** (Windows) un
   `Balance_BESS.xlsx` después de actualizar una hoja suelta y confirmar
@@ -4845,3 +4836,43 @@ explícito.
 **Verificación:** `tests/test_subastas_hoja_y_cambio_hora.py` (nuevo, 6
 pruebas). 257 pruebas, 13 salteadas (tkinter). **Hay que regenerar
 Subastas** (y después E Costos / RE545) de septiembre.
+
+## 2026-10-15 (9) — FMA en el cambio de hora (CPF y CTF)
+
+Pedido del usuario: ver cómo trataba el cambio de hora el script original
+de FMA (`entradas_sscc.py`). Respuesta: no lo trataba. CPF: `Hora = fila
++ 1` y el operador cambiaba a mano el nombre del archivo (líneas
+comentadas `..._utc-3.xlsx`, `tabla_resumen_5_4_2025_UTC-4.xlsx`); CSF:
+concatena; CTF: `tz_localize(None)`, que borra el desfase (lo único que
+traía la información) y en abril junta las dos pasadas de las 23:xx.
+
+**Reportes reales que pasó el usuario** (`tabla_resumen_6_9_2026`,
+`tabla_resumen_4_4_2026` y `..._UTC-4`). Las columnas T-/T+ (frecuencia
+del sistema, iguales en todas las unidades) sirven de huella: en abril la
+fila k del `UTC-4` es la k+1 del sin sufijo en todo el día. Conclusión: el
+sin sufijo va en el desfase vigente **al empezar el día** (sáb. 4-04:
+UTC-3 → filas 0..23 = horas 1..24; dom. 6-09: UTC-4 → filas 0..22 = horas
+2..24 y la 23 ya es el 7-09), y la última fila del `UTC-4` es la segunda
+pasada de las 23:00 = **hora 25**. Esto cierra el pendiente del FMA CPF
+de septiembre (la hipótesis UTC-4 era correcta).
+
+- **CPF** (`Indices_FMA.construir_fma_cpf`): lee todos los reportes del día
+  (`buscar_tablas_resumen`: el sin sufijo primero y las variantes
+  `_UTC±N`), lleva cada fila a la hora local real (`America/Santiago`,
+  desfase del nombre o el del inicio del día) y descarta las que caen en
+  otro día (ese día tiene su reporte; el log lo dice). Entre reportes del
+  mismo día manda el sin sufijo; los otros solo agregan lo que falta (la
+  25). Sin tzdata: `fila + 1` como antes, con aviso.
+- **CTF**: antes de borrar el desfase, `construir_fma_ctf` agrega la
+  columna `Hora t0` (1..24, 25 para la segunda pasada) y
+  `Subastas/Fma.tablas_ctf` la usa si está.
+- **CSF**: sin cambios. El 6-09 no trae la hora 0, así que `Hora Día + 1`
+  ya da 2..24. Abril: pendiente (no hay archivo).
+
+**Verificación:** con los tres reportes reales: abril 25 horas por
+unidad, la 25 con la huella de la última fila del `UTC-4`; septiembre
+2..24. `tests/test_fma_cambio_hora.py` (nuevo, 4 pruebas, reportes
+sintéticos con la misma forma; los reales no se suben al repo). 261
+pruebas, 13 salteadas (tkinter). Hay que regenerar el FMA de abril y
+septiembre.
+
