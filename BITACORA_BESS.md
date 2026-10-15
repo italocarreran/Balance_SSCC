@@ -4591,3 +4591,23 @@ bloqueando.
 el Excel de prorrata → se puede ejecutar, PRORRATA_RETIROS y Resumen
 afuera con aviso; tildar una hoja sola tampoco se bloquea; sin el SoC
 sigue bloqueando). 223 pruebas, 13 salteadas (tkinter).
+
+## 2026-10-15 — COMPENSACION_CENTRAL: total por central de cada hoja de cálculo
+
+Pedido del usuario: un cuadro con el total por central para cada tipo de
+cálculo (E Costos y RE545), intermedio entre el detalle por ciclo/ventana
+y el total por empresa.
+
+`compensacion.total_por_central(detalle)` suma el detalle de cada hoja por
+(central, empresa); `construir_compensacion_central` sigue devolviendo sus
+tres tablas (no cambia la firma), y `proceso` arma los dos cuadros nuevos y
+se los pasa a `escribir_pagos_bess`. La hoja queda con cinco cuadros, cada
+uno separado por una columna en blanco: `B:E` E Costos por central y ciclo,
+`G:I` E Costos total por central, `K:N` RE545 por central y ventana, `P:R`
+RE545 total por central, `T:U` total recibido por empresa (antes `H:K` y
+`N:O` para RE545 y empresa; nada lee esas posiciones).
+
+**Verificación:** `tests/test_compensacion_central.py` +2 pruebas (suma por
+central y cierra con el total por empresa; sin detalle queda vacío con sus
+columnas); `tests/test_pasos_sueltos.py` revisa los cinco títulos de la
+hoja. 225 pruebas, 13 salteadas (tkinter).

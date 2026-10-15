@@ -114,6 +114,21 @@ class TestHojaCentrales(unittest.TestCase):
             ):
                 self.assertIn(nombre, hojas)
 
+            # COMPENSACION_CENTRAL: detalle y total por central de cada
+            # hoja de calculo, y al final el total por empresa.
+            import openpyxl
+            libro = openpyxl.load_workbook(
+                base / nucleo.ARCHIVO_SALIDA, read_only=True
+            )
+            fila_titulos = next(libro[HOJA_COMPENSACION_CENTRAL].iter_rows(
+                min_row=2, max_row=2, values_only=True
+            ))
+            libro.close()
+            titulos = [t for t in fila_titulos if t]
+            self.assertEqual(len(titulos), 5, titulos)
+            self.assertIn("E Costos: total por central", titulos[1])
+            self.assertIn("RE545: total por central", titulos[3])
+
     def test_da_lo_mismo_que_leyendo_centrales_xlsx(self):
         with tempfile.TemporaryDirectory() as uno, \
                 tempfile.TemporaryDirectory() as dos:

@@ -323,6 +323,8 @@ def escribir_pagos_bess(
     df_resumen_re545=None,
     df_compensacion_ecostos=None,
     df_compensacion_re545=None,
+    df_compensacion_ecostos_central=None,
+    df_compensacion_re545_central=None,
     df_compensacion_empresa=None,
     df_prorrata_retiros=None,
     df_compensacion_cuarto=None,
@@ -463,15 +465,22 @@ def escribir_pagos_bess(
             _preservar_o_avisar(writer, HOJA_CALCULO_RE545)
 
         if HOJA_COMPENSACION_CENTRAL in regenerar:
+            # Cada hoja de calculo con su detalle y, al lado, el total
+            # por central (el cuadro intermedio); al final el total por
+            # empresa, que junta las dos.
             cuadros_compensacion = [
                 (df_compensacion_ecostos, 1,
                  "Cuadro N° 1 — Calculo E Costos: compensación por central "
                  "y ciclo"),
-                (df_compensacion_re545, 7,
-                 "Cuadro N° 2 — Calculo RE545: compensación por central "
+                (df_compensacion_ecostos_central, 6,
+                 "Cuadro N° 2 — Calculo E Costos: total por central"),
+                (df_compensacion_re545, 10,
+                 "Cuadro N° 3 — Calculo RE545: compensación por central "
                  "y ventana"),
-                (df_compensacion_empresa, 13,
-                 "Cuadro N° 3 — total recibido por cada empresa"),
+                (df_compensacion_re545_central, 15,
+                 "Cuadro N° 4 — Calculo RE545: total por central"),
+                (df_compensacion_empresa, 19,
+                 "Cuadro N° 5 — total recibido por cada empresa"),
             ]
             if any(df is not None for df, _, _ in cuadros_compensacion):
                 escritas.append(HOJA_COMPENSACION_CENTRAL)

@@ -124,6 +124,7 @@ from .prorrata_retiros import (
 )
 from .compensacion import (
     construir_compensacion_central, construir_compensacion_total,
+    total_por_central,
     construir_resumen,
 )
 from .lectura import (
@@ -302,7 +303,7 @@ __all__ = [
     "COLUMNAS_ORIGEN", "HOJA_ORIGEN",
     "buscar_archivo_prorrata", "leer_prorrata_retiros",
     "construir_prorrata_retiros", "construir_compensacion_total",
-    "construir_compensacion_central", "construir_resumen",
+    "construir_compensacion_central", "total_por_central", "construir_resumen",
     "_filas_de_hojas", "hojas_con_datos", "hojas_de",
     "revisar_estructura", "ROL_BALANCE_BESS", "ROL_FD", "ROL_FMA_CPF",
     "ROL_OFERTAS", "ROL_SUBASTAS", "TITULOS_DICCIONARIO",

@@ -111,8 +111,9 @@ python Balance_BESS.py
      estaba; si el archivo todavía no existe, se crea.
    - `COMPENSACION_CENTRAL` tiene **Resumir**: la compensación
      de `Calculo E Costos` (por central y `Ciclo de Carga del mes`) y la de
-     `Calculo RE545` (por central y `Ventana de valorizacion`), más el total
-     que recibe cada empresa según el `Propietario` de `Resumen BESS`.
+     `Calculo RE545` (por central y `Ventana de valorizacion`), cada una
+     con su total por central al lado, más el total que recibe cada
+     empresa según el `Propietario` de `Resumen BESS`.
    - `PRORRATA_RETIROS` tiene **Traer**: consume `Prorrata 15min`
      del Excel de `Prorrata retiros/` (A: cuarto de hora, B: suministrador,
      C: prorrata) y reparte, cuarto de hora por cuarto de hora, el monto a

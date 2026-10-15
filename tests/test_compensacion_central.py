@@ -86,6 +86,41 @@ class TestCompensacionCentral(unittest.TestCase):
         self.assertAlmostEqual(total["Compensación Total [$]"].sum(), 220.0)
 
 
+    def test_total_por_central_suma_los_ciclos_de_cada_central(self):
+        ecostos = pd.DataFrame({
+            "Configuracion": ["BESS UNO", "BESS UNO", "BESS UNO", "BESS DOS"],
+            "Ciclo de Carga del mes": [1, 1, 2, 1],
+            "Monto a compensar": [50.0, 50.0, 30.0, 90.0],
+        })
+        por_ecostos, _, total = nucleo.construir_compensacion_central(
+            ecostos, pd.DataFrame(), RESUMEN_BESS
+        )
+        por_central = nucleo.total_por_central(por_ecostos)
+
+        self.assertEqual(
+            list(por_central.columns),
+            ["Central", "Empresa", "Compensación [$]"],
+        )
+        montos = dict(zip(por_central["Central"], por_central["Compensación [$]"]))
+        self.assertEqual(montos, {"BESS DOS": 90.0, "BESS UNO": 130.0})
+        self.assertEqual(
+            dict(zip(por_central["Central"], por_central["Empresa"])),
+            {"BESS DOS": "ENGIE", "BESS UNO": "COLBUN S.A."},
+        )
+        # El cuadro intermedio cierra con el total por empresa.
+        self.assertAlmostEqual(
+            por_central["Compensación [$]"].sum(),
+            total["Compensación Total [$]"].sum(),
+        )
+
+    def test_total_por_central_sin_detalle_queda_vacio(self):
+        vacio = nucleo.total_por_central(pd.DataFrame())
+        self.assertTrue(vacio.empty)
+        self.assertEqual(
+            list(vacio.columns), ["Central", "Empresa", "Compensación [$]"]
+        )
+
+
 class TestResumen(unittest.TestCase):
     def test_cruza_por_nombre_normalizado(self):
         compensacion = pd.DataFrame({

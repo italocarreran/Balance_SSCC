@@ -89,6 +89,24 @@ def _detalle_por_central(df, candidatas_ciclo, propietarios, registrar):
     )
 
 
+def total_por_central(detalle):
+    """Cuadro intermedio: el detalle por ciclo/ventana sumado por central.
+
+    Va entre el detalle de cada hoja de calculo y el total por empresa:
+    una fila por central (con su empresa), sin abrir por ciclo/ventana.
+    """
+
+    columnas = [COL_CENTRAL, COL_EMPRESA, COL_COMPENSACION]
+    if detalle is None or detalle.empty:
+        return pd.DataFrame(columns=columnas)
+    return (
+        detalle.groupby([COL_CENTRAL, COL_EMPRESA], as_index=False,
+                        dropna=False)[COL_COMPENSACION].sum()
+        .sort_values(COL_CENTRAL, kind="stable")
+        .loc[:, columnas].reset_index(drop=True)
+    )
+
+
 def construir_compensacion_central(df_ecostos, df_re545, resumen_bess,
                                    registrar=None):
     """Los tres cuadros de la hoja COMPENSACION_CENTRAL.
