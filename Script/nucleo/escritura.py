@@ -20,6 +20,7 @@ recalcula en esta pasada se copia tal cual del libro anterior.
 """
 
 import shutil
+import time
 from pathlib import Path
 
 import openpyxl
@@ -111,6 +112,29 @@ def _archivo_temporal(ruta_salida):
 
     ruta_salida = Path(ruta_salida)
     return ruta_salida.with_name(f".~nuevas_{ruta_salida.name}")
+
+
+class _Cronometro:
+    """Cuanto tarda cada tramo de una escritura del libro (para el log)."""
+
+    def __init__(self, registrar):
+        self.registrar = registrar
+        self.marca = time.time()
+        self.inicio = self.marca
+
+    def tramo(self, nombre):
+        ahora = time.time()
+        self.registrar(f"  escritura: {nombre} ({_segundos(ahora - self.marca)})")
+        self.marca = ahora
+
+    def total(self):
+        self.registrar(
+            f"  escritura: total {_segundos(time.time() - self.inicio)}"
+        )
+
+
+def _segundos(segundos):
+    return f"{segundos:.1f} s".replace(".", ",")
 
 
 def _pegar_en_salida(writer_ruta, ruta_salida, wb_existente, escritas_vacio):
@@ -374,7 +398,9 @@ def escribir_pagos_bess(
     # Siempre se lee el libro que hay: aunque se regeneren TODAS las
     # hojas de calculo, las de entrada (la otra mitad de la planilla)
     # hay que preservarlas igual.
+    crono = _Cronometro(registrar)
     wb_existente = _abrir_existente_en_zip(ruta_existente or ruta_salida)
+    crono.tramo("abrir el libro existente")
     ruta_temporal = _archivo_temporal(ruta_salida)
 
     avisos_preservacion = []
@@ -543,10 +569,14 @@ def escribir_pagos_bess(
         _preservar_ajenas(writer, wb_existente, set())
         _ordenar_hojas(writer.book, ORDEN_HOJAS_SALIDA)
 
+        crono.tramo("armar las hojas")
         formatear_libro(writer.book, _FILAS_ENCABEZADO)
+        crono.tramo("formato (encabezados, anchos, numeros, marco)")
         relleno = _asegurar_una_hoja(writer)
 
+    crono.tramo("guardar el archivo temporal")
     _pegar_en_salida(ruta_temporal, ruta_salida, wb_existente, relleno)
+    crono.tramo("pegar las hojas en el libro")
     # Cuando se escribio cada hoja (ver sellos.py / vigencia.py).
     sellar(ruta_salida, escritas)
 
@@ -558,6 +588,8 @@ def escribir_pagos_bess(
         periodo=periodo,
         hojas_regeneradas=escritas,
     )
+    crono.tramo("Control_corrida.xlsx (Alertas y Ejecucion)")
+    crono.total()
 
     for mensaje in avisos_preservacion:
         registrar(f"  [{ALTA}] PAG-001: {mensaje}")
@@ -756,7 +788,9 @@ def escribir_salida(
     # Siempre se lee el libro que hay: aunque se regeneren TODAS las
     # hojas de entrada, las de calculo (la otra mitad de la planilla)
     # hay que preservarlas igual.
+    crono = _Cronometro(registrar)
     wb_existente = _abrir_existente_en_zip(ruta_existente or ruta_salida)
+    crono.tramo("abrir el libro existente")
     ruta_temporal = _archivo_temporal(ruta_salida)
 
     avisos_preservacion = []
@@ -901,10 +935,15 @@ def escribir_salida(
         _preservar_ajenas(writer, wb_existente, set())
         _ordenar_hojas(writer.book, ORDEN_HOJAS_SALIDA)
 
+        crono.tramo("armar las hojas")
         formatear_libro(writer.book, _FILAS_ENCABEZADO)
+        crono.tramo("formato (encabezados, anchos, numeros, marco)")
         relleno = _asegurar_una_hoja(writer)
 
+    crono.tramo("guardar el archivo temporal")
     _pegar_en_salida(ruta_temporal, ruta_salida, wb_existente, relleno)
+    crono.tramo("pegar las hojas en el libro")
+    crono.total()
     # Cuando se escribio cada hoja (ver sellos.py / vigencia.py).
     sellar(ruta_salida, [
         hoja for hoja, escrita in (

@@ -5060,3 +5060,14 @@ paralelo y terminó a los 4:44, así que acelerarlo no acorta la corrida.
 **Verificación:** `tests/test_gen_real_cambio_hora.py` (nuevo). 276
 pruebas, 0 salteadas con tkinter.
 
+
+## 2026-10-16 (3) — Tiempos dentro de la escritura del libro
+
+Para encontrar en qué se van los 3 min 14 s de la escritura del cálculo
+(entrada (2)): `escribir_salida` y `escribir_pagos_bess` registran cada
+tramo con `_Cronometro` ("  escritura: abrir el libro existente (x s)",
+"armar las hojas", "formato (encabezados, anchos, numeros, marco)",
+"guardar el archivo temporal", "pegar las hojas en el libro", y en el
+cálculo "Control_corrida.xlsx (Alertas y Ejecucion)", más el total).
+Pendiente: con el próximo log real, atacar el tramo más largo. 276
+pruebas.
