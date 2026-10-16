@@ -5097,3 +5097,30 @@ contra el calendario real de `Claves_Balance`; septiembre con la hora 1 en
 cero: queda fuera y el aviso dice "venian en cero"). 278 pruebas, 0
 salteadas con tkinter. Hay que volver a traer `Medidas_SAE.xlsx` de abril.
 
+
+---
+
+## 2026-10-16 (5) — "Ejecutar todo" ya no se bloquea: avisa y deja correr igual
+
+Pedido: *"En la ventana de ejecutar todo no quiero que se bloquee, que me
+advierta por ultimo, pero si quiero correr igual sin actualizar un previo
+igual que me deje"*.
+
+- `orquestador.planificar` separa `impedimentos` (periodo inválido, nada
+  tildado: siguen frenando) del resto de `bloqueos` (entradas que faltan,
+  pasos previos sin hacer). Nuevo `puede_forzar = not impedimentos`;
+  `puede_ejecutar` sigue significando "no falta nada".
+- `ejecutar_plan(..., forzar=False)`: con `forzar=True` corre aunque haya
+  bloqueos (no impedimentos) y deja en el registro un `[AVISO] Se ejecuta
+  igual, aunque falta: ...`. Cada paso hace lo que puede con lo que hay;
+  si uno falla, se informa y lo que depende de él se omite, como siempre.
+- Ventana: el botón "Ejecutar" queda activo salvo impedimento; si falta
+  algo, pregunta "¿Ejecutar igual?" con la lista y, si se acepta, corre
+  con `forzar=True`. El recuadro pasó a llamarse "Avisos antes de
+  ejecutar".
+
+**Verificación:** +2 en `test_orquestador` (forzado corre `pagos:ecostos`
+sin previos; forzar no salta periodo inválido ni nada tildado), +1 en
+`test_ventana_ejecutar_todo` (botón activo con caso vacío; "no" no corre;
+"sí" llama a `ejecutar_plan` con `forzar=True`). 281 pruebas OK con y sin
+display.

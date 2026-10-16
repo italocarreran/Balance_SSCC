@@ -29,8 +29,11 @@ Tres reglas de las que depende que esto sea seguro:
      mandan todas juntas en UNA llamada a generar_consolidado, que es
      ademas la unica forma de escribir el libro una sola vez).
   2. Una tarea corre solo si sus dependencias estan al dia o se
-     recalculan en esta misma corrida. Si no, queda bloqueada y se
-     dice por que, en vez de calcular con datos viejos.
+     recalculan en esta misma corrida. Si no, queda "bloqueada" y se
+     dice por que. Ya no frena el boton (pedido del usuario: "no
+     quiero que se bloquee, que me advierta por ultimo, pero si quiero
+     correr igual sin actualizar un previo que me deje"): la ventana
+     lo avisa, pide confirmar y corre con forzar=True.
   3. Si una tarea falla, no se corre nada que dependa de ella.
 """
 
@@ -502,9 +505,15 @@ def planificar(carpeta_base, aamm, seleccion=None, filas=None):
                    faltan_requisitos, faltan_dependencias, estado
                    ("al dia" / "se genera" / "se rehace" / "bloqueada"
                    / "sin tildar")
-      bloqueos     lista de textos: que falta para poder ejecutar
+      bloqueos     lista de textos: lo que falta (entradas o pasos
+                   previos). Ya no frena: la ventana avisa y deja
+                   ejecutar igual si el usuario confirma (forzar).
+      impedimentos lista de textos: lo que si impide ejecutar (periodo
+                   invalido, nada tildado). Esta incluido en bloqueos.
       advertencias lista de textos: lo que queda viejo por no tildarlo
-      puede_ejecutar  bool
+      puede_ejecutar  bool: no falta nada
+      puede_forzar    bool: no hay impedimentos (se puede ejecutar
+                      igual, confirmando)
       orden        grupos a correr, en orden de dependencia
     """
 
@@ -514,11 +523,12 @@ def planificar(carpeta_base, aamm, seleccion=None, filas=None):
     estado_fila = {fila["id"]: fila["estado"] for fila in filas}
 
     bloqueos = []
+    impedimentos = []
 
     try:
         validar_aamm(aamm)
     except ErrorEntrada as error:
-        bloqueos.append(str(error).split("\n")[0])
+        impedimentos.append(str(error).split("\n")[0])
 
     for entrada in ENTRADAS_INICIALES:
         if estado_fila.get(entrada) != "ok":
@@ -613,13 +623,17 @@ def planificar(carpeta_base, aamm, seleccion=None, filas=None):
     elegidas = [t for t in tareas if t["seleccionada"]]
 
     if not elegidas:
-        bloqueos.append("No hay nada tildado para ejecutar.")
+        impedimentos.append("No hay nada tildado para ejecutar.")
+
+    bloqueos = impedimentos + bloqueos
 
     return {
         "tareas": tareas,
         "bloqueos": bloqueos,
+        "impedimentos": impedimentos,
         "advertencias": advertencias,
         "puede_ejecutar": not bloqueos,
+        "puede_forzar": not impedimentos,
         "orden": _orden_de_grupos(
             {t["id"] for t in elegidas}
         ),
@@ -711,7 +725,7 @@ def formatear_duracion(segundos):
 
 def ejecutar_plan(
     carpeta_base, aamm, seleccion=None, registrar=print, progreso=None,
-    hilos=3, plan=None,
+    hilos=3, plan=None, forzar=False,
 ):
     """
     Corre lo tildado respetando el grafo, en paralelo donde se puede.
@@ -720,6 +734,11 @@ def ejecutar_plan(
     planificar()).
     hilos: cuantos grupos pueden correr a la vez (1 = todo en fila,
     util para depurar).
+    forzar: ejecutar aunque falten entradas o pasos previos (pedido
+    del usuario: "si quiero correr igual sin actualizar un previo que
+    me deje"). Lo que falta se anota como aviso y cada paso hace lo que
+    puede con lo que hay; si uno falla, se informa como siempre. Un
+    periodo invalido o nada tildado frena igual.
 
     Devuelve {id de grupo: "ok" | "error: ..." | "omitido: ..."}.
     Levanta ErrorEntrada al final si algo fallo -- con el detalle de
@@ -730,9 +749,15 @@ def ejecutar_plan(
     if plan is None:
         plan = planificar(carpeta_base, aamm, seleccion)
 
-    if plan["bloqueos"]:
+    if plan["bloqueos"] and not (forzar and plan["puede_forzar"]):
         raise ErrorEntrada(
             "No se puede ejecutar todavia:\n  - "
+            + "\n  - ".join(plan["bloqueos"])
+        )
+
+    if plan["bloqueos"]:
+        registrar(
+            "[AVISO] Se ejecuta igual, aunque falta:\n  - "
             + "\n  - ".join(plan["bloqueos"])
         )
 

@@ -16,7 +16,7 @@ se la completa desde ahi mismo.
 Todo lo que el programa puede hacer sale de un boton en la fila que
 corresponde. Ademas, abajo de todo hay un boton "Ejecutar todo": abre
 una ventana con el PLAN de la corrida (que falta, que esta al dia, que
-se puede rehacer y que bloquea la corrida) y lo ejecuta respetando las
+se puede rehacer y que falta) y lo ejecuta respetando las
 dependencias, en paralelo donde se puede. El grafo y el plan viven en
 Script/nucleo/orquestador.py; esta ventana solo los dibuja.
 
@@ -2037,9 +2037,11 @@ def main():
     def ventana_ejecutar_todo():
         """
         Abre la ventana del plan: una fila por tarea, tildada si hay
-        que hacerla, con lo que falta para poder ejecutar. El boton
-        "Ejecutar" queda bloqueado mientras falte una entrada o una
-        dependencia (pedido del usuario).
+        que hacerla, con lo que falta. Si falta una entrada o un paso
+        previo, "Ejecutar" avisa y pregunta si se corre igual (pedido
+        del usuario: "no quiero que se bloquee, que me advierta por
+        ultimo, pero si quiero correr igual ... que me deje"). Solo se
+        apaga con un periodo invalido o nada tildado.
 
         El plan lo arma nucleo.planificar(): esta ventana solo lo
         dibuja y devuelve la seleccion.
@@ -2094,7 +2096,7 @@ def main():
         lienzo.bind("<Configure>", ajustar_lista)
 
         frame_avisos = tk.LabelFrame(
-            top, text="Para poder ejecutar", padx=8, pady=6
+            top, text="Avisos antes de ejecutar", padx=8, pady=6
         )
         frame_avisos.pack(fill="x", padx=14, pady=4)
 
@@ -2274,7 +2276,7 @@ def main():
                 txt_avisos.insert("end", f"\n[AVISO] {aviso}")
 
             btn_ejecutar.config(
-                state="normal" if plan["puede_ejecutar"] else "disabled"
+                state="normal" if plan["puede_forzar"] else "disabled"
             )
 
             ajustar_lista()
@@ -2289,15 +2291,30 @@ def main():
 
         def ejecutar():
             plan = estado_plan["plan"]
-            if plan is None or not plan["puede_ejecutar"]:
+            if plan is None or not plan["puede_forzar"]:
                 return
+            forzar = bool(plan["bloqueos"])
+            if forzar:
+                lista = "\n".join(f"- {b}" for b in plan["bloqueos"][:15])
+                if len(plan["bloqueos"]) > 15:
+                    lista += f"\n... y {len(plan['bloqueos']) - 15} mas"
+                if not messagebox.askyesno(
+                    "Ejecutar igual",
+                    "Falta esto:\n\n" + lista + "\n\n"
+                    "Lo que dependa de algo que falta o no esta al dia "
+                    "se calcula con lo que haya (puede quedar viejo o "
+                    "fallar ese paso).\n\nEjecutar igual?",
+                    icon="warning", parent=top,
+                ):
+                    return
             ids = {
                 t["id"] for t in plan["tareas"] if t["seleccionada"]
             }
             top.destroy()
             lanzar(
                 nucleo.ejecutar_plan,
-                dict(carpeta_base=ruta, aamm=aamm, seleccion=ids),
+                dict(carpeta_base=ruta, aamm=aamm, seleccion=ids,
+                     forzar=forzar),
                 nucleo.ARCHIVO_SALIDA,
             )
 

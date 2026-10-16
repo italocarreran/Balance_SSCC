@@ -10,6 +10,7 @@ unittest discover`); sin ellos se saltea.
 """
 
 import unittest
+from unittest import mock
 
 from Script.nucleo import orquestador
 from tests import test_ventana_actualizar as base
@@ -110,6 +111,63 @@ class TestVentanaEjecutarTodo(base.TestVentanaActualizar):
             self.assertIn(f"0 de {len(hojas)}", contador())
         finally:
             dialogo.destroy()
+
+    def test_con_cosas_faltantes_avisa_y_deja_ejecutar_igual(self):
+        """El caso de prueba esta vacio: falta todo, pero no se bloquea."""
+
+        class HiloEnElMismo:
+            def __init__(self, target=None, daemon=None, **_):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        llamadas = []
+
+        def ejecutar_falso(**kwargs):
+            llamadas.append(kwargs)
+
+        dialogo = self._dialogo()
+        try:
+            boton = self._boton("Ejecutar", dialogo)
+            self.assertEqual(str(boton.cget("state")), "normal")
+            avisos = [
+                w for w in self._todos(dialogo) if w.winfo_class() == "Text"
+            ]
+            self.assertTrue(
+                any("Falta" in w.get("1.0", "end") for w in avisos)
+            )
+
+            # Dice que no: no corre nada y la ventana sigue abierta
+            with mock.patch.object(
+                self.app.messagebox, "askyesno", return_value=False,
+            ) as pregunta, mock.patch.object(
+                self.nucleo, "ejecutar_plan", ejecutar_falso,
+            ):
+                boton.invoke()
+                self.root.update()
+            self.assertEqual(pregunta.call_count, 1)
+            self.assertIn("Ejecutar igual", pregunta.call_args[0][1])
+            self.assertEqual(llamadas, [])
+            self.assertTrue(dialogo.winfo_exists())
+
+            # Dice que si: corre forzado
+            with mock.patch.object(
+                self.app.messagebox, "askyesno", return_value=True,
+            ), mock.patch.object(
+                self.nucleo, "ejecutar_plan", ejecutar_falso,
+            ), mock.patch.object(
+                self.app.threading, "Thread", HiloEnElMismo,
+            ), mock.patch.object(self.app.messagebox, "showinfo"), \
+                    mock.patch.object(self.app.messagebox, "showerror"):
+                boton.invoke()
+                for _ in range(5):
+                    self.root.update()
+            self.assertEqual(len(llamadas), 1, llamadas)
+            self.assertTrue(llamadas[0].get("forzar"))
+        finally:
+            if dialogo.winfo_exists():
+                dialogo.destroy()
 
 
 if __name__ == "__main__":

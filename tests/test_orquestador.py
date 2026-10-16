@@ -328,7 +328,8 @@ class TestCorrida(unittest.TestCase):
     rama que sale de el.
     """
 
-    def correr(self, filas, seleccion=None, falla=(), hilos=3, mensajes=None):
+    def correr(self, filas, seleccion=None, falla=(), hilos=3, mensajes=None,
+               forzar=False):
 
         corridos = []
         candado = threading.Lock()
@@ -373,7 +374,7 @@ class TestCorrida(unittest.TestCase):
                         mensajes.append if mensajes is not None
                         else (lambda *a: None)
                     ),
-                    hilos=hilos, plan=plan,
+                    hilos=hilos, plan=plan, forzar=forzar,
                 )
             except nucleo.ErrorEntrada as fallo:
                 error = str(fallo)
@@ -485,6 +486,43 @@ class TestCorrida(unittest.TestCase):
                     filas=caso_vacio(),
                 ),
             )
+
+    def test_forzado_corre_igual_lo_que_le_falta_un_previo(self):
+        """
+        Pedido del usuario: "no quiero que se bloquee, que me advierta
+        por ultimo, pero si quiero correr igual sin actualizar un previo
+        igual que me deje".
+        """
+
+        plan = nucleo.planificar(
+            "/caso", "2607", seleccion={"pagos:ecostos"}, filas=caso_vacio(),
+        )
+        self.assertFalse(plan["puede_ejecutar"])
+        self.assertTrue(plan["puede_forzar"], plan["impedimentos"])
+
+        mensajes = []
+        corridos, _, error = self.correr(
+            caso_vacio(), seleccion={"pagos:ecostos"}, forzar=True,
+            mensajes=mensajes,
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(corridos, [("pagos", ("ecostos",))])
+        self.assertTrue(
+            any("Se ejecuta igual" in m for m in mensajes), mensajes
+        )
+
+    def test_forzar_no_salta_un_periodo_invalido_ni_nada_tildado(self):
+        for aamm, seleccion in (("26", {"pagos:ecostos"}), ("2607", set())):
+            plan = nucleo.planificar(
+                "/caso", aamm, seleccion=seleccion, filas=caso_vacio(),
+            )
+            self.assertFalse(plan["puede_forzar"], aamm)
+            with self.assertRaises(nucleo.ErrorEntrada):
+                orquestador.ejecutar_plan(
+                    "/caso", aamm, registrar=lambda *a: None,
+                    plan=plan, forzar=True,
+                )
 
 
 if __name__ == "__main__":
