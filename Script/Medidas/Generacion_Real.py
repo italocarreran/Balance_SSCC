@@ -267,10 +267,24 @@ def expandir_a_cuartos(df_horario, centrales, registrar=print):
     df = df_horario.loc[df_horario.index.repeat(4)].copy()
     df["cuarto_hora"] = df.groupby(level=0).cumcount() + 1
 
-    # topologyTimeHour: 1 -> 00:00-00:45, 24 -> 23:00-23:45.
+    # topologyTimeHour es el periodo del dia local: 1 -> 00:00-00:45,
+    # 24 -> 23:00-23:45 (visto con la API real, prueba_opreal_horas):
+    #   - el dia que se atrasa la hora (sab 4-04-2026) trae 1..25: la 25
+    #     es la SEGUNDA vez de las 23:00. Antes caia en las 00:00 del
+    #     domingo y se sumaba a su hora 1 (doble), y la segunda pasada
+    #     de las 23:00 quedaba sin energia;
+    #   - el dia que se adelanta (dom 6-09-2026) trae 1..24 con la 1 (las
+    #     00:00, que no existen) en cero: queda fuera del calendario y
+    #     pegar_calendario lo avisa.
+    # "vez" distingue la primera pasada de una hora local (0) de la
+    # segunda (1), para cruzarla con la fila correcta del calendario.
+    hora = pd.to_numeric(df[COLUMNA_HORA], errors="coerce")
+    df["vez"] = (hora - 24).clip(lower=0).fillna(0).astype(int)
+    # La segunda pasada (25) es otra vez la hora 24 del dia = las 23:00.
+    hora_local = hora.where(hora <= 24, 24) - 1
     df["intervalo"] = (
         pd.to_datetime(df["fecha_consulta"])
-        + pd.to_timedelta(df[COLUMNA_HORA] - 1, unit="h")
+        + pd.to_timedelta(hora_local, unit="h")
         + pd.to_timedelta((df["cuarto_hora"] - 1) * 15, unit="m")
     )
 
@@ -295,7 +309,7 @@ def expandir_a_cuartos(df_horario, centrales, registrar=print):
 
     salida = (
         df
-        .groupby(["intervalo", "clave"], as_index=False)
+        .groupby(["intervalo", "vez", "clave"], as_index=False)
         .agg(Gen_Unidad=("Gen_Unidad", "sum"))
     )
 
@@ -329,9 +343,10 @@ def pegar_calendario(df_cuartos, calendario, registrar=print):
     desalinearia.
 
     La API de operacion real entrega fecha + hora local (no UTC), asi
-    que el cruce es por hora local. En un dia de cambio de hora hacia
-    atras la hora local se repite y el calendario tiene dos filas para
-    ese instante: se toma la primera y se avisa.
+    que el cruce es por hora local. El dia que se atrasa la hora, la
+    hora local que se repite tiene dos filas en el calendario (en orden
+    de Cuarto de Hora): la primera pasada cruza con vez=0 y la segunda
+    (la hora 25 de la API) con vez=1.
     """
 
     if df_cuartos.empty:
@@ -340,21 +355,28 @@ def pegar_calendario(df_cuartos, calendario, registrar=print):
             "Hora Mes": [], "Cuarto de Hora": [],
         })
 
-    cal = calendario.drop_duplicates(subset=["intervalo"], keep="first")
+    cal = (
+        calendario.sort_values("Cuarto de Hora", kind="stable")
+        .drop_duplicates(subset=["intervalo", "Cuarto de Hora"])
+        .copy()
+    )
+    cal["vez"] = cal.groupby("intervalo").cumcount()
 
-    repetidos = len(calendario) - len(cal)
-    if repetidos:
+    if "vez" not in df_cuartos.columns:
+        df_cuartos = df_cuartos.assign(vez=0)
+
+    repetidas = int((cal["vez"] > 0).sum())
+    if repetidas:
         registrar(
-            f"  AVISO: {repetidos} cuarto(s) de hora con hora local "
-            f"repetida (cambio de hora). Para las centrales de la hoja "
-            f"'Gen real' se toma la primera ocurrencia: la API de "
-            f"operacion real no entrega hora UTC para distinguirlas."
+            f"  cambio de hora: {repetidas} cuarto(s) de hora local "
+            f"repetida; para las centrales de 'Gen real' la segunda pasada "
+            f"es la hora 25 de la API."
         )
 
     df = df_cuartos.merge(
-        cal[["intervalo", "Cuarto de Hora", "Mes", "Dia", "Hora",
+        cal[["intervalo", "vez", "Cuarto de Hora", "Mes", "Dia", "Hora",
              "Minutos", "Hora Mes"]],
-        on="intervalo",
+        on=["intervalo", "vez"],
         how="left",
     )
 
@@ -395,4 +417,4 @@ def pegar_calendario(df_cuartos, calendario, registrar=print):
         )
         df = df.dropna(subset=["Cuarto de Hora"])
 
-    return df
+    return df.drop(columns=["vez"])

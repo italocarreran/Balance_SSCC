@@ -12,13 +12,6 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
-- **Generación Real en el cambio de hora (2026-10-16 (2)):** en la corrida
-  real de 2609 quedaron 8 filas de la API de operación real fuera del
-  calendario (2 centrales × 4 cuartos; casi seguro la "hora 1" del 6-09,
-  que la API numera como las 00:00, inexistente ese día). El aviso ahora
-  dice la hora y cuánta energía traían. Si traen energía, ver cómo numera
-  la API ese día (¿23 horas 1..23 desde la 01:00, o 24 con la 1 falsa?) y
-  corregir `expandir_a_cuartos`.
 - **Tiempos (2026-10-16 (2)):** el cuello de botella es la escritura de
   las hojas de cálculo (3 min 14 s de los 4 min 34 s de "cálculo"). Ver
   la entrada del día.
@@ -5071,3 +5064,36 @@ tramo con `_Cronometro` ("  escritura: abrir el libro existente (x s)",
 cálculo "Control_corrida.xlsx (Alertas y Ejecucion)", más el total).
 Pendiente: con el próximo log real, atacar el tramo más largo. 276
 pruebas.
+
+## 2026-10-16 (4) — Generación Real (opreal): la hora 25 de abril iba al domingo
+
+Pregunta del usuario: opreal puede traer formatos horarios distintos,
+¿está cubierto? No lo estaba. Con un script de una vez
+(`probar_opreal_horas.py`, fuera del repo) el usuario bajó la API real para
+3-5/04 y 5-7/09 de 2026 (`prueba_opreal_horas.xlsx`). Columnas:
+`topologyTimeDateMeasure` ("2026-04-04Z", solo fecha), `topologyTimeHour`,
+`topologyTimeLevel` = "hour". Resultado:
+
+- días normales: 1..24 (1 = 00:00), como se suponía;
+- **6-09 (23 h): 1..24**, con la hora 1 (las 00:00, que no existen) **en
+  cero** en todas las centrales (en ANDES IV, que inyecta ~50 parejo, se ve
+  que es relleno). El código ya la dejaba fuera del calendario: eran las 8
+  filas del aviso de la corrida real, sin energía perdida;
+- **4-04 (25 h): 1..25**, la 25 es la segunda pasada de las 23:00. **Bug:**
+  la 25 caía en las 00:00 del domingo y se sumaba a su hora 1 (ANDES IV con
+  ~101.700 kWh en vez de ~50.850), y la segunda pasada de las 23:00 del
+  sábado quedaba sin energía.
+
+**Arreglo** (`Generacion_Real`): `expandir_a_cuartos` lleva cada hora a su
+hora local con una columna `vez` (0 = primera pasada, 1 = la 25), y
+`pegar_calendario` cruza por `intervalo + vez` contra el calendario
+(ordenado por Cuarto de Hora, la repetida numerada con cumcount). Ya no se
+toma "la primera ocurrencia". Con los datos reales de abril: sáb 24 =
+50.847, sáb 25 = 50.850, dom 1 = 50.848 kWh, y el total cruzado igual al
+de la API.
+
+**Verificación:** `tests/test_gen_real_cambio_hora.py` +2 (abril con 1..25
+contra el calendario real de `Claves_Balance`; septiembre con la hora 1 en
+cero: queda fuera y el aviso dice "venian en cero"). 278 pruebas, 0
+salteadas con tkinter. Hay que volver a traer `Medidas_SAE.xlsx` de abril.
+
