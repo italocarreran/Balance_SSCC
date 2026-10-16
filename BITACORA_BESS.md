@@ -12,6 +12,17 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **Generación Real en el cambio de hora (2026-10-16 (2)):** en la corrida
+  real de 2609 quedaron 8 filas de la API de operación real fuera del
+  calendario (2 centrales × 4 cuartos; casi seguro la "hora 1" del 6-09,
+  que la API numera como las 00:00, inexistente ese día). El aviso ahora
+  dice la hora y cuánta energía traían. Si traen energía, ver cómo numera
+  la API ese día (¿23 horas 1..23 desde la 01:00, o 24 con la 1 falsa?) y
+  corregir `expandir_a_cuartos`.
+- **Tiempos (2026-10-16 (2)):** el cuello de botella es la escritura de
+  las hojas de cálculo (3 min 14 s de los 4 min 34 s de "cálculo"). Ver
+  la entrada del día.
+
 - **Hojas de cálculo sin auxiliares (pedido 2026-10-15 (11), "para
   después"):** en `Calculo E Costos` y `Calculo RE545` (y las demás de
   cálculo) dejar solo lo relevante para ver, revisar y entender el paso a
@@ -5016,3 +5027,36 @@ hora en cada línea, tags de color, archivo guardado) y
 `tests/test_orquestador.py` +2 (duración por paso y en el resumen;
 `formatear_duracion`). 275 pruebas, 0 salteadas con tkinter. Captura del
 Registro revisada a ojo.
+
+## 2026-10-16 (2) — Primera corrida real con tiempos: análisis y un arreglo de velocidad
+
+El usuario corrió "Ejecutar todo" de 2609 con el control de tiempo (12 min
+27 s). **Camino crítico:** Medidas_SAE (5:36) → entradas (2:18) → cálculo
+(4:34) = 12:27 exactos; todo lo demás (CMg, FD, FMA, subastas) corrió en
+paralelo y terminó a los 4:44, así que acelerarlo no acorta la corrida.
+
+- **Medidas_SAE 5:36:** API por punto ~2:30; armado ~1 min, con **50 s
+  entre "Armando calendario" y la línea siguiente**; Generación Real
+  ~1:34 (API). Los 50 s eran míos: con desfases mezclados (`-04:00` /
+  `-03:00`), `parse_fecha_mixta` caía al camino valor por valor (dos
+  columnas) y `utc_desde_local` (entrada (10)) también iba fila por fila.
+  **Arreglado:** camino rápido vectorizado para ISO con desfase (los
+  primeros 19 caracteres = hora tal cual escrita) y `utc_desde_local`
+  vectorizado (`to_datetime(utc=True, format="ISO8601")`). 356.624 filas:
+  21,1 s → 2,6 s aquí (en su PC eran ~50 s). Mismo resultado (pruebas de
+  cambio de hora y API v2 sin cambios).
+- **Entradas 2:18:** leer el OfertasSSCC ~56 s (`iterrows` sobre todas las
+  hojas) y escribir el libro ~56 s.
+- **Cálculo 4:34:** lectura de hojas ~30 s (FMA 14 s), cálculo ~1:20
+  (RE545 reservas 26 s), **escritura 3 min 14 s** — lo más grande de la
+  corrida. Candidatos: carpeta en OneDrive (sincroniza mientras se
+  escribe), formato/contorno de 2 hojas de ~37 mil filas × 47/59
+  columnas, y el pegado en el zip. Pendiente medir por partes.
+- Fuera del camino crítico: FD 2:18, de los cuales 1:42 es copiar el `.zip`
+  del DCO, que trae nada ("sin Excel adentro").
+- **Generación Real:** el aviso de filas fuera del calendario ahora dice
+  qué hora local, de qué central y cuánta energía traían (ver pendiente).
+
+**Verificación:** `tests/test_gen_real_cambio_hora.py` (nuevo). 276
+pruebas, 0 salteadas con tkinter.
+

@@ -20,6 +20,7 @@ en el cambio de hora y desordenaria la numeracion), el signo sale de
 `Flujo`, y la agrupacion final es por clave.
 """
 
+import re
 import warnings
 
 import pandas as pd
@@ -45,6 +46,12 @@ COLUMNAS_SAE = [
 ]
 
 
+_PATRON_ISO_CON_DESFASE = re.compile(
+    r"^\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d(\.\d+)?([+-]\d\d:?\d\d|Z)$"
+)
+_PATRON_DESFASE_CERO = re.compile(r"(?:Z|[+-]00:?00)$")
+
+
 def parse_fecha_mixta(serie):
     """
     Fechas que pueden venir en formatos distintos en el mismo lote.
@@ -60,6 +67,18 @@ def parse_fecha_mixta(serie):
     """
 
     textos = serie.dropna().astype(str).str.strip()
+
+    # Camino rapido: todo ISO con desfase ('2026-09-05T20:00:00.000-04:00',
+    # lo que trae la API v2). La hora tal como esta escrita son los
+    # primeros 19 caracteres. Sin esto, con desfases mezclados (cambio de
+    # hora) pandas caia al camino de abajo, valor por valor, y en un mes
+    # de 356 mil filas eran casi un minuto por columna.
+    if len(textos) and textos.str.match(_PATRON_ISO_CON_DESFASE).all():
+        return pd.to_datetime(
+            serie.astype("string").str.strip().str[:19],
+            format="%Y-%m-%dT%H:%M:%S", errors="coerce",
+        )
+
     dayfirst = not (
         len(textos) > 0 and textos.str.match(r"^\d{4}-").all()
     )
@@ -126,19 +145,16 @@ def utc_desde_local(serie):
     hora local con la marca equivocada y no sirve para sacar el UTC.
     """
 
-    utc = []
-    for valor in serie:
-        if valor is None or (not isinstance(valor, str) and pd.isna(valor)):
-            utc.append(pd.NaT)
-            continue
-        try:
-            marca = pd.Timestamp(valor)
-        except (TypeError, ValueError):
-            return None
-        if marca.tzinfo is None or marca.utcoffset() == pd.Timedelta(0):
-            return None
-        utc.append(marca.tz_convert("UTC").tz_localize(None))
-    return pd.to_datetime(pd.Series(utc, index=serie.index))
+    textos = serie.dropna().astype(str).str.strip()
+    if not len(textos):
+        return None
+    if not textos.str.match(_PATRON_ISO_CON_DESFASE).all():
+        return None
+    if textos.str.contains(_PATRON_DESFASE_CERO).any():
+        return None
+    return pd.to_datetime(
+        serie, utc=True, format="ISO8601", errors="coerce"
+    ).dt.tz_localize(None)
 
 
 def normalizar_fechas(df, registrar=None):

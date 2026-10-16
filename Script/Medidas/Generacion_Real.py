@@ -370,10 +370,28 @@ def pegar_calendario(df_cuartos, calendario, registrar=print):
         )
 
     if sin_calendario:
+        # Que horas son y cuanta energia traian: la causa tipica es la
+        # hora que no existe del cambio de hora (la API numera la hora 1
+        # como las 00:00 y el 6-09 las 00:00 no existen), y si traian
+        # energia, esa energia se pierde.
+        fuera = df[df["Cuarto de Hora"].isna()]
+        horas = sorted(
+            {pd.Timestamp(i).floor("h") for i in fuera["intervalo"].dropna()}
+        )
+        detalle = ", ".join(f"{h:%d-%m %H:%M}" for h in horas[:6])
+        if len(horas) > 6:
+            detalle += f" y {len(horas) - 6} hora(s) mas"
+        energia = float(pd.to_numeric(fuera["Gen_Unidad"], errors="coerce").abs().sum())
+        claves = ", ".join(sorted(fuera["clave"].dropna().astype(str).unique()))
         registrar(
             f"  AVISO: {sin_calendario:,} fila(s) de la API de "
             f"operacion real quedaron fuera del calendario del mes y "
-            f"no se agregan (probablemente de otro periodo)."
+            f"no se agregan: hora local {detalle or '?'} ({claves}); "
+            + (
+                f"traian {energia:,.3f} kWh en total, que NO entran al "
+                f"balance."
+                if energia > 0 else "venian en cero."
+            )
         )
         df = df.dropna(subset=["Cuarto de Hora"])
 
