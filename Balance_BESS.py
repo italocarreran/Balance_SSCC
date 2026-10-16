@@ -132,6 +132,59 @@ SIMBOLO = {
 SIMBOLO_AVISO = "\u26a0"
 COLOR_AVISO = "#d97706"
 
+# Colores del Registro (pedido del usuario): verde lo que termino bien,
+# amarillo los avisos, rojo los errores. El amarillo es oscuro (ambar)
+# porque un amarillo puro no se lee sobre el fondo blanco.
+COLOR_REGISTRO = {
+    "ok": "#1a7f1a",
+    "aviso": "#b8860b",
+    "error": "#c00020",
+}
+
+# Donde queda el registro de la ultima corrida, en la carpeta del caso
+# (para poder mandarlo sin copiar a mano).
+ARCHIVO_REGISTRO = "Registro_ultima_corrida.txt"
+
+_PATRON_ERROR = re.compile(
+    r"\bERROR\b|Traceback|\bNO se corre\b|: error\b|termino con problemas",
+    re.IGNORECASE,
+)
+_PATRON_AVISO = re.compile(
+    r"\[AVISO\]|\bAVISO\b|\bOJO\b|advertencia|desactualizad|omitido|"
+    r"queda fuera|no se encontro|sin datos|incomplet|cambio de hora",
+    re.IGNORECASE,
+)
+_PATRON_OK = re.compile(
+    r"^(\[[^\]]+\]\s*)?(Listo|Terminado|Hecho|OK\b)|: ok\b|correctamente",
+    re.IGNORECASE,
+)
+
+
+def nivel_del_mensaje(texto):
+    """'error' / 'aviso' / 'ok' / None: que color lleva en el Registro."""
+
+    texto = str(texto).strip()
+    if not texto:
+        return None
+    if _PATRON_ERROR.search(texto):
+        return "error"
+    if _PATRON_AVISO.search(texto):
+        return "aviso"
+    if _PATRON_OK.search(texto):
+        return "ok"
+    return None
+
+
+def formatear_reloj(segundos):
+    """83.4 -> '01:23'; 3725 -> '1:02:05'."""
+
+    entero = int(max(0, segundos))
+    horas, resto = divmod(entero, 3600)
+    minutos, seg = divmod(resto, 60)
+    if horas:
+        return f"{horas}:{minutos:02d}:{seg:02d}"
+    return f"{minutos:02d}:{seg:02d}"
+
 COLOR_ESTADO = {
     "ok": COLOR_OK,
     "falta": COLOR_FALTA,
@@ -1011,10 +1064,41 @@ def main():
     for widget in (frame_log, txt_log, scroll_log):
         registrar_desplazable(widget, _desplazar_registro)
 
+    for nivel, color in COLOR_REGISTRO.items():
+        txt_log.tag_configure(nivel, foreground=color)
+    txt_log.tag_configure("hora", foreground=COLOR_NEUTRO)
+
+    # Inicio del proceso en curso: cada linea lleva la hora y el tiempo
+    # transcurrido desde ahi ("control de tiempo", pedido del usuario).
+    inicio_log = {"t": None}
+
     def log(mensaje):
-        txt_log.insert("end", str(mensaje) + "\n")
+        texto = str(mensaje)
+        nivel = nivel_del_mensaje(texto)
+        ahora = time.time()
+        for linea in texto.split("\n"):
+            if linea.strip():
+                marca = time.strftime("%H:%M:%S", time.localtime(ahora))
+                if inicio_log["t"] is not None:
+                    marca += f" +{formatear_reloj(ahora - inicio_log['t'])}"
+                txt_log.insert("end", f"[{marca}] ", ("hora",))
+            txt_log.insert("end", linea + "\n", (nivel,) if nivel else ())
         txt_log.see("end")
         root.update_idletasks()
+
+    def guardar_registro():
+        """Deja el registro en <caso>/Registro_ultima_corrida.txt."""
+
+        base = var_base.get()
+        if not base or not os.path.isdir(base):
+            return None
+        ruta = os.path.join(base, ARCHIVO_REGISTRO)
+        try:
+            with open(ruta, "w", encoding="utf-8") as archivo:
+                archivo.write(txt_log.get("1.0", "end"))
+        except OSError:
+            return None
+        return ruta
 
     # --------------------------------------------------------
     # TIMER
@@ -1435,6 +1519,11 @@ def main():
 
         timer["corriendo"] = True
         timer["inicio"] = time.time()
+        inicio_log["t"] = timer["inicio"]
+        log(
+            f"Inicio: {time.strftime('%d-%m-%Y %H:%M:%S')} - "
+            f"{getattr(funcion, '__name__', 'proceso')}"
+        )
         tick()
 
         resultado = {"ok": False}
@@ -1468,6 +1557,17 @@ def main():
         def terminar(res):
             timer["corriendo"] = False
             corriendo["activo"] = False
+
+            duracion = time.time() - timer["inicio"]
+            log("")
+            log(
+                f"{'Terminado' if res['ok'] else 'ERROR: termino con problemas'}"
+                f" - tiempo total {nucleo.formatear_duracion(duracion)}"
+            )
+            guardado = guardar_registro()
+            if guardado:
+                log(f"Registro guardado en {guardado}")
+            inicio_log["t"] = None
 
             # revisar() repinta el arbol entero (y con el, todos los
             # botones): no hace falta rehabilitarlos a mano.

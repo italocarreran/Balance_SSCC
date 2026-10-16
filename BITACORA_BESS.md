@@ -4986,3 +4986,33 @@ Medidores ni Subastas), "Ejecutar todo" las propone, rehacer la hoja CMg
 la deja ok pero el cálculo sigue viejo, y rehacer el cálculo deja todo al
 día; un libro sin sellos no avisa. `test_xlsx_rapido` ignora el archivo de
 sellos. 271 pruebas, 0 salteadas con tkinter.
+
+## 2026-10-16 — Registro: control de tiempo y colores
+
+Pedido del usuario: control de tiempo en el log (va a correr todo y mandar
+el log para ver cuánto se demora cada cosa) y colores en el Registro:
+verde ok, amarillo avisos, rojo errores.
+
+- **Hora en cada línea** (`Balance_BESS.py`, `log`): `[HH:MM:SS +mm:ss]`,
+  hora del reloj y tiempo desde que arrancó el proceso; al empezar, una
+  línea "Inicio: … - <proceso>", y al terminar "Terminado - tiempo total …"
+  (o "ERROR: terminó con problemas").
+- **Duración de cada paso de "Ejecutar todo"** (`orquestador.ejecutar_plan`):
+  "[grupo] Listo (2 min 14 s)." / "[grupo] ERROR (12,4 s): …", y el resumen
+  final dice el total y, por paso, cuánto tardó y a qué altura de la
+  corrida empezó (para ver qué esperó a qué). `formatear_duracion` en
+  `nucleo`.
+- **Colores** (`nivel_del_mensaje`): rojo `ERROR`, `Traceback`, "NO se
+  corre", ": error"; ámbar `[AVISO]`, `OJO`, omitido, desactualizado,
+  cambio de hora, incompleto…; verde lo que empieza con "Listo"/
+  "Terminado", ": ok", "correctamente". El amarillo es ámbar oscuro
+  (`#b8860b`): amarillo puro no se lee sobre blanco.
+- **Archivo:** al terminar cada proceso el registro queda en
+  `<caso>/Registro_ultima_corrida.txt` (se pisa en cada corrida), para
+  mandarlo sin copiar a mano.
+
+**Verificación:** `tests/test_ventana_registro.py` (nuevo, ventana real:
+hora en cada línea, tags de color, archivo guardado) y
+`tests/test_orquestador.py` +2 (duración por paso y en el resumen;
+`formatear_duracion`). 275 pruebas, 0 salteadas con tkinter. Captura del
+Registro revisada a ojo.

@@ -35,6 +35,7 @@ Tres reglas de las que depende que esto sea seguro:
 """
 
 import threading
+import time
 from collections import namedtuple
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
@@ -694,6 +695,20 @@ def _orden_de_grupos(seleccion):
 # LA CORRIDA
 # ============================================================
 
+def formatear_duracion(segundos):
+    """12.3 -> '12,3 s'; 83 -> '1 min 23 s'; 3725 -> '1 h 02 min 05 s'."""
+
+    segundos = max(0.0, float(segundos))
+    if segundos < 60:
+        return f"{segundos:.1f} s".replace(".", ",")
+    entero = int(round(segundos))
+    horas, resto = divmod(entero, 3600)
+    minutos, seg = divmod(resto, 60)
+    if horas:
+        return f"{horas} h {minutos:02d} min {seg:02d} s"
+    return f"{minutos} min {seg:02d} s"
+
+
 def ejecutar_plan(
     carpeta_base, aamm, seleccion=None, registrar=print, progreso=None,
     hilos=3, plan=None,
@@ -744,6 +759,11 @@ def ejecutar_plan(
     terminados = set()
     total = len(orden)
     hechos = 0
+    # Cuanto tardo cada paso y cuando arranco respecto del inicio (para
+    # ver que espero a que, pedido del usuario: "control de tiempo").
+    inicio_corrida = time.time()
+    duraciones = {}
+    arranques = {}
 
     def registrar_grupo(id_grupo, mensaje):
         with candado_registro:
@@ -760,17 +780,25 @@ def ejecutar_plan(
         grupo = GRUPO_POR_ID[id_grupo]
 
         with candados_recurso[grupo.recurso]:
+            arranque = time.time()
+            arranques[id_grupo] = arranque - inicio_corrida
             registrar_grupo(id_grupo, f"Empezando: {grupo.etiqueta}")
-            grupo.ejecutar(
-                carpeta_base,
-                aamm,
-                grupos[id_grupo],
-                lambda m: registrar_grupo(id_grupo, m),
-                # El progreso fino de cada paso no se mezcla en una
-                # sola barra: la de la ventana avanza por paso hecho.
-                None,
+            try:
+                grupo.ejecutar(
+                    carpeta_base,
+                    aamm,
+                    grupos[id_grupo],
+                    lambda m: registrar_grupo(id_grupo, m),
+                    # El progreso fino de cada paso no se mezcla en una
+                    # sola barra: la de la ventana avanza por paso hecho.
+                    None,
+                )
+            finally:
+                duraciones[id_grupo] = time.time() - arranque
+            registrar_grupo(
+                id_grupo,
+                f"Listo ({formatear_duracion(duraciones[id_grupo])}).",
             )
-            registrar_grupo(id_grupo, "Listo.")
 
     with ThreadPoolExecutor(max_workers=max(1, hilos)) as pool:
 
@@ -819,7 +847,11 @@ def ejecutar_plan(
                     resultados[id_grupo] = "ok"
                 except Exception as error:  # noqa: BLE001 - se informa
                     resultados[id_grupo] = f"error: {error}"
-                    registrar(f"[{id_grupo}] ERROR: {error}")
+                    registrar(
+                        f"[{id_grupo}] ERROR "
+                        f"({formatear_duracion(duraciones.get(id_grupo, 0))}): "
+                        f"{error}"
+                    )
 
                 terminados.add(id_grupo)
                 hechos += 1
@@ -833,11 +865,20 @@ def ejecutar_plan(
     }
 
     registrar("")
-    registrar("Resumen de la corrida:")
+    registrar(
+        f"Resumen de la corrida (total "
+        f"{formatear_duracion(time.time() - inicio_corrida)}; "
+        f"'empezo' es desde el inicio de la corrida):"
+    )
     for id_grupo in orden:
+        tiempos = (
+            f" - tardo {formatear_duracion(duraciones[id_grupo])}, empezo a "
+            f"los {formatear_duracion(arranques[id_grupo])}"
+            if id_grupo in duraciones else ""
+        )
         registrar(
             f"  {GRUPO_POR_ID[id_grupo].etiqueta}: "
-            f"{resultados.get(id_grupo, 'sin correr')}"
+            f"{resultados.get(id_grupo, 'sin correr')}{tiempos}"
         )
 
     if fallidos:

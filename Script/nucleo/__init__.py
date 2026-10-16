@@ -243,7 +243,7 @@ from .escritura import (
 )
 from .proceso import generar_consolidado, generar_pagos_bess
 from .orquestador import (
-    GRUPOS, GRUPO_POR_ID, TAREAS, TAREA_POR_ID, dependientes, ejecutar_plan,
+    GRUPOS, GRUPO_POR_ID, TAREAS, formatear_duracion, TAREA_POR_ID, dependientes, ejecutar_plan,
     planificar, propagar_seleccion,
 )
 from .traer import (
@@ -278,7 +278,7 @@ __all__ = [
     "COLUMNAS_SALIDA_E_COSTOS", "COLUMNAS_AUXILIARES_RE545",
     "COLUMNAS_SALIDA_RE545", "reponer_auxiliares_medidores",
     "formatear_hoja", "formatear_libro", "leer_cmg_consolidado",
-    "GRUPOS", "GRUPO_POR_ID", "TAREAS", "TAREA_POR_ID", "dependientes",
+    "GRUPOS", "GRUPO_POR_ID", "formatear_duracion", "TAREAS", "TAREA_POR_ID", "dependientes",
     "ejecutar_plan", "planificar", "propagar_seleccion",
     "EXTENSIONES_EXCEL", "HOJA_CALCULO_ECOSTOS", "HOJA_ALERTAS",
     "HOJA_EJECUCION", "HOJA_LOG", "HOJA_MEDIDORES", "HOJA_CMG",

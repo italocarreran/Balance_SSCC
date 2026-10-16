@@ -328,7 +328,7 @@ class TestCorrida(unittest.TestCase):
     rama que sale de el.
     """
 
-    def correr(self, filas, seleccion=None, falla=(), hilos=3):
+    def correr(self, filas, seleccion=None, falla=(), hilos=3, mensajes=None):
 
         corridos = []
         candado = threading.Lock()
@@ -368,7 +368,11 @@ class TestCorrida(unittest.TestCase):
             error = None
             try:
                 orquestador.ejecutar_plan(
-                    "/caso", "2607", registrar=lambda *a: None,
+                    "/caso", "2607",
+                    registrar=(
+                        mensajes.append if mensajes is not None
+                        else (lambda *a: None)
+                    ),
                     hilos=hilos, plan=plan,
                 )
             except nucleo.ErrorEntrada as fallo:
@@ -391,6 +395,22 @@ class TestCorrida(unittest.TestCase):
         self.assertGreater(
             simultaneos, 1, "las bajadas tendrian que ir en paralelo"
         )
+
+    def test_el_registro_dice_cuanto_tardo_cada_paso(self):
+        mensajes = []
+        _, _, error = self.correr(caso_vacio(), mensajes=mensajes)
+        self.assertIsNone(error)
+        texto = "\n".join(mensajes)
+        self.assertRegex(texto, r"\[cmg_csv\] Listo \(\d+,\d s\)\.")
+        self.assertRegex(texto, r"Resumen de la corrida \(total \d+,\d s")
+        resumen = [m for m in mensajes if ": ok - tardo" in m]
+        self.assertEqual(len(resumen), 9, mensajes)
+        self.assertTrue(all("empezo a los" in m for m in resumen))
+
+    def test_formatear_duracion(self):
+        self.assertEqual(nucleo.formatear_duracion(12.34), "12,3 s")
+        self.assertEqual(nucleo.formatear_duracion(83), "1 min 23 s")
+        self.assertEqual(nucleo.formatear_duracion(3725), "1 h 02 min 05 s")
 
     def test_las_hojas_van_juntas_en_una_sola_escritura(self):
         corridos, _, _ = self.correr(caso_vacio())
