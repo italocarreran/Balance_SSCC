@@ -9,10 +9,12 @@ falsos que solo anotan cuando corrieron.
 """
 
 import sys
+import tempfile
 import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -523,6 +525,111 @@ class TestCorrida(unittest.TestCase):
                     "/caso", aamm, registrar=lambda *a: None,
                     plan=plan, forzar=True,
                 )
+
+
+class TestBarraDeProgreso(unittest.TestCase):
+    """
+    Pedido del usuario: "la barra de procesando no se condice con los
+    tiempos de demora". La barra sigue el tiempo estimado, no la
+    cantidad de pasos.
+    """
+
+    def test_simula_el_paralelismo_y_los_recursos(self):
+        orden = ["medidas_sae", "cmg_csv", "cmg_xlsx", "consolidado"]
+        dependencias = {
+            "medidas_sae": set(), "cmg_csv": set(),
+            "cmg_xlsx": {"cmg_csv"},
+            "consolidado": {"medidas_sae", "cmg_xlsx"},
+        }
+        restante = {
+            "medidas_sae": 300.0, "cmg_csv": 30.0, "cmg_xlsx": 90.0,
+            "consolidado": 100.0,
+        }
+        # medidas (300) en paralelo con cmg (30 + 90); despues consolidado
+        self.assertAlmostEqual(
+            orquestador.estimar_restante(orden, dependencias, restante, [], 3),
+            400.0,
+        )
+        # con un hilo, todo en fila
+        self.assertAlmostEqual(
+            orquestador.estimar_restante(orden, dependencias, restante, [], 1),
+            520.0,
+        )
+        # dos del mismo recurso nunca a la vez
+        self.assertAlmostEqual(
+            orquestador.estimar_restante(
+                ["fd_sscc", "fma"], {"fd_sscc": set(), "fma": set()},
+                {"fd_sscc": 10.0, "fma": 20.0}, [], 3,
+            ),
+            30.0,
+        )
+
+    def test_los_tiempos_se_guardan_y_se_leen_por_caso(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            self.assertEqual(
+                orquestador.leer_tiempos(carpeta)["medidas_sae"],
+                orquestador.TIEMPOS_POR_DEFECTO["medidas_sae"],
+            )
+            orquestador.guardar_tiempos(carpeta, {"medidas_sae": 12.34})
+            orquestador.guardar_tiempos(carpeta, {"pagos": 5})
+            tiempos = orquestador.leer_tiempos(carpeta)
+            self.assertEqual(tiempos["medidas_sae"], 12.3)
+            self.assertEqual(tiempos["pagos"], 5.0)
+
+    def test_la_barra_avanza_con_el_tiempo_y_nunca_retrocede(self):
+        lento = 0.6
+
+        def fabricar(id_grupo):
+            def _ejecutar(carpeta, aamm, secciones, registrar, progreso):
+                time.sleep(lento if id_grupo == "medidas_sae" else 0.0)
+            return _ejecutar
+
+        falsos = tuple(
+            orquestador.Grupo(g.id, g.etiqueta, g.recurso, fabricar(g.id))
+            for g in orquestador.GRUPOS
+        )
+        valores = []
+        with tempfile.TemporaryDirectory() as carpeta, mock.patch.object(
+            orquestador, "GRUPOS", falsos,
+        ), mock.patch.object(
+            orquestador, "GRUPO_POR_ID", {g.id: g for g in falsos},
+        ), mock.patch.object(orquestador, "INTERVALO_PROGRESO", 0.05):
+            # La historia dice que medidas es lo unico que tarda
+            orquestador.guardar_tiempos(
+                carpeta,
+                {g.id: (lento if g.id == "medidas_sae" else 0.0)
+                 for g in falsos},
+            )
+            plan = nucleo.planificar(
+                carpeta, "2607", seleccion={"medidas_sae", "cmg_csv"},
+                filas=caso_vacio(),
+            )
+            orquestador.ejecutar_plan(
+                carpeta, "2607", registrar=lambda *a: None,
+                progreso=valores.append, plan=plan,
+            )
+            guardados = orquestador.leer_tiempos(carpeta)
+
+        self.assertEqual(valores[-1], 100)
+        self.assertEqual(valores, sorted(valores))
+        # Con un solo paso por grupo, la barra vieja saltaba 0 -> 50
+        # -> 100 (el CMg termina al tiro). Ahora el CMg rapido casi no
+        # mueve la barra, y medidas la va llenando mientras corre.
+        self.assertLess(valores[0], 30, valores)
+        self.assertGreater(len([v for v in valores if 0 < v < 100]), 3, valores)
+        self.assertGreater(guardados["medidas_sae"], 0.4)
+
+    def test_la_escritura_del_libro_mueve_la_barra_por_tramo(self):
+        from Script.nucleo import escritura
+
+        valores = []
+        crono = escritura._Cronometro(lambda *a: None, valores.append)
+        for nombre in escritura._AVANCE_TRAMO:
+            crono.tramo(nombre)
+        crono.tramo("Control_corrida.xlsx (Alertas y Ejecucion)")
+        self.assertEqual(valores, sorted(valores))
+        self.assertEqual(len(valores), len(escritura._AVANCE_TRAMO))
+        self.assertLess(valores[-1], 1)
 
 
 if __name__ == "__main__":

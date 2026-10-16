@@ -37,9 +37,11 @@ Tres reglas de las que depende que esto sea seguro:
   3. Si una tarea falla, no se corre nada que dependa de ella.
 """
 
+import json
 import threading
 import time
 from collections import namedtuple
+from pathlib import Path
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
 from .estructura import revisar_estructura
@@ -723,6 +725,117 @@ def formatear_duracion(segundos):
     return f"{minutos} min {seg:02d} s"
 
 
+# ------------------------------------------------------------
+# La barra de progreso de la corrida
+# ------------------------------------------------------------
+# Pedido del usuario: "la barra de procesando no se condice con los
+# tiempos de demora". Antes avanzaba un trozo igual por paso terminado:
+# un paso de 3 s movia lo mismo que Medidas (5 min) y entre pasos no se
+# movia. Ahora la barra es tiempo transcurrido / tiempo total estimado,
+# con cuanto tardo cada paso la vez anterior (o lo de la primera
+# corrida real, si no hay historia) y simulando el paralelismo.
+
+ARCHIVO_TIEMPOS = ".tiempos_ejecutar_todo.json"
+
+# Segundos de la primera corrida real completa (2026-10-16).
+TIEMPOS_POR_DEFECTO = {
+    "medidas_sae": 336.0,
+    "cmg_csv": 34.0,
+    "cmg_xlsx": 89.0,
+    "fd_sscc": 138.0,
+    "fma": 130.0,
+    "subastas_db": 11.0,
+    "subastas_xlsx": 47.0,
+    "consolidado": 138.0,
+    "pagos": 274.0,
+}
+
+# Cada cuanto se actualiza la barra mientras corre un paso.
+INTERVALO_PROGRESO = 1.0
+
+
+def _ruta_tiempos(carpeta_base):
+    return Path(carpeta_base) / ARCHIVO_TIEMPOS
+
+
+def leer_tiempos(carpeta_base):
+    """{id de grupo: segundos esperados}, con la historia del caso."""
+
+    tiempos = dict(TIEMPOS_POR_DEFECTO)
+    try:
+        datos = json.loads(_ruta_tiempos(carpeta_base).read_text("utf-8"))
+    except (OSError, ValueError, TypeError):
+        return tiempos
+    if isinstance(datos, dict):
+        for id_grupo, valor in datos.items():
+            if isinstance(valor, (int, float)) and valor >= 0:
+                tiempos[str(id_grupo)] = float(valor)
+    return tiempos
+
+
+def guardar_tiempos(carpeta_base, duraciones):
+    """Anota lo que tardo cada paso que termino bien. Nunca falla."""
+
+    if not duraciones:
+        return
+    try:
+        datos = json.loads(_ruta_tiempos(carpeta_base).read_text("utf-8"))
+        if not isinstance(datos, dict):
+            datos = {}
+    except (OSError, ValueError, TypeError):
+        datos = {}
+    datos.update({g: round(float(d), 1) for g, d in duraciones.items()})
+    try:
+        _ruta_tiempos(carpeta_base).write_text(
+            json.dumps(datos, indent=1, sort_keys=True), encoding="utf-8"
+        )
+    except OSError:
+        pass
+
+
+def estimar_restante(orden, dependencias, restante, en_curso, hilos):
+    """
+    Segundos que faltan para terminar, simulando el mismo reparto que
+    la corrida: hasta `hilos` pasos a la vez, uno por recurso, y cada
+    uno cuando terminaron los que necesita.
+
+    orden: grupos que faltan terminar (en orden de plan).
+    dependencias: {grupo: set de grupos que van antes}.
+    restante: {grupo: segundos que le faltan}.
+    en_curso: grupos que ya estan corriendo.
+    """
+
+    hechos = set()
+    corriendo = {g: max(0.0, restante.get(g, 0.0)) for g in en_curso}
+    pendientes = [g for g in orden if g not in corriendo]
+    reloj = 0.0
+    todos = set(orden)
+
+    while corriendo or pendientes:
+        recursos = {GRUPO_POR_ID[g].recurso for g in corriendo}
+        for g in list(pendientes):
+            if len(corriendo) >= max(1, hilos):
+                break
+            antes = dependencias.get(g, set()) & todos
+            recurso = GRUPO_POR_ID[g].recurso
+            if antes - hechos or recurso in recursos:
+                continue
+            corriendo[g] = max(0.0, restante.get(g, 0.0))
+            recursos.add(recurso)
+            pendientes.remove(g)
+        if not corriendo:
+            break  # dependencia imposible: no deberia pasar
+        paso = min(corriendo.values())
+        reloj += paso
+        for g in list(corriendo):
+            corriendo[g] -= paso
+            if corriendo[g] <= 1e-9:
+                del corriendo[g]
+                hechos.add(g)
+
+    return reloj
+
+
 def ejecutar_plan(
     carpeta_base, aamm, seleccion=None, registrar=print, progreso=None,
     hilos=3, plan=None, forzar=False,
@@ -782,13 +895,46 @@ def ejecutar_plan(
 
     resultados = {}
     terminados = set()
-    total = len(orden)
-    hechos = 0
     # Cuanto tardo cada paso y cuando arranco respecto del inicio (para
     # ver que espero a que, pedido del usuario: "control de tiempo").
     inicio_corrida = time.time()
     duraciones = {}
     arranques = {}
+    esperados = leer_tiempos(carpeta_base)
+    ultimo_progreso = {"valor": 0}
+
+    def informar_progreso(final=False):
+        """Transcurrido / (transcurrido + lo que falta segun la historia)."""
+
+        if not progreso:
+            return
+        if final:
+            valor = 100
+        else:
+            ahora = time.time()
+            transcurrido = ahora - inicio_corrida
+            en_curso = [g for g in en_vuelo.values() if g in arranques]
+            faltan = [g for g in orden if g not in terminados]
+            restante = {}
+            for g in faltan:
+                esperado = esperados.get(g, 60.0)
+                if g in en_curso:
+                    pasado = ahora - inicio_corrida - arranques[g]
+                    # Si tarda mas de lo previsto, se supone que le
+                    # falta un poco (nunca cero mientras corre).
+                    esperado = max(esperado - pasado, 0.1 * esperado, 1.0)
+                restante[g] = esperado
+            falta = estimar_restante(
+                faltan, dependencias, restante, en_curso, hilos
+            )
+            total_estimado = transcurrido + falta
+            valor = int(99 * transcurrido / total_estimado) if total_estimado else 0
+            valor = min(99, valor)
+        # Nunca para atras: una estimacion que se corrige no hace
+        # retroceder la barra.
+        if valor > ultimo_progreso["valor"]:
+            ultimo_progreso["valor"] = valor
+            progreso(valor)
 
     def registrar_grupo(id_grupo, mensaje):
         with candado_registro:
@@ -849,7 +995,6 @@ def ejecutar_plan(
                     )
                     pendientes.remove(id_grupo)
                     terminados.add(id_grupo)
-                    hechos += 1
                     continue
 
                 if dependencias[id_grupo] - terminados:
@@ -861,7 +1006,11 @@ def ejecutar_plan(
             if not en_vuelo:
                 break
 
-            listos, _ = wait(list(en_vuelo), return_when=FIRST_COMPLETED)
+            listos, _ = wait(
+                list(en_vuelo), timeout=INTERVALO_PROGRESO,
+                return_when=FIRST_COMPLETED,
+            )
+            informar_progreso()
 
             for futuro in listos:
 
@@ -879,10 +1028,15 @@ def ejecutar_plan(
                     )
 
                 terminados.add(id_grupo)
-                hechos += 1
 
-                if progreso and total:
-                    progreso(int(100 * hechos / total))
+            if listos:
+                informar_progreso()
+
+    informar_progreso(final=True)
+    guardar_tiempos(
+        carpeta_base,
+        {g: d for g, d in duraciones.items() if resultados.get(g) == "ok"},
+    )
 
     fallidos = {
         id_grupo: detalle for id_grupo, detalle in resultados.items()

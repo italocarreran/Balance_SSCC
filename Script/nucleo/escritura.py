@@ -114,11 +114,26 @@ def _archivo_temporal(ruta_salida):
     return ruta_salida.with_name(f".~nuevas_{ruta_salida.name}")
 
 
+# Hasta donde llega la barra (0..1 de la escritura) al terminar cada
+# tramo. Es aproximado: la escritura no avisa nada por dentro de cada
+# tramo, pero al menos la barra no se queda quieta en el 90% los
+# minutos que tarda (pedido del usuario: "la barra de procesando no se
+# condice con los tiempos de demora").
+_AVANCE_TRAMO = {
+    "abrir el libro existente": 0.15,
+    "armar las hojas": 0.45,
+    "formato (encabezados, anchos, numeros, marco)": 0.60,
+    "guardar el archivo temporal": 0.85,
+    "pegar las hojas en el libro": 0.97,
+}
+
+
 class _Cronometro:
     """Cuanto tarda cada tramo de una escritura del libro (para el log)."""
 
-    def __init__(self, registrar):
+    def __init__(self, registrar, progreso=None):
         self.registrar = registrar
+        self.progreso = progreso
         self.marca = time.time()
         self.inicio = self.marca
 
@@ -126,6 +141,8 @@ class _Cronometro:
         ahora = time.time()
         self.registrar(f"  escritura: {nombre} ({_segundos(ahora - self.marca)})")
         self.marca = ahora
+        if self.progreso and nombre in _AVANCE_TRAMO:
+            self.progreso(_AVANCE_TRAMO[nombre])
 
     def total(self):
         self.registrar(
@@ -364,6 +381,7 @@ def escribir_pagos_bess(
     conciliacion=None,
     periodo="",
     ruta_control=None,
+    progreso=None,
 ):
     """
     Escribe la MITAD DE CALCULO de la planilla de salida: "Calculo E
@@ -387,6 +405,9 @@ def escribir_pagos_bess(
     ruta_control: si se pasa, ahi se escribe el control de la corrida
     (Alertas + Ejecucion, ver escribir_control) -- en su propio
     archivo, ya no como hojas de esta planilla.
+
+    progreso: si se pasa, se llama con 0..1 al terminar cada tramo de
+    la escritura (para la barra de la ventana).
     """
 
     ruta_salida = Path(ruta_salida)
@@ -398,7 +419,7 @@ def escribir_pagos_bess(
     # Siempre se lee el libro que hay: aunque se regeneren TODAS las
     # hojas de calculo, las de entrada (la otra mitad de la planilla)
     # hay que preservarlas igual.
-    crono = _Cronometro(registrar)
+    crono = _Cronometro(registrar, progreso)
     wb_existente = _abrir_existente_en_zip(ruta_existente or ruta_salida)
     crono.tramo("abrir el libro existente")
     ruta_temporal = _archivo_temporal(ruta_salida)
@@ -744,6 +765,7 @@ def escribir_salida(
     ruta_control=None,
     centrales=None,
     tablas_fma=None,
+    progreso=None,
 ):
     """
     Escribe la MITAD DE ENTRADAS de la planilla de salida: la tabla
@@ -775,6 +797,9 @@ def escribir_salida(
 
     tablas_fma: el dict de cargar_tablas_fma(), para la hoja "FMA" (una
     tabla al lado de la otra, cada una con su titulo de TITULOS_FMA).
+
+    progreso: si se pasa, se llama con 0..1 al terminar cada tramo de
+    la escritura (para la barra de la ventana).
     """
 
     ruta_salida = Path(ruta_salida)
@@ -788,7 +813,7 @@ def escribir_salida(
     # Siempre se lee el libro que hay: aunque se regeneren TODAS las
     # hojas de entrada, las de calculo (la otra mitad de la planilla)
     # hay que preservarlas igual.
-    crono = _Cronometro(registrar)
+    crono = _Cronometro(registrar, progreso)
     wb_existente = _abrir_existente_en_zip(ruta_existente or ruta_salida)
     crono.tramo("abrir el libro existente")
     ruta_temporal = _archivo_temporal(ruta_salida)

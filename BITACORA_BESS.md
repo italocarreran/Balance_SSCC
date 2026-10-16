@@ -5124,3 +5124,36 @@ sin previos; forzar no salta periodo inválido ni nada tildado), +1 en
 `test_ventana_ejecutar_todo` (botón activo con caso vacío; "no" no corre;
 "sí" llama a `ejecutar_plan` con `forzar=True`). 281 pruebas OK con y sin
 display.
+
+---
+
+## 2026-10-16 (6) — La barra de progreso sigue el tiempo, no la cantidad de pasos
+
+Pedido: *"la barra de procesando no se condice con los tiempos de demora"*.
+
+Causa: en "Ejecutar todo" la barra avanzaba un trozo igual por paso
+terminado (subastas_db, 10 s, movía lo mismo que Medidas, 5 min 36 s) y no
+se movía mientras corría un paso. En los botones sueltos de
+`Balance_BESS.xlsx` la barra llegaba a 90-92 antes de escribir, y la
+escritura (3 min 14 s de los 4 min 34 s del cálculo) quedaba quieta ahí.
+
+Arreglo:
+
+- `orquestador.ejecutar_plan`: la barra es transcurrido / (transcurrido +
+  lo que falta estimado), recalculada cada segundo (`INTERVALO_PROGRESO`).
+  Lo que falta sale de `estimar_restante`, que simula el mismo reparto de
+  la corrida (hasta `hilos` pasos a la vez, uno por recurso, cada uno tras
+  sus dependencias) con lo que tardó cada paso la vez anterior
+  (`<caso>/.tiempos_ejecutar_todo.json`, solo pasos que terminaron bien) o,
+  sin historia, con los tiempos de la corrida real del 2026-10-16
+  (`TIEMPOS_POR_DEFECTO`). Nunca retrocede y llega a 100 al final.
+- `proceso`: el cálculo llena hasta 50 (consolidado) o 30 (cálculo) y la
+  escritura el resto. `escribir_salida` y `escribir_pagos_bess` reciben
+  `progreso` y el `_Cronometro` avisa al terminar cada tramo
+  (`_AVANCE_TRAMO`, aproximado: ajustar con los tiempos "escritura:" de la
+  próxima corrida real).
+
+**Verificación:** +4 en `test_orquestador` (simulación con paralelismo,
+un hilo y recurso compartido; tiempos se guardan/leen por caso; barra
+monótona que se llena mientras corre el paso lento; tramos de escritura).
+285 pruebas OK con y sin display.

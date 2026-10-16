@@ -93,9 +93,18 @@ def generar_consolidado(
     pidio.
     """
 
+    # La escritura del libro es buena parte de lo que tarda: el calculo
+    # llena la barra hasta calculo_hasta y la escritura el resto (antes
+    # quedaba quieta en 92 los minutos que tarda escribir).
+    calculo_hasta = 50
+
     def avanzar(valor):
         if progreso:
-            progreso(valor)
+            progreso(int(valor * calculo_hasta / 100))
+
+    def avanzar_escritura(fraccion):
+        if progreso:
+            progreso(int(calculo_hasta + fraccion * (100 - calculo_hasta)))
 
     secciones_activas = set(secciones_activas)
     ids_validos = {seccion[0] for seccion in SECCIONES_CONSOLIDADO}
@@ -371,9 +380,10 @@ def generar_consolidado(
         ruta_control=rutas["control"],
         centrales=centrales_a_escribir,
         tablas_fma=tablas_fma,
+        progreso=avanzar_escritura,
     )
 
-    avanzar(100)
+    avanzar_escritura(1)
     registrar(f"Listo: {rutas['salida']}")
 
     return rutas["salida"]
@@ -558,9 +568,18 @@ def generar_pagos_bess(
     mientras las hojas que necesita ya esten escritas.
     """
 
+    # La escritura del libro es buena parte de lo que tarda: el calculo
+    # llena la barra hasta calculo_hasta y la escritura el resto (antes
+    # quedaba quieta en 92 los minutos que tarda escribir).
+    calculo_hasta = 30
+
     def avanzar(valor):
         if progreso:
-            progreso(valor)
+            progreso(int(valor * calculo_hasta / 100))
+
+    def avanzar_escritura(fraccion):
+        if progreso:
+            progreso(int(calculo_hasta + fraccion * (100 - calculo_hasta)))
 
     # Todo lo que el calculo escriba al log pasa por este Registro: las
     # alertas quedan guardadas con su id y severidad, no solo impresas.
@@ -955,9 +974,10 @@ def generar_pagos_bess(
         conciliacion=conciliacion,
         periodo=periodo_medidores,
         ruta_control=rutas["control"],
+        progreso=avanzar_escritura,
     )
 
-    avanzar(100)
+    avanzar_escritura(1)
     registrar(f"Listo: {rutas['salida']}")
 
     for linea in registro.resumen(
