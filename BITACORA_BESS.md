@@ -21,7 +21,9 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
     el mes siguiente), pero el 31 solo sirve en meses de 31 días: en meses
     de 30 días (ventana 30) y en febrero (28/29) la última ventana no se
     anula. Arreglo: anular la **última** ventana del mes, sea cual sea su
-    número. Pendiente de implementar.
+    número. **En espera: el usuario tiene que confirmar el criterio** antes
+    de implementarlo (aplica igual a la macro VBA `Calcular_RE545`, que
+    también compara con 31).
   - **Curva descendente de RE545 sin filtro por central (obs. 4):**
     `calcular_bk_bl_bm_bs_re545` busca el k-ésimo mayor CMg entre todas las
     filas con el mismo CMg promedio horario, sin limitar a central +
