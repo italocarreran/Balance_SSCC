@@ -12,6 +12,36 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **Reliquidación enero 2601 — observaciones (2026-10-21, revisión con el
+  usuario, sin cambios de código todavía):**
+  - **Ventana 31 fija en RE545:** `construir_resumen_ventanas_re545` anula
+    la Energía Disponible con `ventana != 31` a fuego. La regla tiene
+    respaldo (RE545: solo cuentan las ventanas "cuyo término haya ocurrido
+    dentro del periodo de facturación"; la última ventana del mes termina
+    el mes siguiente), pero el 31 solo sirve en meses de 31 días: en meses
+    de 30 días (ventana 30) y en febrero (28/29) la última ventana no se
+    anula. Arreglo: anular la **última** ventana del mes, sea cual sea su
+    número. Pendiente de implementar.
+  - **Curva descendente de RE545 sin filtro por central (obs. 4):**
+    `calcular_bk_bl_bm_bs_re545` busca el k-ésimo mayor CMg entre todas las
+    filas con el mismo CMg promedio horario, sin limitar a central +
+    ventana. Dos BESS en la misma barra mezclan sus bloques. Arreglo chico,
+    a decidir con el usuario.
+  - **Tope de capacidad en la Energía Disponible (obs. 2):** se propuso no
+    acogerla (la RE545 limita la E inicial a la capacidad; la almacenada no
+    se recorta por el `max(..., EalmT)`). Queda anotado el caso en que el
+    tope pierde energía real (inicial 90, descarga 50, carga 20, capacidad
+    100 → 100 en vez de 110).
+  - **FD en E Costos (en pausa):** la "Energía con FD" mezcla la prorrata
+    de la fila cronológica con el FD del bloque del puesto de la curva; con
+    prorrata 0 en la fila se usa factor 1 y no hay descuento. La norma
+    (§10.2.5) no define cómo aplicar el FD. Opciones: A (prorrata y FD del
+    bloque del puesto) o B (castigar la energía real de cada bloque antes de
+    ordenar; preferida por el usuario, falta definir si también se castiga
+    el Componente 2).
+  - **Regla de los 10 kWh** (`calcular_au_av`): viene de la macro VBA
+    (`sumaIP > 10`), sin respaldo en el Estudio de Costos.
+
 - **Tiempos (2026-10-16 (2)):** el cuello de botella es la escritura de
   las hojas de cálculo (3 min 14 s de los 4 min 34 s de "cálculo"). Ver
   la entrada del día.
@@ -5097,3 +5127,14 @@ contra el calendario real de `Claves_Balance`; septiembre con la hora 1 en
 cero: queda fuera y el aviso dice "venian en cero"). 278 pruebas, 0
 salteadas con tkinter. Hay que volver a traer `Medidas_SAE.xlsx` de abril.
 
+## 2026-10-21 — Revisión de observaciones de la reliquidación de enero (sin cambios de código)
+
+El usuario está reliquidando enero (2601) y trajo observaciones hechas a
+`11_PAGOS_BESS_2601_*.xlsm` para ver si el cálculo actual en Python las
+corrige. Resultado: obs. 1 (FD aplicado dos veces en la descarga de E
+Costos) **corregida** (`calcular_au_av` usa la energía a Pmax sin FD; el FD
+se aplica una vez en el Descuento FD); obs. 3 ("SSCC última hora" sin
+referencia a la central) **corregida** (usa la propia fila y agrupa por
+clave); obs. 2 y obs. 4 y los hallazgos de la revisión quedan en
+"Pendientes abiertos". También se armaron páginas explicativas del cálculo
+(fuera del repo): paso a paso de E Costos y de RE545.
