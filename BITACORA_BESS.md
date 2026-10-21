@@ -25,8 +25,9 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
   - **Curva descendente de RE545 sin filtro por central (obs. 4):**
     `calcular_bk_bl_bm_bs_re545` busca el k-ésimo mayor CMg entre todas las
     filas con el mismo CMg promedio horario, sin limitar a central +
-    ventana. Dos BESS en la misma barra mezclan sus bloques. Arreglo chico,
-    a decidir con el usuario.
+    ventana. Dos BESS en la misma barra mezclan sus bloques. **Acogida por
+    el usuario, pendiente de implementar:** buscar el k-ésimo dentro de la
+    misma central + ventana, con prueba de dos centrales en la misma barra.
   - **Tope de capacidad en la Energía Disponible (obs. 2):** se propuso no
     acogerla (la RE545 limita la E inicial a la capacidad; la almacenada no
     se recorta por el `max(..., EalmT)`). Queda anotado el caso en que el
