@@ -42,6 +42,13 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
     bloque del puesto) o B (castigar la energía real de cada bloque antes de
     ordenar; preferida por el usuario, falta definir si también se castiga
     el Componente 2).
+    **Ligado a esto, la dirección del FD y de los umbrales (2026-10-22):** en
+    E Costos la descarga usa el FD de **bajada** (CPF(−)/CSF(−)) y las horas
+    de BAJADA para el promedio del descuento, y la carga usa el FD de
+    **subida** y las horas de SUBIDA (`calcular_as_at`, `calcular_aw_ax`).
+    Físicamente es al revés: el margen de subida es el que limita la
+    descarga. Un BESS que solo prestó subida mientras descargaba queda sin
+    descuento. Viene de la macro original; decidir junto con A/B.
   - **Regla de los 10 kWh** (`calcular_au_av`): viene de la macro VBA
     (`sumaIP > 10`), sin respaldo en el Estudio de Costos.
 
