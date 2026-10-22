@@ -24,12 +24,6 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
     número. **En espera: el usuario tiene que confirmar el criterio** antes
     de implementarlo (aplica igual a la macro VBA `Calcular_RE545`, que
     también compara con 31).
-  - **Curva descendente de RE545 sin filtro por central (obs. 4):**
-    `calcular_bk_bl_bm_bs_re545` busca el k-ésimo mayor CMg entre todas las
-    filas con el mismo CMg promedio horario, sin limitar a central +
-    ventana. Dos BESS en la misma barra mezclan sus bloques. **Acogida por
-    el usuario, pendiente de implementar:** buscar el k-ésimo dentro de la
-    misma central + ventana, con prueba de dos centrales en la misma barra.
   - **Tope de capacidad en la Energía Disponible (obs. 2):** se propuso no
     acogerla (la RE545 limita la E inicial a la capacidad; la almacenada no
     se recorta por el `max(..., EalmT)`). Queda anotado el caso en que el
@@ -5178,3 +5172,19 @@ usuario en el artefacto).
 
 **Verificación:** las dos páginas renderizan sin errores de consola ni
 placeholders sin reemplazar; 278 pruebas OK (12 salteadas).
+
+## 2026-10-22 (3) — Obs. 4: curva descendente de RE545 por central + ventana
+
+`calcular_bk_bl_bm_bs_re545` buscaba el k-ésimo CMg de cada puesto (BM)
+entre todas las filas de la hoja con el mismo BK (suma de CMg promedio),
+como el `LARGE(IF(BK=BK(i), BL), k)` del .xlsm. Dos BESS en la misma barra
+tienen el mismo BK y sus bloques se mezclaban (curva 135, 135, 128, 128…).
+Ahora agrupa por central + ventana + BI, la misma clave G + T + BI que el
+usuario puso en la macro. Prueba nueva `desarrollo/tests/test_re545_curva.py`
+(una central y dos en la misma barra); falla con el código anterior.
+
+Nota: BI se reinicia solo cuando cambia la ventana, no la central. En un mes
+real no importa (la ventana pasa de la última a 1 al cambiar de central).
+
+**Verificación:** 280 pruebas OK (12 salteadas); el ejemplo de
+`explicacion/` no cambia (una sola central).
