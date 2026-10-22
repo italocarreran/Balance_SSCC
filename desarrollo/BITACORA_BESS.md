@@ -5148,3 +5148,17 @@ referencia a la central) **corregida** (usa la propia fila y agrupa por
 clave); obs. 2 y obs. 4 y los hallazgos de la revisión quedan en
 "Pendientes abiertos". También se armaron páginas explicativas del cálculo
 (fuera del repo): paso a paso de E Costos y de RE545.
+
+## 2026-10-22 — Repo ordenado: `desarrollo/` y `explicacion/`
+
+Pedido del usuario: dejar en una carpeta todo lo que es bitácora,
+comunicación entre IAs y pruebas, y en otra lo que se arma ahora (las
+páginas que explican E Costos y RE545). `REGLAS.md`, `METODOLOGIA.md`,
+`MAPA.md`, `BITACORA_BESS.md`, `BITACORA_CRA.md` y `tests/` pasaron a
+`desarrollo/` con `git mv` (se conserva el historial). Las pruebas importan
+ahora `desarrollo.tests.*` y calculan la raíz con `parents[2]`; se agregó
+`desarrollo/__init__.py` para que `python -m unittest discover` desde la raíz
+las siga encontrando. README y REGLAS actualizados con las rutas nuevas.
+
+**Verificación:** 278 pruebas, 12 salteadas, antes y después del movimiento.
+

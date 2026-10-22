@@ -16,7 +16,7 @@ from openpyxl import Workbook
 from Script import cra
 from Script.Politicas import Costos_Variables as cv
 from Script.cra import parametros as p
-from tests.apoyo_cra import maestro_cra
+from desarrollo.tests.apoyo_cra import maestro_cra
 
 AAMM = "2602"          # febrero 2026: 28 dias
 DIAS = 28

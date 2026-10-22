@@ -6,8 +6,8 @@
 > `docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md`). Del CRA están hoy solo
 > las hojas de entrada `ENERGIA`, `FP`, `CO`, `SC y CO`, `FD_*` y la matriz
 > de `PRORRATA_RETIROS`; `fp_` y `cvar_cra_` los arma el programa desde las
-> políticas de operación (`Script/Politicas/`). Ver `MAPA.md` y
-> `BITACORA_CRA.md` → "Pendientes abiertos".
+> políticas de operación (`Script/Politicas/`). Ver `desarrollo/MAPA.md` y
+> `desarrollo/BITACORA_CRA.md` → "Pendientes abiertos".
 
 Herramienta en Python que reemplaza, hoja por hoja, el cálculo hecho hoy en
 `11_PAGOS_BESS_2607_Definitivo.xlsm` (Balance BESS / SSCC). La planilla se
@@ -213,11 +213,17 @@ Script/
         Descarga_PRMTE.py      <- API de medidas, por punto de medida
         Claves_Balance.py      <- calendario de cuartos + agrupación por clave
         Generacion_Real.py     <- API de operación real (hoja "Gen real")
+docs/                      <- documentos de dominio y archivos reales de referencia
+desarrollo/                <- cómo se trabaja el repo (personas y asistentes de IA)
+    REGLAS.md  METODOLOGIA.md  MAPA.md
+    BITACORA_BESS.md  BITACORA_CRA.md
+    tests/                 <- pruebas: `python -m unittest discover` desde la raíz
+explicacion/               <- páginas que explican el cálculo (E Costos, RE545)
 ```
 
 `nucleo/__init__.py` es solo una fachada: re-exporta todo, así que
 `nucleo.lo_que_sea` funciona igual que cuando era un único archivo.
-Ver `MAPA.md` para qué hace cada módulo.
+Ver `desarrollo/MAPA.md` para qué hace cada módulo.
 
 ## Estructura de carpeta de un caso
 
@@ -355,10 +361,10 @@ resultado, siempre que la carpeta base seleccionada sea la misma.
 | Querés... | Leé |
 |---|---|
 | **Saber qué estructura real tiene cada archivo Excel que arma el usuario (o que manda para validar), sin tener que pedírselo de nuevo ni que te lo vuelva a explicar** | `docs/Estructura_Archivos_Reales.md` |
-| Entender cómo se trabaja en este repo (para un asistente de IA o alguien nuevo) | `METODOLOGIA.md` |
-| El checklist obligatorio de inicio/cierre de sesión | `REGLAS.md` |
-| Qué hace cada script, en dos líneas | `MAPA.md` |
-| Historial de sesiones y pendientes abiertos | `BITACORA_BESS.md` (BESS) y `BITACORA_CRA.md` (CRA) |
+| Entender cómo se trabaja en este repo (para un asistente de IA o alguien nuevo) | `desarrollo/METODOLOGIA.md` |
+| El checklist obligatorio de inicio/cierre de sesión | `desarrollo/REGLAS.md` |
+| Qué hace cada script, en dos líneas | `desarrollo/MAPA.md` |
+| Historial de sesiones y pendientes abiertos | `desarrollo/BITACORA_BESS.md` (BESS) y `desarrollo/BITACORA_CRA.md` (CRA) |
 | Reglas de negocio del cálculo y el plan completo de migración | `docs/Plan_Traspaso_Python_Balance_BESS.md` |
 | CRA: de dónde sale cada hoja de `5_REMUNERACIÓN_CRA_*`, fórmulas y pendientes | `docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md` |
 | El código VBA original, las fórmulas del `.xlsm` y de dónde sale cada dato | `docs/Trazabilidad_11_PAGOS_BESS_2607_Definitivo.md` |
@@ -488,5 +494,5 @@ Las macros de Ofertas SSCC, CMg, FD y Subastas replicadas son solo las de
 **carga** de esas hojas.
 
 Validado con casos sintéticos (no con datos reales todavía): ver
-`BITACORA_BESS.md` → "Pendientes abiertos" para lo que falta antes de dar por
+`desarrollo/BITACORA_BESS.md` → "Pendientes abiertos" para lo que falta antes de dar por
 cerrada cada etapa (validación contra un caso real y contra la planilla 11).

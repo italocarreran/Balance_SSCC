@@ -560,3 +560,11 @@ Lista de solo agregar, para no volver a discutir lo mismo en cada sesión.
   `docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md`. La hoja de cada origen,
   mientras no esté confirmada, no se adivina: si el libro tiene varias,
   se para y las lista.
+- **La raíz del repositorio queda para lo que se usa; lo de trabajo va en
+  `desarrollo/`.** Pedido del usuario (2026-10-22): bitácoras, reglas,
+  metodología, mapa y pruebas se movieron a `desarrollo/` (las pruebas a
+  `desarrollo/tests/`, que importan como `desarrollo.tests.*`; se corren igual
+  con `python -m unittest discover` desde la raíz). En la raíz quedan las dos
+  ventanas, `Script/`, `docs/` (dominio y archivos reales de referencia),
+  `README.md` y la configuración. Las páginas que explican el cálculo van en
+  `explicacion/`, con el contenido separado del diseño (ver su `README.md`).

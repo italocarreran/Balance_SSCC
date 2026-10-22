@@ -14,7 +14,7 @@ import unittest
 
 from Script import nucleo
 from Script.nucleo.sellos import leer_sellos, ruta_sellos
-from tests.test_pasos_sueltos import armar_caso, correr_pagos
+from desarrollo.tests.test_pasos_sueltos import armar_caso, correr_pagos
 
 
 def _estados(base):

@@ -27,7 +27,7 @@ resto (regla de expansión de contexto, convenciones, trampas conocidas).
    Script/nucleo/*.py Script/*/*.py` **y** `python -m unittest discover` desde la raíz
    (revisar que el total de pruebas no baje: si dice `Ran 0 tests`,
    algo se rompió en el descubrimiento, no es un verde). Las pruebas de
-   la ventana (`tests/test_ventana_rueda.py`) se saltean si no hay
+   la ventana (`desarrollo/tests/test_ventana_rueda.py`) se saltean si no hay
    tkinter o no hay pantalla: en Linux corren con
    `xvfb-run -a python -m unittest discover`. Si hay un caso de
    prueba disponible (una carpeta con la estructura de

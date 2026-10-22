@@ -20,7 +20,7 @@ import requests
 
 from Script.Medidas import Claves_Balance as cb
 from Script.Medidas import Descarga_PRMTE as dp
-from tests.test_claves_balance import HOMOLOGACION, descarga
+from desarrollo.tests.test_claves_balance import HOMOLOGACION, descarga
 
 
 def _hay_parquet():

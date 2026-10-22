@@ -70,7 +70,7 @@ class TestGenRealComoVieneLaApi(unittest.TestCase):
 
     def _calendario(self, *args, **kwargs):
         from Script.Medidas import Claves_Balance as cb
-        from tests.test_claves_balance import descarga
+        from desarrollo.tests.test_claves_balance import descarga
         df = cb.normalizar_fechas(descarga(*args, **kwargs))
         df, _ = cb.descartar_hora_inexistente(df)
         return cb.construir_calendario(df)
