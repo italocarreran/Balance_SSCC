@@ -5162,3 +5162,19 @@ las siga encontrando. README y REGLAS actualizados con las rutas nuevas.
 
 **Verificación:** 278 pruebas, 12 salteadas, antes y después del movimiento.
 
+
+## 2026-10-22 (2) — `explicacion/`: páginas paso a paso con contenido y diseño separados
+
+Pedido del usuario: trabajar las páginas de explicación con ChatGPT (diseño)
+y Claude (teoría) vía GitHub. Se armó `explicacion/` con `re545.html` y
+`ecostos.html`, que se abren con doble clic. Contenido en `contenido/*.js`
+(textos con `{placeholders}`), diseño en `estilos.css`, `pagina.js` y
+`figuras.js`. El ejemplo (`datos/ejemplo.js`) lo genera
+`generar_ejemplo.py` corriendo las funciones reales de `Script/nucleo`, así
+que si cambia el cálculo cambian los números. Contrato y reparto de archivos
+en `explicacion/README.md`. Sin letras de columnas de Excel en los textos.
+Se aclaró en RE545 que la energía almacenada suma solo cargas (pregunta del
+usuario en el artefacto).
+
+**Verificación:** las dos páginas renderizan sin errores de consola ni
+placeholders sin reemplazar; 278 pruebas OK (12 salteadas).
