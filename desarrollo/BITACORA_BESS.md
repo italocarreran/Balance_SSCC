@@ -26,8 +26,8 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
     ventana 0 solo tiene las horas 1 a 9 del mes, así que las 15 horas del
     último día del mes anterior nunca se pagan. Observación de marzo 2026
     (planillas 2603 Definitivo 01-03) pide quitar la restricción del 31;
-    eso pagaría la ventana en el mes equivocado y con 15 horas. **Criterio
-    confirmado por el usuario (2026-10-26): pendiente de implementar**
+    eso pagaría la ventana en el mes equivocado y con 15 horas. **En tintero
+    para corregir en el repo (2026-10-26); falta que el usuario confirme el criterio**
     (requiere datos del mes anterior; aplica igual a la macro VBA
     `Calcular_RE545`).
   - **Eficiencia de RE545 (obs. reliquidación):** se usa la "Eficiencia" de
