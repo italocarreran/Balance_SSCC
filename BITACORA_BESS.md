@@ -5097,3 +5097,25 @@ contra el calendario real de `Claves_Balance`; septiembre con la hora 1 en
 cero: queda fuera y el aviso dice "venian en cero"). 278 pruebas, 0
 salteadas con tkinter. Hay que volver a traer `Medidas_SAE.xlsx` de abril.
 
+
+## 2026-10-26 — Medidas (API v2): la hora 25 de abril no aparecía
+
+Reporte del usuario: al correr las medidas de abril 2026 no toma la hora
+25. Revisado `Claves_Balance`: con `dateRange` bien marcado (-03:00 la
+primera pasada de las 23:xx del 4-04, -04:00 la segunda) el calendario sí
+da 1..25. Pero desde el arreglo de septiembre el UTC se saca de la hora
+local con su desfase; si la API marca **las dos pasadas con el mismo
+desfase**, las dos quedaban con el mismo UTC, el calendario no veía hora
+repetida y la segunda pasada se sumaba en la 24 (doble).
+
+**Arreglo** (`normalizar_fechas`): donde el UTC de la hora local choca
+entre filas distintas y el `intervaloUtc` de la API no, se usa el de la
+API (en septiembre es al revés y sigue igual). Además
+`avisar_hora_repetida` deja un **AVISO** en el log si el día que se atrasa
+la hora el calendario no trae la 25 (con cuántos cuartos trae), por si la
+API directamente no entrega la segunda pasada.
+
+**Verificación:** `tests/test_api_v2_abril.py` (nuevo: desfases correctos,
+misma marca en las dos pasadas, sin la segunda pasada). 281 pruebas.
+Pendiente: confirmar con el log real de abril cuál de los casos es
+(líneas "choca con otra" o "AVISO ... hora repetida").
