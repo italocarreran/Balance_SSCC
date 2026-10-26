@@ -20,16 +20,14 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
     dentro del periodo de facturación"; la última ventana del mes termina
     el mes siguiente), pero el 31 solo sirve en meses de 31 días: en meses
     de 30 días (ventana 30) y en febrero (28/29) la última ventana no se
-    anula. Arreglo: (1) anular la **última** ventana del mes, sea cual sea
-    su número; (2) que la ventana 0 de cada mes incluya las horas 10 a 24
-    del último día del mes anterior y se valorice completa (24 h). Hoy la
-    ventana 0 solo tiene las horas 1 a 9 del mes, así que las 15 horas del
-    último día del mes anterior nunca se pagan. Observación de marzo 2026
-    (planillas 2603 Definitivo 01-03) pide quitar la restricción del 31;
-    eso pagaría la ventana en el mes equivocado y con 15 horas. **En tintero
-    para corregir en el repo (2026-10-26); falta que el usuario confirme el criterio**
-    (requiere datos del mes anterior; aplica igual a la macro VBA
-    `Calcular_RE545`).
+    anula. **Criterio decidido por el usuario (2026-10-26):** la primera
+    ventana (0) y la última del mes quedan parciales y se pagan en el mes,
+    como hoy pasa en meses de 28 a 30 días. Arreglo: quitar el `!= 31` de la
+    Energía Disponible (Python y macro `Calcular_RE545`). Es lo que pide la
+    observación de marzo 2026 (planillas 2603 Definitivo 01-03). Se aparta de
+    la letra de la RE545 ("ventanas cuyo término haya ocurrido dentro del
+    periodo de facturación"), que dejaría la última para el mes siguiente.
+    **Pendiente de implementar.**
   - **Eficiencia de RE545 (obs. reliquidación):** se usa la "Eficiencia" de
     Resumen BESS (`Centrales.xlsx`), que hoy es la de celdas (Pruebas de
     Potencia Máxima). La RE545 §2.2.2.2 pide factores de eficiencia que
