@@ -37,6 +37,13 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
     1 a 9 del día 25, así que queda incompleta. La RE545 exige oferta
     completa "para la totalidad del periodo subastado" (el día), lo que
     respalda el criterio actual. **Pendiente:** confirmación del usuario.
+  - **Inyección real de cada puesto de la curva RE545 (BS):** el CMg del
+    puesto es el k-ésimo mayor de la hora (BM), pero la inyección real se
+    toma del bloque k en el tiempo (minuto BJ), no del bloque que tiene ese
+    CMg. Si la inyección varía dentro de la hora, el espacio libre de la caja
+    (Pmax/4 − inyección) se calcula con la inyección de otro bloque.
+    Encontrado al revisar la obs. de asignación de BN (planilla 2603; esa obs.
+    ya está cubierta en el repo: BN = mín(Pmax/4 − BS, saldo)). **Pendiente.**
   - **Tope de capacidad en la Energía Disponible (obs. 2):** se propuso no
     acogerla (la RE545 limita la E inicial a la capacidad; la almacenada no
     se recorta por el `max(..., EalmT)`). Queda anotado el caso en que el
