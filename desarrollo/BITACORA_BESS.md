@@ -20,10 +20,16 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
     dentro del periodo de facturación"; la última ventana del mes termina
     el mes siguiente), pero el 31 solo sirve en meses de 31 días: en meses
     de 30 días (ventana 30) y en febrero (28/29) la última ventana no se
-    anula. Arreglo: anular la **última** ventana del mes, sea cual sea su
-    número. **En espera: el usuario tiene que confirmar el criterio** antes
-    de implementarlo (aplica igual a la macro VBA `Calcular_RE545`, que
-    también compara con 31).
+    anula. Arreglo: (1) anular la **última** ventana del mes, sea cual sea
+    su número; (2) que la ventana 0 de cada mes incluya las horas 10 a 24
+    del último día del mes anterior y se valorice completa (24 h). Hoy la
+    ventana 0 solo tiene las horas 1 a 9 del mes, así que las 15 horas del
+    último día del mes anterior nunca se pagan. Observación de marzo 2026
+    (planillas 2603 Definitivo 01-03) pide quitar la restricción del 31;
+    eso pagaría la ventana en el mes equivocado y con 15 horas. **Criterio
+    confirmado por el usuario (2026-10-26): pendiente de implementar**
+    (requiere datos del mes anterior; aplica igual a la macro VBA
+    `Calcular_RE545`).
   - **Eficiencia de RE545 (obs. reliquidación):** se usa la "Eficiencia" de
     Resumen BESS (`Centrales.xlsx`), que hoy es la de celdas (Pruebas de
     Potencia Máxima). La RE545 §2.2.2.2 pide factores de eficiencia que
