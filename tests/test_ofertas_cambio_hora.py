@@ -14,9 +14,9 @@ import pandas as pd
 from Script.nucleo import ofertas_sscc
 
 
-def _filas(dia, horas, servicio="CPF_RS"):
+def _filas(dia, horas, servicio="CPF_RS", mes=9):
     return [
-        ["BESS UNO", 2026, 9, dia, hora, None, None, servicio, "Sí"]
+        ["BESS UNO", 2026, mes, dia, hora, None, None, servicio, "Sí"]
         for hora in horas
     ]
 
@@ -63,6 +63,30 @@ class TestOfertaCompletaCambioDeHora(unittest.TestCase):
     def test_el_dia_6_le_falta_otra_hora_es_incompleto(self):
         oferta = _resumen(_filas(6, range(3, 25)))
         self.assertEqual(oferta[6], 0)
+
+
+class TestOfertaCompletaAbril(unittest.TestCase):
+    """El sabado 4-04-2026 tiene 25 horas: la columna E va de 1 a 25."""
+
+    def test_el_sabado_tiene_25_horas(self):
+        self.assertEqual(
+            ofertas_sscc.horas_del_dia(2026, 4, 4), frozenset(range(1, 26))
+        )
+
+    def test_con_la_hora_25_la_oferta_es_completa(self):
+        oferta = _resumen(
+            _filas(4, range(1, 26), mes=4) + _filas(5, range(1, 25), mes=4)
+        )
+        self.assertEqual(oferta[4], 1)
+        self.assertEqual(oferta[5], 1)
+
+    def test_sin_la_hora_25_el_sabado_es_incompleto(self):
+        oferta = _resumen(_filas(4, range(1, 25), mes=4))
+        self.assertEqual(oferta[4], 0)
+
+    def test_la_25_no_cuenta_por_otra_hora(self):
+        oferta = _resumen(_filas(4, list(range(1, 24)) + [25], mes=4))
+        self.assertEqual(oferta[4], 0)
 
 
 if __name__ == "__main__":

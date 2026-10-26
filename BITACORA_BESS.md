@@ -5119,3 +5119,21 @@ API directamente no entrega la segunda pasada.
 misma marca en las dos pasadas, sin la segunda pasada). 281 pruebas.
 Pendiente: confirmar con el log real de abril cuál de los casos es
 (líneas "choca con otra" o "AVISO ... hora repetida").
+
+## 2026-10-26 (2) — Ofertas SSCC: la hora 25 del sábado de abril
+
+Pregunta del usuario: en el OfertasSSCC del mes con cambio de hora la
+columna E va de 1 a 25, ¿está considerado? **No lo estaba:**
+`_normalizar_periodo` solo aceptaba 1..24 (la 25 se descartaba) y
+`horas_del_dia` del sábado de abril devolvía 1..24, así que la oferta del
+día quedaba completa aunque faltara la 25.
+
+**Arreglo:** `_normalizar_periodo` acepta el entero 25 y
+`cambio_hora.horas_del_dia` del día que se atrasa la hora devuelve 1..25
+(la repetida numerada después de la 24, como en Medidas, CMg, FMA y
+Subastas). Para la oferta completa del sábado se exigen las 25; el log de
+ofertas lo dice. Septiembre sin cambios (2..24).
+
+**Verificación:** `tests/test_ofertas_cambio_hora.py` +4 (sábado con 25
+horas; con la 25 completo; sin la 25 incompleto; la 25 no reemplaza a
+otra hora), `test_cambio_hora` ajustada. 285 pruebas.
