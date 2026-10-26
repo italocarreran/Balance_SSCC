@@ -28,6 +28,13 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
     la letra de la RE545 ("ventanas cuyo término haya ocurrido dentro del
     periodo de facturación"), que dejaría la última para el mes siguiente.
     **Pendiente de implementar.**
+  - **Obs. 4 (curva descendente de RE545 por central + ventana + BI):**
+    implementada en el commit `b19e1b6` (código + prueba
+    `desarrollo/tests/test_re545_curva.py`) y **revertida a pedido del
+    usuario (2026-10-26)** para comparar antes otro cambio sin que se mezclen
+    los efectos. Para aplicarla de nuevo: `git revert` del commit que la
+    revirtió, o `git checkout b19e1b6 -- Script/nucleo/re545_componentes.py
+    desarrollo/tests/test_re545_curva.py`. **Pendiente de volver a aplicar.**
   - **Eficiencia de RE545 (obs. reliquidación):** se usa la "Eficiencia" de
     Resumen BESS (`Centrales.xlsx`), que hoy es la de celdas (Pruebas de
     Potencia Máxima). La RE545 §2.2.2.2 pide factores de eficiencia que
@@ -5221,3 +5228,10 @@ ciclo de E Costos es la misma ventana de RE545, cada ventana va a un solo
 método según su oferta completa y en la otra hoja queda con energía 0
 (comprobado con el caso de ejemplo: ventana completa → monto E Costos 0).
 **Cerrada: corregida.**
+
+## 2026-10-26 (2) — Obs. 4 revertida temporalmente
+
+A pedido del usuario se devolvió `Script/nucleo/re545_componentes.py` a su
+estado anterior a `b19e1b6` y se sacó `desarrollo/tests/test_re545_curva.py`:
+tiene que aplicar y comparar otro cambio primero, y la obs. 4 movería el
+resultado. Queda en Pendientes abiertos con cómo volver a aplicarla.

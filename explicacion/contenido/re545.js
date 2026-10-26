@@ -81,7 +81,7 @@ window.CONTENIDO = {
       id: "curva", titulo: "Abrir cada hora en sus bloques",
       texto: "Cada hora se abre en sus 4 bloques, de mayor a menor CMg. Así queda la <b>curva descendente</b>, con {n_bloques:0} puestos. Desde aquí cada fila es un <b>puesto de la curva</b>, no un bloque en el tiempo.",
       figura: "curva",
-      bloques: [{tipo: "nota", titulo: "Corregido (observación 4)", texto: "El precio de cada puesto se busca solo entre los bloques de la misma central y ventana. Antes se buscaba en toda la hoja y dos BESS en la misma barra mezclaban sus bloques. Corregido en la macro y en Python."}],
+      bloques: [{tipo: "revision", titulo: "En revisión (observación 4)", texto: "El código busca el precio de cada puesto entre todas las filas que tengan el mismo CMg promedio de la hora, sin limitarse a la central. Si dos BESS están en la misma barra, sus bloques se mezclan y los precios de la curva salen corridos. Ya está corregido en la macro; en Python está listo pero se aplicará después."}],
     },
     {
       id: "inyeccion", titulo: "Inyección real de cada puesto",
