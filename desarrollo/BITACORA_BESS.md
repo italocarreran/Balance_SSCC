@@ -5188,3 +5188,12 @@ real no importa (la ventana pasa de la última a 1 al cambiar de central).
 
 **Verificación:** 280 pruebas OK (12 salteadas); el ejemplo de
 `explicacion/` no cambia (una sola central).
+
+## 2026-10-26 — Obs. reliquidación: remuneración por E Costos y RE545 a la vez
+
+Observación: en "Compensación Total" algunos ciclos aparecían pagados por los
+dos métodos. Venía de la planilla usada en febrero. En Python no pasa: el
+ciclo de E Costos es la misma ventana de RE545, cada ventana va a un solo
+método según su oferta completa y en la otra hoja queda con energía 0
+(comprobado con el caso de ejemplo: ventana completa → monto E Costos 0).
+**Cerrada: corregida.**
