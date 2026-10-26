@@ -24,6 +24,19 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
     número. **En espera: el usuario tiene que confirmar el criterio** antes
     de implementarlo (aplica igual a la macro VBA `Calcular_RE545`, que
     también compara con 31).
+  - **Eficiencia de RE545 (obs. reliquidación):** se usa la "Eficiencia" de
+    Resumen BESS (`Centrales.xlsx`), que hoy es la de celdas (Pruebas de
+    Potencia Máxima). La RE545 §2.2.2.2 pide factores de eficiencia que
+    representen las pérdidas de retiro e inyección de la instalación,
+    "de acuerdo con el Capítulo de Programación de la Operación de la NT
+    CyO". Arreglo: es de datos, no de código (cambiar el valor en
+    `Centrales.xlsx`). **Pendiente:** conseguir la eficiencia de la NT CyO
+    por central.
+  - **Oferta completa de la ventana 24 con el día 25 incompleto (obs.
+    reliquidación):** la marca es por día y la ventana 24 usa las horas
+    1 a 9 del día 25, así que queda incompleta. La RE545 exige oferta
+    completa "para la totalidad del periodo subastado" (el día), lo que
+    respalda el criterio actual. **Pendiente:** confirmación del usuario.
   - **Tope de capacidad en la Energía Disponible (obs. 2):** se propuso no
     acogerla (la RE545 limita la E inicial a la capacidad; la almacenada no
     se recorta por el `max(..., EalmT)`). Queda anotado el caso en que el
