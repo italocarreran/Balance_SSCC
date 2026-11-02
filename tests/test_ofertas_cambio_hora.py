@@ -89,5 +89,51 @@ class TestOfertaCompletaAbril(unittest.TestCase):
         self.assertEqual(oferta[4], 0)
 
 
+def _ventanas(anio, mes, dias, sin=(), extra=()):
+    """Medidores de una central con toda la oferta: (Dia, Hora) x 4."""
+
+    from Script.nucleo.medidores import calcular_ventana
+
+    filas = [
+        (d, h) for d in range(1, dias + 1) for h in range(1, 25)
+        if (d, h) not in sin
+    ]
+    filas += list(extra)
+    filas.sort()
+    df = pd.DataFrame(
+        [f for f in filas for _ in range(4)], columns=["Dia", "Hora"]
+    )
+    df["clave"] = "SAE A"
+    ventana = calcular_ventana(df["clave"], df["Hora"])
+    resumen = ofertas_sscc.construir_resumen_ventana_oferta(
+        df["clave"], ventana, [1] * len(df), registrar=lambda *_: None,
+        anio=anio, mes=mes,
+    )
+    return resumen.set_index("Ventana T")
+
+
+class TestVentanaDelCambioDeHora(unittest.TestCase):
+    """La ventana que cruza el cambio de hora no tiene 96 cuartos."""
+
+    def test_septiembre_la_ventana_5_tiene_92_cuartos(self):
+        resumen = _ventanas(2026, 9, 30, sin={(6, 1)})
+        self.assertEqual(resumen.loc[5, "Oferta"], 92)
+        self.assertTrue((resumen["Completa"] == 1).all())
+
+    def test_abril_la_ventana_4_tiene_100_cuartos(self):
+        resumen = _ventanas(2026, 4, 30, extra=[(4, 25)])
+        self.assertEqual(resumen.loc[4, "Oferta"], 100)
+        self.assertTrue((resumen["Completa"] == 1).all())
+
+    def test_sin_una_hora_ofertada_sigue_incompleta(self):
+        resumen = _ventanas(2026, 9, 30, sin={(6, 1), (6, 3)})
+        self.assertEqual(resumen.loc[5, "Completa"], 0)
+        self.assertEqual(int((resumen["Completa"] == 0).sum()), 1)
+
+    def test_mes_sin_cambio_igual_que_antes(self):
+        resumen = _ventanas(2026, 7, 31)
+        self.assertTrue((resumen["Completa"] == 1).all())
+
+
 if __name__ == "__main__":
     unittest.main()

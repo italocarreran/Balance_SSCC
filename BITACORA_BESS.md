@@ -5171,3 +5171,28 @@ curva; ya no hay "Descuento FD".
 **Verificación:** `tests/test_ecostos_fd_nuevo.py` (nuevo, 8 pruebas, caso
 a mano: 50 kWh × (0,5×0,9 + 0,5×0,8) = 42,5; asignación 100+70 / −100−4;
 monto 177,25). Pruebas de FD y prorrata adaptadas. 293 pruebas.
+
+## 2026-11-02 (2) — Ventana del cambio de hora: "Oferta Completa" exigía 96 cuartos
+
+Reporte del usuario: en RE545, la "EalmT" (energía almacenada en el
+periodo) de la tabla por central y ventana sale en 0 en la ventana 5 para
+todas las centrales; en el Excel con la macro sí hay valores.
+
+**Causa:** `construir_resumen_ventana_oferta` marca una ventana como
+completa si la suma de "Oferta completa del día" de sus cuartos llega a 96
+(24 h × 4). La ventana 5 de septiembre (5-09 10:00 → 6-09 09:59) cruza el
+cambio de hora: no existe la hora 1 del 6-09, tiene 92 cuartos y nunca
+llegaba a 96. Ninguna central quedaba completa → Medidores!T = 1 → toda su
+energía iba a Calculo E Costos y RE545 quedaba sin energía en esa ventana.
+En abril pasaba lo mismo al revés con la ventana 4 (100 cuartos, hora 25).
+
+**Arreglo:** `_ajuste_ventanas_cambio_hora` (desde `cambio_hora`) suma o
+resta 4 cuartos por cada periodo repetido o inexistente a la ventana donde
+cae (periodo ≥ hora de inicio → ventana del mismo día; si no, la del día
+anterior). `construir_ofertas_sscc` pasa año y mes. Agosto no tiene cambio
+de hora: `Definitivo-Agosto` no se ve afectado.
+
+**Verificación:** `tests/test_ofertas_cambio_hora.py` +4 (septiembre 92,
+abril 100, una hora sin ofertar sigue incompleta, mes normal igual). 297
+pruebas. Hay que volver a generar Medidores/Ofertas SSCC del mes y los
+cálculos.
