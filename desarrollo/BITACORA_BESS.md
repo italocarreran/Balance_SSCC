@@ -5344,10 +5344,8 @@ medidas/ofertas, FMA CPF). Las pruebas nuevas de `main`
 (`test_api_v2_abril.py`, `test_ecostos_fd_nuevo.py`) quedaron en
 `desarrollo/tests/`. 300 pruebas OK (12 salteadas).
 
-**Pendiente:** la página `explicacion/ecostos.html` y `generar_ejemplo.py`
-siguen con el método anterior del FD (descuento FD, umbrales, columnas
-viejas). Con el método nuevo las columnas cambiaron y el generador lee mal
-el monto. Se dejó `datos/ejemplo.js` como estaba hasta rehacer la página.
+La página de E Costos quedó desactualizada con el merge; se rehízo en la
+entrada siguiente.
 
 ## 2026-11-02 (4) — RE545: la inyección real de cada puesto sale del bloque correcto
 
@@ -5363,3 +5361,17 @@ Cerrados con el usuario: oferta completa por día (ventanas 24/25) **no se
 acoge**, queda como está.
 
 **Verificación:** 301 pruebas OK (12 salteadas).
+
+## 2026-11-02 (5) — Página de E Costos con el método nuevo del FD
+
+`explicacion/`: `generar_ejemplo.py` lee las columnas nuevas (energía
+ajustada, asignación, valorización, monto) y ya no genera el escenario "sin
+subasta en la hora 1". `contenido/ecostos.js` pasa a 9 pasos: filtrar → ajustar
+la energía de cada hora por prorrata × FD → Pmax → bloques → ordenar CMg →
+puestos → Componente 1 (sin descuento FD) → Componente 2 → monto, con una nota
+de qué cambió respecto del método anterior. `figuras.js`: nueva `ajuste`,
+fuera `dual` y `precios_descuento`; `puestos`, `bloques` y `wf_c1` usan la
+energía ajustada. Ejemplo: factor 0,9, descarga y carga ajustadas 5.400 kWh,
+C1 583.200, C2 494.000, monto 89.200.
+
+**Verificación:** las dos páginas renderizan sin errores ni placeholders.

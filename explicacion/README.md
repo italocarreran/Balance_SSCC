@@ -53,8 +53,8 @@ Regla: si un cambio necesita tocar el archivo del otro, se pide, no se hace.
 - En cualquier texto, `{nombre}` se reemplaza por `EJEMPLO.valores.nombre`
   con formato chileno; `{nombre:0}` sin decimales. Los nombres disponibles
   están en `generar_ejemplo.py` (diccionario `v`).
-- Figuras disponibles: E Costos `filtro`, `bloques`, `ordenar`, `puestos`,
-  `precios_descuento`, `dual`, `wf_c1`, `wf_c2`; RE545 `ed`, `orden_horas`,
+- Figuras disponibles: E Costos `filtro`, `ajuste`, `bloques`, `ordenar`,
+  `puestos`, `wf_c1`, `wf_c2`; RE545 `ed`, `orden_horas`,
   `curva`, `inyeccion`, `cajas`.
 
 Quien diseña puede cambiar libremente cómo se ve todo eso (orden visual,

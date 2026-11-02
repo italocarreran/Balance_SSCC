@@ -119,13 +119,12 @@ def _prom(valores):
 
 def main():
     ec = calcular_ecostos()
-    sin1 = calcular_ecostos((2, 3))
     re, res = calcular_re545()
 
     cols_ec = ["Hora", "Minutos", "Cuarto de Hora", "CMg", "Energia_Positiva",
-               "Energia_Negativa", "L", "W", "Y", "AB", "AC", "AD", "AE", "AF",
-               "AG", "AH", "AM", "AN", "AP", "AQ", "AS", "AT", "AU", "AV",
-               "AW", "AX", "S", "T", "U", "AZ"]
+               "Energia_Negativa", "L", "W", "Y", "AB", "AC", "AD",
+               "AG", "AH", "AJ", "AK", "AM", "AN", "AP", "AQ", "AS", "AT",
+               "AW", "AX", "AY", "AZ", "BA", "S", "T", "U", "BC"]
     cols_re = ["Hora", "Minutos", "CMg", "R", "S", "SoC", "U", "V",
                "Energia_Positiva", "Energia_Negativa", "AU", "BI", "BJ", "BM",
                "BS", "BN", "BO", "BU", "CC", "CE"]
@@ -134,12 +133,10 @@ def main():
     fila_res = res.iloc[0]
 
     # ---- valores que citan los textos (placeholders {nombre}) ----
-    usados_d = [p for p, e in zip(E["AB"], E["AE"]) if p is not None and e]
-    usados_c = [p for p, e in zip(E["AD"], E["AF"]) if p is not None and e]
-    horas_sub = 3
-    lim = horas_sub * 4
-    no_resp_d = sum(e - s for e, s in zip(E["AE"], E["AS"]))
-    no_resp_c = sum(s - e for e, s in zip(E["AF"], E["AT"]))
+    usados_d = [p for p, e in zip(E["AB"], E["AW"]) if p is not None and e]
+    usados_c = [p for p, e in zip(E["AD"], E["AX"]) if p is not None and e]
+    aj_desc = sum(E["AS"])
+    aj_carga = -sum(E["AT"])
     n = len(E["CMg"])
     v = {
         "pmax_mw": PMAX, "capacidad_mwh": CAPACIDAD, "eficiencia": EFICIENCIA,
@@ -151,19 +148,18 @@ def main():
         # E Costos
         "ec_tot_desc": sum(e for e, l in zip(E["Energia_Positiva"], E["L"]) if l == 1),
         "ec_tot_carga": -sum(e for e, l in zip(E["Energia_Negativa"], E["L"]) if l == 1),
+        "ec_prorr_cpf_mas": E["AJ"][0], "ec_prorr_csf_menos": E["AH"][0],
+        "ec_fd_cpf_mas": E["AP"][0], "ec_fd_csf_menos": E["AN"][0],
+        "ec_factor": E["AJ"][0] * E["AP"][0] + E["AH"][0] * E["AN"][0],
+        "ec_aj_desc": aj_desc, "ec_aj_carga": aj_carga,
+        "ec_bloques_desc": aj_desc / (PMAX * 250),
+        "ec_bloques_carga": aj_carga / (PMAX * 250),
         "ec_precio_desc": _prom(usados_d), "ec_precio_carga": _prom(usados_c),
         "ec_n_usados_desc": len(usados_d), "ec_n_usados_carga": len(usados_c),
-        "ec_ingreso": sum(E["AU"]), "ec_costo": sum(E["AV"]),
-        "ec_no_resp_desc": no_resp_d, "ec_no_resp_carga": no_resp_c,
-        "ec_bloques_desc": sum(e for e, l in zip(E["Energia_Positiva"], E["L"]) if l == 1) / (PMAX * 250),
-        "ec_bloques_carga": -sum(e for e, l in zip(E["Energia_Negativa"], E["L"]) if l == 1) / (PMAX * 250),
-        "ec_horas_subasta": horas_sub, "ec_limite_puestos": lim,
-        "ec_precio_descuento_desc": _prom([p for p in E["AB"][:lim] if p is not None]),
-        "ec_precio_descuento_carga": _prom([p for p in E["AD"][:lim] if p is not None]),
-        "ec_descuento": sum(E["AW"]), "ec_c1": sum(E["AX"]),
+        "ec_val_desc": sum(E["AY"]), "ec_val_carga": sum(E["AZ"]),
+        "ec_c1": sum(E["BA"]),
         "ec_c2_desc": sum(E["S"]), "ec_c2_carga": sum(E["T"]), "ec_c2": sum(E["U"]),
-        "ec_monto": sum(E["AZ"]), "ec_monto_bloque": sum(E["AZ"]) / n,
-        "ec_monto_sin1": sum(sin1["AZ"]),
+        "ec_monto": sum(E["BC"]), "ec_monto_bloque": E["BC"][0],
         # RE545
         "re_soc0": R["SoC"][0], "re_eini": float(fila_res["EiniT"]),
         "re_carga": -sum(R["Energia_Negativa"]), "re_ealm": float(fila_res["EalmT"]),
@@ -173,7 +169,7 @@ def main():
         "re_monto_bloque": R["CE"][0], "re_capacidad_kwh": CAPACIDAD * 1000,
         "re_eini_mas_ealm": float(fila_res["EiniT"]) + float(fila_res["EalmT"]),
     }
-    datos = {"ec": E, "ec_sin_subasta_hora1": _columnas(sin1, cols_ec), "re": R, "valores": v}
+    datos = {"ec": E, "re": R, "valores": v}
     SALIDA.parent.mkdir(parents=True, exist_ok=True)
     SALIDA.write_text(
         "// Generado por explicacion/generar_ejemplo.py. No editar a mano.\n"
