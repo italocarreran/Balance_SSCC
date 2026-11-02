@@ -14,18 +14,6 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 - **Reliquidación enero 2601 — observaciones (2026-10-21, revisión con el
   usuario, sin cambios de código todavía):**
-  - **Oferta completa de la ventana 24 con el día 25 incompleto (obs.
-    reliquidación):** la marca es por día y la ventana 24 usa las horas
-    1 a 9 del día 25, así que queda incompleta. La RE545 exige oferta
-    completa "para la totalidad del periodo subastado" (el día), lo que
-    respalda el criterio actual. **Pendiente:** confirmación del usuario.
-  - **Inyección real de cada puesto de la curva RE545 (BS):** el CMg del
-    puesto es el k-ésimo mayor de la hora (BM), pero la inyección real se
-    toma del bloque k en el tiempo (minuto BJ), no del bloque que tiene ese
-    CMg. Si la inyección varía dentro de la hora, el espacio libre de la caja
-    (Pmax/4 − inyección) se calcula con la inyección de otro bloque.
-    Encontrado al revisar la obs. de asignación de BN (planilla 2603; esa obs.
-    ya está cubierta en el repo: BN = mín(Pmax/4 − BS, saldo)). **Pendiente.**
   - **Regla de los 10 kWh** (`calcular_au_av`): viene de la macro VBA
     (`sumaIP > 10`), sin respaldo en el Estudio de Costos.
 
@@ -5360,3 +5348,18 @@ medidas/ofertas, FMA CPF). Las pruebas nuevas de `main`
 siguen con el método anterior del FD (descuento FD, umbrales, columnas
 viejas). Con el método nuevo las columnas cambiaron y el generador lee mal
 el monto. Se dejó `datos/ejemplo.js` como estaba hasta rehacer la página.
+
+## 2026-11-02 (4) — RE545: la inyección real de cada puesto sale del bloque correcto
+
+`calcular_bk_bl_bm_bs_re545`: BS (inyección real del puesto) ahora sale del
+mismo bloque que BM (el k-ésimo de mayor CMg de la hora), no del bloque en la
+posición k en el tiempo. Antes, si la inyección cambiaba dentro de la hora,
+la caja libre (Pmax/4 − BS) se calculaba con la inyección de otro bloque y el
+Componente 1 (y el 2) salían corridos. Prueba nueva en
+`desarrollo/tests/test_re545_curva.py`; falla con el código anterior.
+La macro `Calcular_RE545` tiene el mismo problema (BS por BR+S+G+E).
+
+Cerrados con el usuario: oferta completa por día (ventanas 24/25) **no se
+acoge**, queda como está.
+
+**Verificación:** 301 pruebas OK (12 salteadas).
