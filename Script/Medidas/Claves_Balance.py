@@ -169,11 +169,37 @@ def normalizar_fechas(df, registrar=None):
     )
 
     df = df.copy()
+    texto_local = df[COL_INTERVALO_LOCAL].astype("string").str.strip()
     utc_real = utc_desde_local(df[COL_INTERVALO_LOCAL])
     df[COL_INTERVALO_LOCAL] = parse_fecha_mixta(df[COL_INTERVALO_LOCAL])
     df[COL_INTERVALO_UTC] = parse_fecha_mixta(df[COL_INTERVALO_UTC])
 
     if utc_real is not None:
+        # Abril: si `dateRange` marca las dos pasadas de la hora que se
+        # repite con el mismo desfase, su UTC sale igual para las dos y
+        # la segunda (la hora 25) se sumaba en la primera. Donde el UTC
+        # de la hora local choca y el `intervaloUtc` de la API no, se
+        # queda el de la API (en septiembre es al reves: ver arriba).
+        pares = pd.DataFrame({
+            "texto": texto_local, "api": df[COL_INTERVALO_UTC],
+            "real": utc_real,
+        }).dropna().drop_duplicates()
+        choque = (
+            pares.duplicated("real", keep=False)
+            & ~pares.duplicated("api", keep=False)
+        )
+        if choque.any():
+            usar_api = pd.MultiIndex.from_arrays(
+                [texto_local, df[COL_INTERVALO_UTC]]
+            ).isin(pd.MultiIndex.from_frame(pares.loc[choque, ["texto", "api"]]))
+            utc_real = utc_real.mask(usar_api, df[COL_INTERVALO_UTC])
+            if registrar:
+                registrar(
+                    f"  la API trae {int(usar_api.sum()):,} fila(s) cuya hora "
+                    f"local (con su desfase) choca con otra (cambio de hora): "
+                    f"se usa su intervaloUtc"
+                )
+
         distintas = int(
             (utc_real.notna() & utc_real.ne(df[COL_INTERVALO_UTC])).sum()
         )
@@ -468,6 +494,33 @@ def construir_calendario(df):
     ]
 
 
+def avisar_hora_repetida(calendario, registrar):
+    """
+    El dia que se atrasa la hora (abril) el calendario tiene que traer
+    la hora repetida (25): 100 cuartos de hora. Si la descarga no la
+    trae distinguible, se avisa con lo que trae ese dia.
+    """
+
+    # Import diferido: nucleo importa Script.Medidas al cargarse.
+    from ..nucleo.cambio_hora import cambios_de_hora
+
+    fechas = calendario[COL_INTERVALO_LOCAL].dt.date
+    for anio, mes in sorted({(f.year, f.month) for f in fechas}):
+        for cambio in cambios_de_hora(anio, mes):
+            if not cambio.periodos_repetidos:
+                continue
+            del_dia = calendario[fechas == cambio.fecha]
+            if del_dia.empty or del_dia["Hora"].max() > 24:
+                continue
+            registrar(
+                f"  AVISO: el {cambio.fecha:%d-%m-%Y} se atrasa la hora "
+                f"pero la descarga no trae la hora repetida (25): ese dia "
+                f"tiene {len(del_dia):,} cuartos de hora (se esperaban "
+                f"{cambio.horas_del_dia * 4}). La API no la entrega "
+                f"distinguible (misma hora local y mismo UTC)."
+            )
+
+
 def construir_por_clave(df, df_homol, registrar=print):
     """
     Del crudo descargado a (df_por_clave, calendario, diagnostico).
@@ -561,6 +614,7 @@ def construir_por_clave(df, df_homol, registrar=print):
     )
 
     calendario = construir_calendario(df_cruzado)
+    avisar_hora_repetida(calendario, registrar)
 
     df_cruzado = df_cruzado.merge(
         calendario,

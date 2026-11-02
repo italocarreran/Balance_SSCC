@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """FMA CPF y CTF en el cambio de hora.
 
-Comprobado con los reportes reales del DCO de 2026 (huella de las
-columnas de frecuencia T-/T+): el tabla_resumen sin sufijo va en el
-desfase vigente al empezar el dia, y el `_UTC-4` del 4-04 es el mismo dia
-corrido una hora, con la segunda pasada de las 23:00 en su ultima fila.
+Comprobado con los reportes reales del DCO de 2026: el tabla_resumen sin
+sufijo va en hora local (fila k = las k:00; el 6-09 la fila 0 es la hora
+que no existe), y el `_UTC-4` del 4-04 es el mismo dia corrido una hora,
+con la segunda pasada de las 23:00 en su ultima fila.
 Aca se arman reportes sinteticos con esa forma.
 """
 
@@ -66,11 +66,11 @@ class TestFmaCpfCambioDeHora(unittest.TestCase):
 
     def test_septiembre_sin_la_hora_1(self):
         hace = self._cpf("2609", [("tabla_resumen_6_9_2026", 0)])
-        # UTC-4 al empezar el dia: fila 0 = 01:00 local = hora 2; la
-        # fila 23 ya es el 7-09 y se descarta.
+        # Hora local: la fila 0 es la 00:00, que no existe, y se
+        # descarta; fila 1 = 01:00 = hora 2 ... fila 23 = hora 24.
         self.assertEqual(list(hace.index), list(range(2, 25)))
-        self.assertEqual(hace.loc[2], 0)
-        self.assertEqual(hace.loc[24], 22)
+        self.assertEqual(hace.loc[2], 1)
+        self.assertEqual(hace.loc[24], 23)
 
     def test_mes_normal_igual_que_antes(self):
         hace = self._cpf("2607", [("tabla_resumen_15_7_2026", 0)])

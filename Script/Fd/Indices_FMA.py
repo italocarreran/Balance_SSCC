@@ -411,10 +411,14 @@ def buscar_ctf(carpeta_version, aamm):
 # los reportes reales de 2026 (huella de las columnas de frecuencia
 # T-/T+, que son del sistema y no de la unidad):
 #
-#   - el archivo sin sufijo va en el desfase vigente al EMPEZAR el dia:
-#     sabado 4-04 en UTC-3 (filas 0..23 = horas 1..24 locales), domingo
-#     6-09 en UTC-4 (filas 0..22 = horas 2..24, la 23 ya es la 00:00
-#     del 7-09);
+#   - el archivo sin sufijo va en HORA LOCAL (fila k = las k:00 del
+#     dia): sabado 4-04 en UTC-3 (filas 0..23 = horas 1..24); domingo
+#     6-09 la fila 0 es la 00:00, que ese dia no existe, y se descarta
+#     (filas 1..23 = horas 2..24). Comprobado en 2026-11 cruzando la
+#     participacion de cada unidad del reporte (NP / en blanco) contra
+#     las subastas adjudicadas de los dias 5, 6 y 7-09: con fila + 1
+#     calzan las tres (0 descalces); con fila + 2, que era lo que se
+#     usaba el 6-09, 14 a 17 descalces por dia.
 #   - el `_UTC-4` del 4-04 es el mismo dia una hora corrido: su fila k
 #     es la k+1 del otro, y su ultima fila es la SEGUNDA pasada de las
 #     23:00 (hora 25), que el archivo sin sufijo no trae.
@@ -461,7 +465,12 @@ def _periodos_del_reporte(anio, mes, dia, filas, desfase_horas, zona):
     """
 
     if desfase_horas is None:
-        desfase = datetime.datetime(anio, mes, dia, tzinfo=zona).utcoffset()
+        # fold=1: si las 00:00 no existen (el dia que se adelanta la
+        # hora), el desfase es el que rige despues del salto, y la fila
+        # 0 cae en el dia anterior y se descarta.
+        desfase = datetime.datetime(
+            anio, mes, dia, tzinfo=zona, fold=1
+        ).utcoffset()
     else:
         desfase = datetime.timedelta(hours=desfase_horas)
 

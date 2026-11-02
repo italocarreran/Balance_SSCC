@@ -5211,8 +5211,152 @@ resultado. Queda en Pendientes abiertos con cómo volver a aplicarla.
 - **Eficiencia de RE545** (usar la de la central completa): no se acoge.
 - **Obs. 2** (tope de capacidad en la Energía Disponible): no se acoge.
 - **FD en E Costos y dirección del FD/umbrales:** el usuario indica que ya
-  está aplicado. Ojo: en el Python del repo no hubo cambio de código para
-  esto (sigue la lógica de la macro original).
+  está aplicado: lo hizo otro chat en `main` (commit `87c31a7`, "metodo
+  nuevo del FD"), traído a esta rama con un merge de `main`.
 - **Regla de los 10 kWh:** sigue en el tintero.
 - Inyección real por puesto (BS) y oferta completa por día: siguen abiertos,
   en explicación al usuario.
+
+## 2026-10-26 — Medidas (API v2): la hora 25 de abril no aparecía
+
+Reporte del usuario: al correr las medidas de abril 2026 no toma la hora
+25. Revisado `Claves_Balance`: con `dateRange` bien marcado (-03:00 la
+primera pasada de las 23:xx del 4-04, -04:00 la segunda) el calendario sí
+da 1..25. Pero desde el arreglo de septiembre el UTC se saca de la hora
+local con su desfase; si la API marca **las dos pasadas con el mismo
+desfase**, las dos quedaban con el mismo UTC, el calendario no veía hora
+repetida y la segunda pasada se sumaba en la 24 (doble).
+
+**Arreglo** (`normalizar_fechas`): donde el UTC de la hora local choca
+entre filas distintas y el `intervaloUtc` de la API no, se usa el de la
+API (en septiembre es al revés y sigue igual). Además
+`avisar_hora_repetida` deja un **AVISO** en el log si el día que se atrasa
+la hora el calendario no trae la 25 (con cuántos cuartos trae), por si la
+API directamente no entrega la segunda pasada.
+
+**Verificación:** `tests/test_api_v2_abril.py` (nuevo: desfases correctos,
+misma marca en las dos pasadas, sin la segunda pasada). 281 pruebas.
+Pendiente: confirmar con el log real de abril cuál de los casos es
+(líneas "choca con otra" o "AVISO ... hora repetida").
+
+## 2026-10-26 (2) — Ofertas SSCC: la hora 25 del sábado de abril
+
+Pregunta del usuario: en el OfertasSSCC del mes con cambio de hora la
+columna E va de 1 a 25, ¿está considerado? **No lo estaba:**
+`_normalizar_periodo` solo aceptaba 1..24 (la 25 se descartaba) y
+`horas_del_dia` del sábado de abril devolvía 1..24, así que la oferta del
+día quedaba completa aunque faltara la 25.
+
+**Arreglo:** `_normalizar_periodo` acepta el entero 25 y
+`cambio_hora.horas_del_dia` del día que se atrasa la hora devuelve 1..25
+(la repetida numerada después de la 24, como en Medidas, CMg, FMA y
+Subastas). Para la oferta completa del sábado se exigen las 25; el log de
+ofertas lo dice. Septiembre sin cambios (2..24).
+
+**Verificación:** `tests/test_ofertas_cambio_hora.py` +4 (sábado con 25
+horas; con la 25 completo; sin la 25 incompleto; la 25 no reemplaza a
+otra hora), `test_cambio_hora` ajustada. 285 pruebas.
+
+## 2026-11-02 — Calculo E Costos: método nuevo del FD (macro SSCC_Calcular_Integrado)
+
+Antes del cambio se creó la rama **`Definitivo-Agosto`** con el estado de
+`main` usado para el definitivo de agosto (base para reliquidar agosto).
+`main` sigue como continuación.
+
+El usuario entregó la macro activa de Calculo E Costos: conserva el
+cálculo histórico hasta AF y reemplaza AG:AZ por un método integrado
+(AG:BC). **Cambio de fondo:** el FD se aplica a la energía medida de cada
+cuarto de hora, en su propia hora, antes de acumular y repartir en la
+curva; ya no hay "Descuento FD".
+
+- **Prorrata (AG:AL):** tabla dinámica de Subastas por **Concepto**
+  (CPF(-), CPF(+), CSF(-), CSF(+)) en vez de Control, dividida por el total
+  de la fila; (-) y (+) por separado. Solo filas con Adj SSCC = 1.
+  Supuesto (sin confirmar contra el libro): la hoja "Prorrata SSCC" de la
+  macro es esa misma dinámica en % del total de la fila (su control exige
+  que las prorratas sumen 100%).
+- **FD (AM:AR):** clave = Hora Mes de la fila + unidad (antes: la hora
+  reordenada de la curva, Y / AC). Solo si la prorrata del servicio <> 0;
+  lo que falta o no es numérico, 0 con alerta.
+- **AS / AT** = I / J × Σ(prorrata × FD). **AU / AV** = acumulados como N/O
+  sobre AS/AT. **AW / AX** = la asignación de AE/AF con máx(AU/AV) y Pmax.
+  **AY / AZ** = promedio de la curva AB/AD (la de siempre) en las filas con
+  asignación <> 0, por AW/AX, con los umbrales globales ΣI > 10 / ΣJ < -10.
+  **BA** = AY + AZ. **BC** "Monto a compensar" = MAX(0, (ΣBA − ΣU)/n).
+- Se eliminaron el descuento FD, la tabla de umbrales de Subastas!S:W y el
+  Ciclo de Subastas (`ecostos_ciclo.py` → `ecostos_valorizacion.py`).
+- Alertas nuevas: `PRO-003`, `FD-008`, `VAL-001`.
+
+**Verificación:** `tests/test_ecostos_fd_nuevo.py` (nuevo, 8 pruebas, caso
+a mano: 50 kWh × (0,5×0,9 + 0,5×0,8) = 42,5; asignación 100+70 / −100−4;
+monto 177,25). Pruebas de FD y prorrata adaptadas. 293 pruebas.
+
+## 2026-11-02 (2) — Ventana del cambio de hora: "Oferta Completa" exigía 96 cuartos
+
+Reporte del usuario: en RE545, la "EalmT" (energía almacenada en el
+periodo) de la tabla por central y ventana sale en 0 en la ventana 5 para
+todas las centrales; en el Excel con la macro sí hay valores.
+
+**Causa:** `construir_resumen_ventana_oferta` marca una ventana como
+completa si la suma de "Oferta completa del día" de sus cuartos llega a 96
+(24 h × 4). La ventana 5 de septiembre (5-09 10:00 → 6-09 09:59) cruza el
+cambio de hora: no existe la hora 1 del 6-09, tiene 92 cuartos y nunca
+llegaba a 96. Ninguna central quedaba completa → Medidores!T = 1 → toda su
+energía iba a Calculo E Costos y RE545 quedaba sin energía en esa ventana.
+En abril pasaba lo mismo al revés con la ventana 4 (100 cuartos, hora 25).
+
+**Arreglo:** `_ajuste_ventanas_cambio_hora` (desde `cambio_hora`) suma o
+resta 4 cuartos por cada periodo repetido o inexistente a la ventana donde
+cae (periodo ≥ hora de inicio → ventana del mismo día; si no, la del día
+anterior). `construir_ofertas_sscc` pasa año y mes. Agosto no tiene cambio
+de hora: `Definitivo-Agosto` no se ve afectado.
+
+**Verificación:** `tests/test_ofertas_cambio_hora.py` +4 (septiembre 92,
+abril 100, una hora sin ofertar sigue incompleta, mes normal igual). 297
+pruebas. Hay que volver a generar Medidores/Ofertas SSCC del mes y los
+cálculos.
+
+## 2026-11-02 (3) — FMA CPF del 6-09: el reporte del DCO va en hora local (se corría una hora)
+
+Reporte del usuario (comparando con el cálculo antiguo en Excel): en el
+nuevo, el FMA CPF(-) del día 6 queda en 0 en varias BESS donde el antiguo
+trae 0,1344; y el CSF(-) del día 8 en Del Desierto.
+
+**CPF día 6 — era nuestro.** El 2026-10-15 (9) se supuso que el
+`tabla_resumen` sin sufijo del 6-09 iba en UTC-4 (fila 0 = 01:00 = hora 2).
+Con los reportes reales del 5, 6 y 7-09 y `subastas_2609.xlsx` se cruzó la
+participación de cada BESS del reporte (columnas indic CPF+/-: "NP" = no
+participa) contra sus subastas CPF(+)/(-) adjudicadas: con **fila + 1**
+calzan los tres días (0 descalces el 5 y el 7; el 6 solo la fila 0, que es
+la hora que no existe); con fila + 2, 14 a 17 descalces por día. El mismo
+cruce con el `SSCC_Desempeño` (CPF Horario) da hora + 1 todo el mes. O
+sea: el reporte va en hora local y el 6-09 la fila 0 es la 00:00
+inexistente. **Arreglo** (`_periodos_del_reporte`): el desfase del día se
+toma con `fold=1` (el que rige después del salto), así la fila 0 cae en el
+día anterior y se descarta, y el resto queda en fila + 1. Abril no cambia.
+Con el reporte real: La Cabaña 6-09 hora 20 = 0,1344, como el antiguo.
+
+**CSF(-) día 8 en Del Desierto — no es un error del programa.** El FMA CSF
+se multiplica por el Vector de Participación del desempeño, por Hora Mes.
+El programa cruza la hora correcta (hora del desempeño + 1, Hora Mes
+correlativa en los dos lados): Del Desierto "No Participó" a las 20:00 y
+21:00 → las subastas de las horas 21 y 22 quedan en 0. El Excel antiguo
+sumaba 1 a la Hora_mes de Subastas después del día del cambio
+(`IF(F9>$F$2,1,0)`) y en septiembre leía la participación de la hora
+siguiente (la 22 tomaba las 22:00, que sí participa; la 20 tomaba las
+20:00, que no).
+
+**Verificación:** `tests/test_fma_cambio_hora.py` ajustada al reporte en
+hora local. 297 pruebas. Hay que volver a generar el FMA de septiembre.
+
+## 2026-11-02 (3) — Merge de `main` (FD nuevo de E Costos) en esta rama
+
+Se trajo `main` (método nuevo del FD en E Costos, hora 25 de abril en
+medidas/ofertas, FMA CPF). Las pruebas nuevas de `main`
+(`test_api_v2_abril.py`, `test_ecostos_fd_nuevo.py`) quedaron en
+`desarrollo/tests/`. 300 pruebas OK (12 salteadas).
+
+**Pendiente:** la página `explicacion/ecostos.html` y `generar_ejemplo.py`
+siguen con el método anterior del FD (descuento FD, umbrales, columnas
+viejas). Con el método nuevo las columnas cambiaron y el generador lee mal
+el monto. Se dejó `datos/ejemplo.js` como estaba hasta rehacer la página.

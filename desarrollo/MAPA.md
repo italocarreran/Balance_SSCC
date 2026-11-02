@@ -41,7 +41,7 @@ Script/
         ecostos.py             <- Calculo E Costos: base y orquestacion
         ecostos_columnas.py    <- E Costos etapa 2
         ecostos_prorratas.py   <- E Costos etapa 3
-        ecostos_ciclo.py       <- E Costos etapa 4
+        ecostos_valorizacion.py <- E Costos etapa 4 (metodo nuevo del FD)
         re545.py               <- Calculo RE545: base y orquestacion
         re545_reservas.py      <- RE545 AC:AT y AU
         re545_resumen.py       <- RE545 AW:BG y BV

@@ -435,6 +435,12 @@ Lista de solo agregar, para no volver a discutir lo mismo en cada sesión.
   existía (`Subastas!N` depende de `Calculo E Costos!P`, que viene de
   `Medidores`, no de una columna calculada). Sigue pendiente toda la
   hoja `Calculo RE545`.
+  **Actualización (2026-11):** `AG:BC` pasó al método nuevo del FD de la
+  macro `SSCC_Calcular_Integrado` (prorrata con dirección y FD de la hora
+  de la fila, aplicados a la energía medida antes de acumular y repartir;
+  sin descuento FD ni tabla de umbrales). Ver `ecostos_prorratas.py` y
+  `ecostos_valorizacion.py`; el método anterior quedó en la rama
+  `Definitivo-Agosto`.
 - **Cada salida tiene su propio botón "Generar" con casillas por sección,
   en vez de un único botón "Ejecutar" para todo.** Pedido explícito del
   usuario, con un archivo de referencia (`Revisor_Reliquidacion.py`) para

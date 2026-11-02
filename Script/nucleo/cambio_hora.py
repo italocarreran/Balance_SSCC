@@ -214,17 +214,23 @@ def describir_periodo(aamm):
 
 
 def horas_del_dia(anio, mes, dia):
-    """Periodos 1..24 que existen en el dia local de Chile.
+    """Periodos que existen en el dia local de Chile (1..24 normalmente).
 
     El dia que se adelanta la hora falta el periodo del salto; el dia
-    que se atrasa los 24 existen (uno se repite, pero los archivos lo
-    traen numerado 1..24).
+    que se atrasa la hora que se repite se numera despues de la 24
+    (1..25), como lo traen las ofertas SSCC en su columna E.
     """
 
     fecha = datetime.date(int(anio), int(mes), int(dia))
     for cambio in _cambios_del_mes(fecha.year, fecha.month):
         if cambio.fecha == fecha:
-            return _TODOS_LOS_PERIODOS - frozenset(cambio.periodos_inexistentes)
+            extra = frozenset(
+                range(25, 25 + len(cambio.periodos_repetidos))
+            )
+            return (
+                _TODOS_LOS_PERIODOS
+                - frozenset(cambio.periodos_inexistentes)
+            ) | extra
     return _TODOS_LOS_PERIODOS
 
 

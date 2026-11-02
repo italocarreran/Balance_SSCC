@@ -47,7 +47,7 @@ class TestCambiosDeHora(unittest.TestCase):
             cambio_hora.horas_del_dia(2026, 9, 6), frozenset(range(2, 25))
         )
         self.assertEqual(
-            cambio_hora.horas_del_dia(2026, 4, 4), frozenset(range(1, 25))
+            cambio_hora.horas_del_dia(2026, 4, 4), frozenset(range(1, 26))
         )
 
     def test_sin_tzdata_la_regla_da_lo_mismo(self):

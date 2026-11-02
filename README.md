@@ -434,19 +434,20 @@ atrás con el detalle: `PRORRATA_RETIROS`, `COMPENSACION_CENTRAL`,
 `Calculo RE545` y `Calculo E Costos`.
 
 - `Calculo E Costos` — traspaso desde `Medidores`, asignación de CMg, y casi
-  toda `Actualizar_Calculos_Columnas` (`L, M, N, O, R, S, T, U, W, X, Y, AB,
-  AC, AD, AE, AF, AG:AX, AZ`), con **nombres reales de columna** (confirmados
-  contra un archivo real, hoja "E COSTOS"): `Configuracion`, `Barra`,
+  toda `Actualizar_Calculos_Columnas` (`L:AF` con el cálculo histórico y
+  `AG:BC` con el **método nuevo del FD**, macro `SSCC_Calcular_Integrado`),
+  con **nombres reales de columna**: `Configuracion`, `Barra`,
   `Descarga kWh`/`Carga kWh`, `SoC %`, `CMg`, `Adj SSCC`, `SoC sobre el
   minimo`, `ranking cmg`, `Valorizacion Descarga`/`Carga`, `Bloque ordenado`,
-  `Curva monotona CMg Descarga`/`Carga`, `Energía descargada`/
-  `cargada`, las Prorratas y el FD homologado (`CPF(±)`/`CSF(±)`/`CTF(±)`,
-  este último siempre en 0 — confirmado que no existe), `Ingreso descarga`,
-  `Costo carga`, `Descuento FD`, `Total` y `Monto a compensar`, entre otros.
-  El FD homologado sale de la hoja `FD` de la misma planilla, no de releer
-  el `SSCC_Desempeño_*`. La hoja
-  queda **completa** (`A:AZ`, sin la columna `AY`, que
-  la macro original tampoco escribe).
+  `Curva monotona CMg Descarga`/`Carga`, `Energía descargada`/`cargada`, y
+  desde la prorrata: la prorrata y el FD **de la hora de cada fila**
+  (`CPF(±)`/`CSF(±)`, `CTF` siempre en 0), `Descarga`/`Carga ajustada
+  FD-prorrata kWh` (la energía medida por Σ prorrata×FD), sus acumulados,
+  `Asignación Descarga`/`Carga kWh`, `Valorización Descarga`/`Carga [$]`,
+  `Total [CLP]` y `Monto a compensar`. Ya no hay `Descuento FD`. El FD sale
+  de la hoja `FD` de la misma planilla. El método anterior (FD aplicado
+  sobre la energía repartida en la curva, con descuento FD) quedó en la
+  rama `Definitivo-Agosto`.
 - `Calculo RE545` — la hoja hermana, también **completa** (`A:CE`): mismo
   traspaso desde `Medidores` (la energía se reparte entre las dos hojas según
   `Ventana_No_Completa`), las reservas por subasta (`AC:AU`), el resumen por

@@ -187,9 +187,10 @@ class FdFaltanteTest(unittest.TestCase):
             "sae-crca-pfv-manzano": "BESS PFV MANZANO",
             "sae-crca-pfv-nuevo-quillagua-2": "SAE-CRCA-PFV-NUEVO-QUILLAGUA-2",
         }
-        # Una fila por central y hora (Y/AC en cuartos: bloque = hora).
+        # Una fila por central y hora: el FD se busca por la hora de la
+        # fila (Hora Mes), no por la hora reordenada de la curva.
         self.df = pd.DataFrame([
-            {"clave": central, "Y": hora * 4, "AC": hora * 4}
+            {"clave": central, "Hora Mes": hora}
             for central in ("SAE-CRCA-PFV-MANZANO",
                             "SAE-CRCA-PFV-NUEVO-QUILLAGUA-2")
             for hora in self.horas
