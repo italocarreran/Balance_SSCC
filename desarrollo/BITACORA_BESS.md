@@ -14,7 +14,7 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 - **Reliquidación enero 2601 — observaciones (2026-10-21, revisión con el
   usuario, sin cambios de código todavía):**
-  - **Regla de los 10 kWh** (`calcular_au_av`): viene de la macro VBA
+  - **Regla de los 10 kWh** (hoy en `ecostos_valorizacion.py`; antes `calcular_au_av`): viene de la macro VBA
     (`sumaIP > 10`), sin respaldo en el Estudio de Costos.
 
 - **Tiempos (2026-10-16 (2)):** el cuello de botella es la escritura de
