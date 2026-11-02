@@ -80,9 +80,12 @@ class AlertasCrucesTest(unittest.TestCase):
             "clave": ["SAE-A", "SAE-A", "SAE-B"],
             "Hora Mes": [1, 2, 1],
         })
-        dic = {"SAE-A¦1": (0.5, 0.5), "SAE-A¦2": (0.5, 0.5)}
+        dic = {
+            "SAE-A¦1": (0.5, 0.5, 0.0, 0.0),
+            "SAE-A¦2": (0.5, 0.5, 0.0, 0.0),
+        }
 
-        ag, ah = nucleo.calcular_prorratas(
+        ag, ah, aj, ak = nucleo.calcular_prorratas(
             df, dic, registrar=mensajes.append
         )
 
@@ -98,10 +101,10 @@ class AlertasCrucesTest(unittest.TestCase):
         df = pd.DataFrame({"clave": ["SAE-A", "SAE-A"], "Hora Mes": [1, 2]})
 
         nucleo.calcular_prorratas(
-            df, {"SAE-A¦1": (0.5, 0.5)}, registrar=mensajes.append
+            df, {"SAE-A¦1": (0.5, 0.5, 0.0, 0.0)}, registrar=mensajes.append
         )
 
-        self.assertTrue(any("1 fila(s) sin prorrata SSCC" in m
+        self.assertTrue(any("1 fila(s) con Adj SSCC = 1 sin prorrata SSCC" in m
                             for m in mensajes), mensajes)
         self.assertFalse(any("ninguna hora" in m for m in mensajes))
 

@@ -26,8 +26,7 @@ class AlertasMapeosTest(unittest.TestCase):
         mensajes = []
         df = pd.DataFrame({
             "clave": ["SAE-SIN-DIC", "SAE-CON-DIC"],
-            "Y": [1, 1],
-            "AC": [1, 5],
+            "Hora Mes": [1, 2],
         })
 
         am, an, ap, aq = nucleo.calcular_fd_prorrateado(
@@ -38,9 +37,12 @@ class AlertasMapeosTest(unittest.TestCase):
             registrar=mensajes.append,
         )
 
-        self.assertTrue(pd.isna(am.iloc[0]))
-        self.assertEqual((am.iloc[1], an.iloc[1], ap.iloc[1], aq.iloc[1]),
-                         (0.0, 0.0, 0.0, 0.0))
+        # Metodo nuevo: lo que falta queda en 0 (y se avisa), no vacio.
+        for fila in (0, 1):
+            self.assertEqual(
+                (am.iloc[fila], an.iloc[fila], ap.iloc[fila], aq.iloc[fila]),
+                (0.0, 0.0, 0.0, 0.0),
+            )
         self.assertTrue(any("no presentes en el diccionario" in m
                             for m in mensajes))
         self.assertTrue(any("CPF homologadas" in m for m in mensajes))
