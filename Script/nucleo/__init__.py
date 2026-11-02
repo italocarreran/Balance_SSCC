@@ -28,8 +28,8 @@ ahora en el modulo de su etapa:
     ecostos.py               Calculo E Costos: traspaso base y orquestacion.
     columnas_compartidas.py  L, M y N/O: iguales en las dos hojas de calculo.
     ecostos_columnas.py      E Costos, etapa 2: R, S, T, U, W, X, Y, AB:AF.
-    ecostos_prorratas.py     E Costos, etapa 3: AG:AL, AM:AR (FD), AS:AV.
-    ecostos_ciclo.py         E Costos, etapa 4: Ciclo, umbrales, AW, AX, AZ.
+    ecostos_prorratas.py     E Costos, etapa 3: prorrata y FD de la hora, energia ajustada.
+    ecostos_valorizacion.py  E Costos, etapa 4: acumulados, asignacion, valorizacion, monto.
     re545.py                 Calculo RE545: traspaso base, S, U, V y orquestacion.
     re545_reservas.py        RE545: los tres bloques de reservas (AC:AT) y AU.
     re545_resumen.py         RE545: la tabla por central+ventana (AW:BG) y BV.
@@ -199,16 +199,16 @@ from .ecostos_columnas import (
     calcular_s_t_u, calcular_w_x, calcular_y_ab_ac_ad,
 )
 from .ecostos_prorratas import (
-    _calcular_bloque, _calcular_costo_ponderado, calcular_as_at,
-    calcular_au_av, calcular_fd_prorrateado, calcular_prorratas,
+    SERVICIOS_PRORRATA, calcular_energia_ajustada,
+    calcular_fd_prorrateado, calcular_prorratas,
     construir_dic_fd_bloque, construir_dic_mapeo_diccionario,
     unidades_bloque_fd, agregar_central_fd, dic_mapeo_desde_fd,
     mapa_unidad_fd_a_central,
     construir_dic_prorrata, construir_prorrata_sscc,
 )
-from .ecostos_ciclo import (
-    _clave_central_ciclo, calcular_aw_ax, calcular_az,
-    calcular_subastas_ciclo, construir_dic_umbrales_subastas,
+from .ecostos_valorizacion import (
+    calcular_acumulados_ajustados, calcular_asignacion_ajustada,
+    calcular_monto_a_compensar, calcular_valorizacion,
 )
 from .re545 import (
     COLUMNAS_AUXILIARES_RE545, COLUMNAS_SALIDA_RE545,
@@ -354,14 +354,14 @@ __all__ = [
     "calcular_l", "calcular_m", "calcular_n_o",
     "_calcular_asignacion_energia", "calcular_ae_af",
     "calcular_r_ecostos", "calcular_s_t_u", "calcular_w_x",
-    "calcular_y_ab_ac_ad", "_calcular_bloque",
-    "_calcular_costo_ponderado", "calcular_as_at", "calcular_au_av",
+    "calcular_y_ab_ac_ad", "SERVICIOS_PRORRATA",
+    "calcular_energia_ajustada",
     "calcular_fd_prorrateado", "calcular_prorratas",
     "construir_dic_fd_bloque", "construir_dic_mapeo_diccionario",
     "unidades_bloque_fd",
     "construir_dic_prorrata", "construir_prorrata_sscc",
-    "_clave_central_ciclo", "calcular_aw_ax", "calcular_az",
-    "calcular_subastas_ciclo", "construir_dic_umbrales_subastas",
+    "calcular_acumulados_ajustados", "calcular_asignacion_ajustada",
+    "calcular_monto_a_compensar", "calcular_valorizacion",
     "GRUPOS_CALCULO_RE545", "NOMBRES_CALCULO_RE545", "calcular_s_re545",
     "calcular_u_v_re545", "completar_calculo_re545",
     "completar_checks_resumen_re545", "construir_calculo_re545",

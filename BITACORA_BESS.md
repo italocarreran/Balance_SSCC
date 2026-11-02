@@ -5119,3 +5119,55 @@ API directamente no entrega la segunda pasada.
 misma marca en las dos pasadas, sin la segunda pasada). 281 pruebas.
 Pendiente: confirmar con el log real de abril cuál de los casos es
 (líneas "choca con otra" o "AVISO ... hora repetida").
+
+## 2026-10-26 (2) — Ofertas SSCC: la hora 25 del sábado de abril
+
+Pregunta del usuario: en el OfertasSSCC del mes con cambio de hora la
+columna E va de 1 a 25, ¿está considerado? **No lo estaba:**
+`_normalizar_periodo` solo aceptaba 1..24 (la 25 se descartaba) y
+`horas_del_dia` del sábado de abril devolvía 1..24, así que la oferta del
+día quedaba completa aunque faltara la 25.
+
+**Arreglo:** `_normalizar_periodo` acepta el entero 25 y
+`cambio_hora.horas_del_dia` del día que se atrasa la hora devuelve 1..25
+(la repetida numerada después de la 24, como en Medidas, CMg, FMA y
+Subastas). Para la oferta completa del sábado se exigen las 25; el log de
+ofertas lo dice. Septiembre sin cambios (2..24).
+
+**Verificación:** `tests/test_ofertas_cambio_hora.py` +4 (sábado con 25
+horas; con la 25 completo; sin la 25 incompleto; la 25 no reemplaza a
+otra hora), `test_cambio_hora` ajustada. 285 pruebas.
+
+## 2026-11-02 — Calculo E Costos: método nuevo del FD (macro SSCC_Calcular_Integrado)
+
+Antes del cambio se creó la rama **`Definitivo-Agosto`** con el estado de
+`main` usado para el definitivo de agosto (base para reliquidar agosto).
+`main` sigue como continuación.
+
+El usuario entregó la macro activa de Calculo E Costos: conserva el
+cálculo histórico hasta AF y reemplaza AG:AZ por un método integrado
+(AG:BC). **Cambio de fondo:** el FD se aplica a la energía medida de cada
+cuarto de hora, en su propia hora, antes de acumular y repartir en la
+curva; ya no hay "Descuento FD".
+
+- **Prorrata (AG:AL):** tabla dinámica de Subastas por **Concepto**
+  (CPF(-), CPF(+), CSF(-), CSF(+)) en vez de Control, dividida por el total
+  de la fila; (-) y (+) por separado. Solo filas con Adj SSCC = 1.
+  Supuesto (sin confirmar contra el libro): la hoja "Prorrata SSCC" de la
+  macro es esa misma dinámica en % del total de la fila (su control exige
+  que las prorratas sumen 100%).
+- **FD (AM:AR):** clave = Hora Mes de la fila + unidad (antes: la hora
+  reordenada de la curva, Y / AC). Solo si la prorrata del servicio <> 0;
+  lo que falta o no es numérico, 0 con alerta.
+- **AS / AT** = I / J × Σ(prorrata × FD). **AU / AV** = acumulados como N/O
+  sobre AS/AT. **AW / AX** = la asignación de AE/AF con máx(AU/AV) y Pmax.
+  **AY / AZ** = promedio de la curva AB/AD (la de siempre) en las filas con
+  asignación <> 0, por AW/AX, con los umbrales globales ΣI > 10 / ΣJ < -10.
+  **BA** = AY + AZ. **BC** "Monto a compensar" = MAX(0, (ΣBA − ΣU)/n).
+- Se eliminaron el descuento FD, la tabla de umbrales de Subastas!S:W y el
+  Ciclo de Subastas (`ecostos_ciclo.py` → `ecostos_valorizacion.py`).
+- Alertas nuevas: `PRO-003`, `FD-008`, `VAL-001`.
+
+**Verificación:** `tests/test_ecostos_fd_nuevo.py` (nuevo, 8 pruebas, caso
+a mano: 50 kWh × (0,5×0,9 + 0,5×0,8) = 42,5; asignación 100+70 / −100−4;
+monto 177,25). Pruebas de FD y prorrata adaptadas. 293 pruebas.

@@ -76,6 +76,11 @@ def _normalizar_periodo(valor):
     periodo horario 1..24. Acepta enteros 1..24, fracciones de dia
     estilo Excel, '24:00' y texto de hora/fecha reconocible. None si
     no se puede interpretar.
+
+    Tambien acepta 25: el sabado del cambio de hora de abril el archivo
+    trae la columna E de 1 a 25 (la 25 es la segunda pasada de las
+    23:00). Si el dia no la tiene, no molesta: se exigen las horas del
+    dia (ver _horas_exigidas), no que sean exactamente esas.
     """
 
     if not _tiene_valor(valor):
@@ -84,7 +89,7 @@ def _normalizar_periodo(valor):
     if _es_numero(valor):
         numero = float(valor)
 
-        if numero == int(numero) and 1 <= numero <= 24:
+        if numero == int(numero) and 1 <= numero <= 25:
             return int(numero)
 
         if 0 <= numero < 1:
@@ -137,8 +142,8 @@ def construir_resumen_ofertas_sscc(ruta_ofertas, registrar=print):
     Día). Para cada grupo, una columna por cada servicio _RS
     encontrado en TODO el archivo (1 si en ese grupo el servicio tiene
     ofertado ("Sí") todas las horas del dia, 0 si no; el dia del cambio
-    a horario de verano son 23,
-    ver cambio_hora.horas_del_dia) y una columna final "Oferta
+    a horario de verano son 23 y el del cambio de abril 25, ver
+    cambio_hora.horas_del_dia) y una columna final "Oferta
     completa" (1 solo si todos los servicios del grupo estan
     completos).
 
@@ -219,6 +224,11 @@ def construir_resumen_ofertas_sscc(ruta_ofertas, registrar=print):
             detalle = cambio.descripcion()
             if cambio.periodos_inexistentes:
                 detalle += " Esa hora no se exige para la oferta completa."
+            if cambio.periodos_repetidos:
+                detalle += (
+                    " Para la oferta completa se exigen las 25 (la 25 es "
+                    "la segunda pasada)."
+                )
             registrar(f"  Cambio de hora {detalle}")
 
     filas_salida = []

@@ -743,9 +743,9 @@ def generar_pagos_bess(
         avanzar(60)
 
         registrar(
-            "Completando L, M, N, O, R, S, T, U, W, X, Y, AB, AC, AD, AE, "
-            "AF, AG, AH, AI, AJ, AK, AL, AM, AN, AO, AP, AQ, AR, AS, AT, "
-            "AU, AV, AW, AX, AZ..."
+            "Completando L:AF (calculo historico) y AG:BC (prorrata y FD "
+            "de la hora aplicados a la energia, asignacion, valorizacion "
+            "y monto a compensar)..."
         )
         df_ecostos_base = completar_calculo_e_costos_grupos(
             df_ecostos, df_subastas, dic_factor, umbral_soc_minimo,

@@ -9,16 +9,16 @@ from .alertas import ALTA, Alerta, anotar
 from .avisos import _avisar_claves_sin_mapeo
 from .columnas_compartidas import calcular_l, calcular_m, calcular_n_o
 from .diccionarios import _buscar_cmg
-from .ecostos_ciclo import (
-    calcular_aw_ax, calcular_az, calcular_subastas_ciclo,
-    construir_dic_umbrales_subastas,
+from .ecostos_valorizacion import (
+    calcular_acumulados_ajustados, calcular_asignacion_ajustada,
+    calcular_monto_a_compensar, calcular_valorizacion,
 )
 from .ecostos_columnas import (
     calcular_ae_af, calcular_r_ecostos, calcular_s_t_u, calcular_w_x,
     calcular_y_ab_ac_ad,
 )
 from .ecostos_prorratas import (
-    calcular_as_at, calcular_au_av, calcular_fd_prorrateado,
+    calcular_energia_ajustada, calcular_fd_prorrateado,
     calcular_prorratas, construir_dic_fd_bloque,
     construir_dic_mapeo_diccionario, construir_dic_prorrata,
     construir_prorrata_sscc, dic_mapeo_desde_fd, unidades_bloque_fd,
@@ -27,7 +27,7 @@ from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, HOJA_CALCULO_ECOSTOS,
     HOJA_RESUMEN_BESS,
 )
-from .utiles import _tiene_valor, normalizar
+from .utiles import normalizar
 
 
 def construir_calculo_e_costos(
@@ -139,10 +139,15 @@ def construir_calculo_e_costos(
 # asi esta en el archivo real (se distinguen por un encabezado de
 # grupo en las filas 1-2 que no se replica en este esquema de una
 # sola fila de encabezado, igual que Subastas!Q sin nombre o el
-# "Hora Mes" duplicado de FD). No es un error de tipeo. Lo mismo pasa
-# con "Total": es el nombre real de U y tambien de AX (el total del
-# grupo "Componente 1"). Para llegar sin ambiguedad a una de esas
-# columnas hay que ir por posicion, no por nombre.
+# "Hora Mes" duplicado de FD). No es un error de tipeo.
+#
+# Desde el metodo nuevo del FD (macro SSCC_Calcular_Integrado) AG:AR
+# son la prorrata y el FD de la HORA DE LA FILA, con (-) y (+) por
+# separado, y AS:BC la energia ajustada, su asignacion y su
+# valorizacion (ver ecostos_prorratas y ecostos_valorizacion). La
+# columna BB de la macro es un separador vacio y no se escribe. El
+# monto final conserva el nombre "Monto a compensar": lo buscan asi la
+# compensacion por central y la prorrata de retiros.
 NOMBRES_CALCULO_E_COSTOS = {
     "Mes": "Mes",
     "Dia": "Dia",
@@ -185,13 +190,16 @@ NOMBRES_CALCULO_E_COSTOS = {
     "AP": "CPF(+)",
     "AQ": "CSF(+)",
     "AR": "CTF(+)",
-    "AS": "Energía descarga con FD",
-    "AT": "Energía carga con FD",
-    "AU": "Ingreso descarga",
-    "AV": "Costo carga",
-    "AW": "Descuento FD",
-    "AX": "Total",
-    "AZ": "Monto a compensar",
+    "AS": "Descarga ajustada FD-prorrata kWh",
+    "AT": "Carga ajustada FD-prorrata kWh",
+    "AU": "Energía SSCC (descargada con FD-Prorrata) por remunerar",
+    "AV": "Energía SSCC (cargada con FD-Prorrata) por remunerar",
+    "AW": "Asignación Descarga kWh",
+    "AX": "Asignación Carga kWh",
+    "AY": "Valorización Descarga [$]",
+    "AZ": "Valorización Carga [$]",
+    "BA": "Total [CLP]",
+    "BC": "Monto a compensar",
 }
 
 # Auxiliares de calculo que NO se escriben (pedido del usuario:
@@ -239,7 +247,8 @@ GRUPOS_CALCULO_E_COSTOS = (
     ("Prorratas (-)", ["AG", "AH", "AI"]),
     ("Prorratas (+)", ["AJ", "AK", "AL"]),
     ("FD", ["AM", "AN", "AO", "AP", "AQ", "AR"]),
-    ("Componente 1", ["AU", "AV", "AW", "AX"]),
+    ("Energía con FD-Prorrata", ["AS", "AT", "AU", "AV", "AW", "AX"]),
+    ("Componente 1", ["AY", "AZ", "BA"]),
 )
 
 
@@ -256,8 +265,8 @@ def completar_calculo_e_costos_grupos(
     """
     Etapas 2, 3 y 4 de "Calculo E Costos": agrega L, M, N, O, R, S,
     T, U, W, X, Y, AB, AC, AD, AE, AF, AG, AH, AI, AJ, AK, AL, AM,
-    AN, AO, AP, AQ, AR, AS, AT, AU, AV, AW, AX y AZ a df_ecostos
-    (que ya viene con la etapa base
+    AN, AO, AP, AQ, AR, AS, AT, AU, AV, AW, AX, AY, AZ, BA y BC a
+    df_ecostos (que ya viene con la etapa base
     de construir_calculo_e_costos). Devuelve la hoja con los nombres
     INTERNOS de columna: el renombre a los nombres reales es un paso
     aparte (renombrar_calculo_e_costos), igual que en RE545, porque
@@ -273,8 +282,9 @@ def completar_calculo_e_costos_grupos(
     df_fd_csf, df_fd_cpf: los dos bloques de la hoja FD (nombres reales
     ya aplicados, y la columna 'Central' si la hoja la trae).
 
-    Fuera de esta funcion: la columna AY del archivo real (que la
-    macro original tampoco escribe) y toda la hoja Calculo RE545.
+    Hasta AF es el calculo historico; de AG en adelante, el metodo
+    nuevo del FD (prorrata y FD de la hora de la fila aplicados a la
+    energia medida, sin descuento FD).
     """
 
     df = df_ecostos.reset_index(drop=True).copy()
@@ -316,22 +326,24 @@ def completar_calculo_e_costos_grupos(
         origen_control="CATALOGO AUX-008",
     )
 
+    # Metodo nuevo: prorrata y FD de la hora de la fila (solo L = 1),
+    # aplicados a la energia medida antes de acumular y repartir.
     tabla_prorrata = construir_prorrata_sscc(df_subastas)
     dic_prorrata = construir_dic_prorrata(tabla_prorrata, registrar=registrar)
 
-    ag, ah = calcular_prorratas(df, dic_prorrata, registrar=registrar)
+    ag, ah, aj, ak = calcular_prorratas(df, dic_prorrata, registrar=registrar)
     df["AG"] = ag
     df["AH"] = ah
     df["AI"] = 0.0
-    df["AJ"] = df["AG"]
-    df["AK"] = df["AH"]
+    df["AJ"] = aj
+    df["AK"] = ak
     df["AL"] = 0.0
 
     # La hoja FD ya trae, al lado de cada fila, el nombre Balance_BESS
     # de su unidad (columna 'Central', puesta al importarla): ese cruce
     # manda. El Diccionario queda solo para lo que la hoja no cubra (un
     # libro de antes de la columna, o una central sin ninguna fila en
-    # FD, que es lo que distingue FD-007 de DIC-001 mas abajo).
+    # FD, que es lo que distingue FD-007 de DIC-001).
     dic_mapeo = (
         construir_dic_mapeo_diccionario(diccionario)
         if diccionario is not None else {}
@@ -352,30 +364,13 @@ def completar_calculo_e_costos_grupos(
     df["AQ"] = aq
     df["AR"] = 0.0
 
-    as_, at = calcular_as_at(df)
-    df["AS"] = as_
-    df["AT"] = at
-
-    au, av = calcular_au_av(df)
-    df["AU"] = au
-    df["AV"] = av
-
-    ciclo_subastas = calcular_subastas_ciclo(df_subastas, df)
-    dic_umbrales = construir_dic_umbrales_subastas(df_subastas, ciclo_subastas)
-
-    con_ciclo = int(ciclo_subastas.map(_tiene_valor).sum())
-    registrar(
-        f"  Subastas: {con_ciclo:,} de {len(df_subastas):,} fila(s) "
-        f"cruzaron con un ciclo de Calculo E Costos ('Ciclo'); "
-        f"{len(dic_umbrales):,} par(es) central+ciclo con umbral "
-        f"SUBIDA/BAJADA."
+    df["AS"], df["AT"] = calcular_energia_ajustada(df)
+    df["AU"], df["AV"] = calcular_acumulados_ajustados(df)
+    df["AW"], df["AX"] = calcular_asignacion_ajustada(df, dic_factor)
+    df["AY"], df["AZ"], df["BA"] = calcular_valorizacion(
+        df, registrar=registrar
     )
-
-    aw, ax = calcular_aw_ax(df, dic_umbrales)
-    df["AW"] = aw
-    df["AX"] = ax
-
-    df["AZ"] = calcular_az(df)
+    df["BC"] = calcular_monto_a_compensar(df)
 
     participa = int(df["L"].sum())
     registrar(

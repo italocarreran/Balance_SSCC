@@ -876,7 +876,10 @@ Revisión del catálogo contra el código, hecha el 2026-09-14.
 | Id | Qué detecta |
 |---|---|
 | `PRO-001` | Central sin **ninguna** hora en la Prorrata SSCC: la homologación contra `Subastas!Configuración` no está cruzando y se cae todo el prorrateo de SSCC de esa central. |
-| `PRO-002` | Filas sueltas sin prorrata para su `central+Hora Mes` (MEDIA: una hora sin SSCC puede ser legítima). |
+| `PRO-002` | Filas sueltas con `Adj SSCC = 1` sin prorrata para su `central+Hora Mes` (MEDIA: una hora sin SSCC puede ser legítima). |
+| `PRO-003` | Filas con `Adj SSCC = 1` cuyas prorratas CPF/CSF no suman 100% (otro `Concepto` en esa hora, p. ej. CTF o "REVISAR"). Control de la macro `SSCC_Calcular_Integrado`. |
+| `FD-008` | FD vacío o no numérico en un servicio con prorrata: se toma como 0. |
+| `VAL-001` | Filas de `Calculo E Costos` con energía asignada y sin precio en la curva monótona: no entran al promedio de CMg de su grupo. |
 | `SUB-011` | Central que no aparece en ninguna fila de `Subastas`: sus reservas `AC:AT` y `AU` quedan en 0 y se paga como si no hubiera tenido reservas. |
 | `PAG-001` | Una hoja del libro de pagos quedó vacía porque no se pidió recalcularla y no había versión anterior. |
 

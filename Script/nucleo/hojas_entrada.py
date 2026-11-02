@@ -417,8 +417,8 @@ def _ordenar_subastas_por_hora_mes(df):
     ordenado por hora_mes, mala mia yo lo pedi pero no"). Se conserva
     la funcion -en vez de borrar los llamados- porque el orden de esta
     hoja es puramente de presentacion: ninguna columna de mas abajo
-    depende de el (calcular_l, construir_prorrata_sscc y
-    construir_dic_umbrales_subastas cruzan por clave), asi que el
+    depende de el (calcular_l y construir_prorrata_sscc cruzan por
+    clave), asi que el
     unico lugar donde se decide es aca.
     """
 
@@ -488,8 +488,8 @@ def leer_cmg_consolidado(ruta_consolidado, registrar=print, libro=None):
 
 # La hoja 'Subastas' del consolidado: sin las columnas que se arman de
 # las otras (Control y Sub_Baj salen de Concepto, la Clave horaria de
-# Configuración + Dia + Hora_dia) ni la de Ciclo, que va vacia (el ciclo
-# se calcula en Calculo E Costos). Pedido del usuario: antes B, C, L y M
+# Configuración + Dia + Hora_dia) ni la de Ciclo, que va vacia (con el
+# metodo nuevo del FD ya no la usa nadie). Pedido del usuario: antes B, C, L y M
 # de la hoja. Se reponen al leerla.
 COLUMNAS_SUBASTAS_AUXILIARES = ("Control", "Sub_Baj", "Clave horaria", "Ciclo")
 
