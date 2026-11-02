@@ -14,14 +14,6 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 - **Reliquidación enero 2601 — observaciones (2026-10-21, revisión con el
   usuario, sin cambios de código todavía):**
-  - **Eficiencia de RE545 (obs. reliquidación):** se usa la "Eficiencia" de
-    Resumen BESS (`Centrales.xlsx`), que hoy es la de celdas (Pruebas de
-    Potencia Máxima). La RE545 §2.2.2.2 pide factores de eficiencia que
-    representen las pérdidas de retiro e inyección de la instalación,
-    "de acuerdo con el Capítulo de Programación de la Operación de la NT
-    CyO". Arreglo: es de datos, no de código (cambiar el valor en
-    `Centrales.xlsx`). **Pendiente:** conseguir la eficiencia de la NT CyO
-    por central.
   - **Oferta completa de la ventana 24 con el día 25 incompleto (obs.
     reliquidación):** la marca es por día y la ventana 24 usa las horas
     1 a 9 del día 25, así que queda incompleta. La RE545 exige oferta
@@ -34,25 +26,6 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
     (Pmax/4 − inyección) se calcula con la inyección de otro bloque.
     Encontrado al revisar la obs. de asignación de BN (planilla 2603; esa obs.
     ya está cubierta en el repo: BN = mín(Pmax/4 − BS, saldo)). **Pendiente.**
-  - **Tope de capacidad en la Energía Disponible (obs. 2):** se propuso no
-    acogerla (la RE545 limita la E inicial a la capacidad; la almacenada no
-    se recorta por el `max(..., EalmT)`). Queda anotado el caso en que el
-    tope pierde energía real (inicial 90, descarga 50, carga 20, capacidad
-    100 → 100 en vez de 110).
-  - **FD en E Costos (en pausa):** la "Energía con FD" mezcla la prorrata
-    de la fila cronológica con el FD del bloque del puesto de la curva; con
-    prorrata 0 en la fila se usa factor 1 y no hay descuento. La norma
-    (§10.2.5) no define cómo aplicar el FD. Opciones: A (prorrata y FD del
-    bloque del puesto) o B (castigar la energía real de cada bloque antes de
-    ordenar; preferida por el usuario, falta definir si también se castiga
-    el Componente 2).
-    **Ligado a esto, la dirección del FD y de los umbrales (2026-10-22):** en
-    E Costos la descarga usa el FD de **bajada** (CPF(−)/CSF(−)) y las horas
-    de BAJADA para el promedio del descuento, y la carga usa el FD de
-    **subida** y las horas de SUBIDA (`calcular_as_at`, `calcular_aw_ax`).
-    Físicamente es al revés: el margen de subida es el que limita la
-    descarga. Un BESS que solo prestó subida mientras descargaba queda sin
-    descuento. Viene de la macro original; decidir junto con A/B.
   - **Regla de los 10 kWh** (`calcular_au_av`): viene de la macro VBA
     (`sumaIP > 10`), sin respaldo en el Estudio de Costos.
 
@@ -5232,3 +5205,14 @@ resultado. Queda en Pendientes abiertos con cómo volver a aplicarla.
   Energía Disponible que la 30; falla con el código anterior.
 
 **Verificación:** 281 pruebas OK (12 salteadas). Página RE545 actualizada.
+
+## 2026-11-02 (2) — Cierre de pendientes con el usuario
+
+- **Eficiencia de RE545** (usar la de la central completa): no se acoge.
+- **Obs. 2** (tope de capacidad en la Energía Disponible): no se acoge.
+- **FD en E Costos y dirección del FD/umbrales:** el usuario indica que ya
+  está aplicado. Ojo: en el Python del repo no hubo cambio de código para
+  esto (sigue la lógica de la macro original).
+- **Regla de los 10 kWh:** sigue en el tintero.
+- Inyección real por puesto (BS) y oferta completa por día: siguen abiertos,
+  en explicación al usuario.
