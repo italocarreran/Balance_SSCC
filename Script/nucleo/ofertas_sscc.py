@@ -635,8 +635,39 @@ def calcular_s(ventana, r_valor):
     return s.ffill().astype("Int64")
 
 
+def _ajuste_ventanas_cambio_hora(anio, mes, inicio_ventana):
+    """
+    Cuartos de hora de mas (+) o de menos (-) de cada ventana por el
+    cambio de hora del mes: {ventana: ajuste}.
+
+    La ventana k va del dia k a la hora de inicio hasta el dia k+1 justo
+    antes (la 0, del dia 1 hasta la hora de inicio). Un periodo p del dia
+    d cae en la ventana d si p >= inicio, si no en la d-1. Ej.: el 6-09-2026
+    no existe el periodo 1 -> la ventana 5 tiene 92 cuartos, no 96; el
+    4-04-2026 se repite el 24 -> la ventana 4 tiene 100.
+    """
+
+    if anio is None or mes is None:
+        return {}
+
+    ajuste = {}
+
+    for cambio in cambios_de_hora(anio, mes):
+        for periodos, signo in (
+            (cambio.periodos_inexistentes, -4),
+            (cambio.periodos_repetidos, 4),
+        ):
+            for periodo in periodos:
+                dia = cambio.fecha.day
+                ventana = dia if periodo >= inicio_ventana else dia - 1
+                ajuste[ventana] = ajuste.get(ventana, 0) + signo
+
+    return ajuste
+
+
 def construir_resumen_ventana_oferta(
-    clave, ventana, oferta_r, inicio_ventana=INICIO_VENTANA, registrar=print
+    clave, ventana, oferta_r, inicio_ventana=INICIO_VENTANA, registrar=print,
+    anio=None, mes=None,
 ):
     """
     Replica Resumir_Medidores_Central_Ventana_Oferta_Completa.
@@ -646,6 +677,12 @@ def construir_resumen_ventana_oferta(
     ventanas normales, (inicio_ventana-1)*4 en la ventana 0, y
     (25-inicio_ventana)*4 en la ultima ventana del mes (la de mayor
     valor numerico encontrado en L).
+
+    Con anio y mes, la ventana del cambio de hora espera los cuartos que
+    de verdad tiene (ver _ajuste_ventanas_cambio_hora). Sin el ajuste,
+    en septiembre la ventana del 5 al 6 (23 horas) nunca llegaba a 96 y
+    ninguna central quedaba completa: su energia se iba entera a Calculo
+    E Costos y RE545 quedaba sin energia almacenada en esa ventana.
 
     Devuelve un DataFrame con columnas Central, Ventana T, Oferta,
     Completa.
@@ -684,12 +721,21 @@ def construir_resumen_ventana_oferta(
         .sum()
     )
 
+    ajuste = _ajuste_ventanas_cambio_hora(anio, mes, inicio_ventana)
+    for numero, cuartos in sorted(ajuste.items()):
+        registrar(
+            f"  Cambio de hora: la ventana {numero} espera "
+            f"{cuartos:+d} cuartos de hora ofertados."
+        )
+
     def oferta_esperada(v):
         if abs(v) < 1e-6:
-            return oferta_esperada_inicial
-        if abs(v - ultima_ventana) < 1e-6:
-            return oferta_esperada_final
-        return 96
+            base = oferta_esperada_inicial
+        elif abs(v - ultima_ventana) < 1e-6:
+            base = oferta_esperada_final
+        else:
+            base = 96
+        return base + ajuste.get(int(round(v)), 0)
 
     esperada = resumen["Ventana T"].map(oferta_esperada)
     resumen["Completa"] = (

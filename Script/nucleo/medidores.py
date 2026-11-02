@@ -373,6 +373,8 @@ def construir_ofertas_sscc(
         df_medidores["Ventana"],
         r_valor,
         registrar=registrar,
+        anio=anio,
+        mes=mes,
     )
 
     return df_wxy, df_resumen_ventana, avisos

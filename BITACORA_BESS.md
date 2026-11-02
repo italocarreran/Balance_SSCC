@@ -5171,3 +5171,61 @@ curva; ya no hay "Descuento FD".
 **Verificación:** `tests/test_ecostos_fd_nuevo.py` (nuevo, 8 pruebas, caso
 a mano: 50 kWh × (0,5×0,9 + 0,5×0,8) = 42,5; asignación 100+70 / −100−4;
 monto 177,25). Pruebas de FD y prorrata adaptadas. 293 pruebas.
+
+## 2026-11-02 (2) — Ventana del cambio de hora: "Oferta Completa" exigía 96 cuartos
+
+Reporte del usuario: en RE545, la "EalmT" (energía almacenada en el
+periodo) de la tabla por central y ventana sale en 0 en la ventana 5 para
+todas las centrales; en el Excel con la macro sí hay valores.
+
+**Causa:** `construir_resumen_ventana_oferta` marca una ventana como
+completa si la suma de "Oferta completa del día" de sus cuartos llega a 96
+(24 h × 4). La ventana 5 de septiembre (5-09 10:00 → 6-09 09:59) cruza el
+cambio de hora: no existe la hora 1 del 6-09, tiene 92 cuartos y nunca
+llegaba a 96. Ninguna central quedaba completa → Medidores!T = 1 → toda su
+energía iba a Calculo E Costos y RE545 quedaba sin energía en esa ventana.
+En abril pasaba lo mismo al revés con la ventana 4 (100 cuartos, hora 25).
+
+**Arreglo:** `_ajuste_ventanas_cambio_hora` (desde `cambio_hora`) suma o
+resta 4 cuartos por cada periodo repetido o inexistente a la ventana donde
+cae (periodo ≥ hora de inicio → ventana del mismo día; si no, la del día
+anterior). `construir_ofertas_sscc` pasa año y mes. Agosto no tiene cambio
+de hora: `Definitivo-Agosto` no se ve afectado.
+
+**Verificación:** `tests/test_ofertas_cambio_hora.py` +4 (septiembre 92,
+abril 100, una hora sin ofertar sigue incompleta, mes normal igual). 297
+pruebas. Hay que volver a generar Medidores/Ofertas SSCC del mes y los
+cálculos.
+
+## 2026-11-02 (3) — FMA CPF del 6-09: el reporte del DCO va en hora local (se corría una hora)
+
+Reporte del usuario (comparando con el cálculo antiguo en Excel): en el
+nuevo, el FMA CPF(-) del día 6 queda en 0 en varias BESS donde el antiguo
+trae 0,1344; y el CSF(-) del día 8 en Del Desierto.
+
+**CPF día 6 — era nuestro.** El 2026-10-15 (9) se supuso que el
+`tabla_resumen` sin sufijo del 6-09 iba en UTC-4 (fila 0 = 01:00 = hora 2).
+Con los reportes reales del 5, 6 y 7-09 y `subastas_2609.xlsx` se cruzó la
+participación de cada BESS del reporte (columnas indic CPF+/-: "NP" = no
+participa) contra sus subastas CPF(+)/(-) adjudicadas: con **fila + 1**
+calzan los tres días (0 descalces el 5 y el 7; el 6 solo la fila 0, que es
+la hora que no existe); con fila + 2, 14 a 17 descalces por día. El mismo
+cruce con el `SSCC_Desempeño` (CPF Horario) da hora + 1 todo el mes. O
+sea: el reporte va en hora local y el 6-09 la fila 0 es la 00:00
+inexistente. **Arreglo** (`_periodos_del_reporte`): el desfase del día se
+toma con `fold=1` (el que rige después del salto), así la fila 0 cae en el
+día anterior y se descarta, y el resto queda en fila + 1. Abril no cambia.
+Con el reporte real: La Cabaña 6-09 hora 20 = 0,1344, como el antiguo.
+
+**CSF(-) día 8 en Del Desierto — no es un error del programa.** El FMA CSF
+se multiplica por el Vector de Participación del desempeño, por Hora Mes.
+El programa cruza la hora correcta (hora del desempeño + 1, Hora Mes
+correlativa en los dos lados): Del Desierto "No Participó" a las 20:00 y
+21:00 → las subastas de las horas 21 y 22 quedan en 0. El Excel antiguo
+sumaba 1 a la Hora_mes de Subastas después del día del cambio
+(`IF(F9>$F$2,1,0)`) y en septiembre leía la participación de la hora
+siguiente (la 22 tomaba las 22:00, que sí participa; la 20 tomaba las
+20:00, que no).
+
+**Verificación:** `tests/test_fma_cambio_hora.py` ajustada al reporte en
+hora local. 297 pruebas. Hay que volver a generar el FMA de septiembre.
