@@ -20,7 +20,7 @@ import pandas as pd
 
 from Script import nucleo
 from Script.nucleo import estructura, medidas_sae
-from tests.test_claves_balance import descarga
+from desarrollo.tests.test_claves_balance import descarga
 
 
 class TestPuntosFallidos(unittest.TestCase):

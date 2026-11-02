@@ -31,7 +31,10 @@ from .utiles import _normaliza_valor_vba, normalizar
 #   AZ = primer U del grupo (G=AW, T=AX)   [INDEX/AGGREGATE(15,6,...,1)]
 #   BA = primer V del mismo grupo
 #   BB = SUMIFS(AU:AU, T:T,AX, G:G,AW)
-#   BC = MIN(MAX(MIN(AZ+BA, Capacidad*1000), BA), BB) * AY * (AX<>31)
+#   BC = MIN(MAX(MIN(AZ+BA, Capacidad*1000), BA), BB) * AY
+#        (el .xlsm multiplicaba ademas por (AX<>31); se quito: la
+#        primera y la ultima ventana del mes se pagan parciales en el
+#        mes, sea cual sea el numero de la ultima)
 #   BF = SUMIFS(BV:BV, BR:BR,AX, G:G,AW)   (BV, ver calcular_bv_re545)
 #   BG = AND(AZ+BA - BF(ventana anterior) > Capacidad*1000, BF_previa<>0)*1
 #
@@ -182,7 +185,8 @@ def construir_resumen_ventanas_re545(
 
     capacidad = factor_num * 1000.0
 
-    # BC = MIN(MAX(MIN(AZ+BA, Pmax*1000), BA), BB) * AY * (AX<>31)
+    # BC = MIN(MAX(MIN(AZ+BA, Pmax*1000), BA), BB) * AY. Sin el (AX<>31)
+    # del .xlsm: la ultima ventana del mes tambien se paga (parcial).
     tabla["BC"] = (
         pd.concat(
             [
@@ -198,7 +202,6 @@ def construir_resumen_ventanas_re545(
             axis=1,
         ).min(axis=1)
         * tabla["AY"]
-        * ventana_num.ne(31).astype(float)
     )
 
     # BG: la resta usa el BF de la MISMA central en la ventana anterior,

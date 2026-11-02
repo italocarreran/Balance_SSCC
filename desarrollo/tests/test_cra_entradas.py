@@ -15,7 +15,7 @@ from openpyxl.utils import column_index_from_string
 
 from Script import cra
 from Script.cra import parametros as p
-from tests.apoyo_cra import maestro_cra
+from desarrollo.tests.apoyo_cra import maestro_cra
 
 
 def _libro(ruta, filas_por_celda, hojas_extra=(), hoja="Hoja1"):
@@ -274,7 +274,7 @@ class PruebaCargaEntradas(unittest.TestCase):
 
 
 REPORTE_REAL = (
-    Path(__file__).resolve().parent.parent
+    Path(__file__).resolve().parents[2]
     / "docs" / "Reporte_CRA_15min_2512_real.csv"
 )
 
@@ -404,7 +404,7 @@ class PruebaProceso(unittest.TestCase):
 
 
 MAESTRO_REAL = (
-    Path(__file__).resolve().parent.parent / "docs" / "centrales_cra_real.xlsx"
+    Path(__file__).resolve().parents[2] / "docs" / "centrales_cra_real.xlsx"
 )
 
 

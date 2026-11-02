@@ -12,6 +12,11 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **Reliquidación enero 2601 — observaciones (2026-10-21, revisión con el
+  usuario, sin cambios de código todavía):**
+  - **Regla de los 10 kWh** (hoy en `ecostos_valorizacion.py`; antes `calcular_au_av`): viene de la macro VBA
+    (`sumaIP > 10`), sin respaldo en el Estudio de Costos.
+
 - **Tiempos (2026-10-16 (2)):** el cuello de botella es la escritura de
   las hojas de cálculo (3 min 14 s de los 4 min 34 s de "cálculo"). Ver
   la entrada del día.
@@ -5097,6 +5102,108 @@ contra el calendario real de `Claves_Balance`; septiembre con la hora 1 en
 cero: queda fuera y el aviso dice "venian en cero"). 278 pruebas, 0
 salteadas con tkinter. Hay que volver a traer `Medidas_SAE.xlsx` de abril.
 
+## 2026-10-21 — Revisión de observaciones de la reliquidación de enero (sin cambios de código)
+
+El usuario está reliquidando enero (2601) y trajo observaciones hechas a
+`11_PAGOS_BESS_2601_*.xlsm` para ver si el cálculo actual en Python las
+corrige. Resultado: obs. 1 (FD aplicado dos veces en la descarga de E
+Costos) **corregida** (`calcular_au_av` usa la energía a Pmax sin FD; el FD
+se aplica una vez en el Descuento FD); obs. 3 ("SSCC última hora" sin
+referencia a la central) **corregida** (usa la propia fila y agrupa por
+clave); obs. 2 y obs. 4 y los hallazgos de la revisión quedan en
+"Pendientes abiertos". También se armaron páginas explicativas del cálculo
+(fuera del repo): paso a paso de E Costos y de RE545.
+
+## 2026-10-22 — Repo ordenado: `desarrollo/` y `explicacion/`
+
+Pedido del usuario: dejar en una carpeta todo lo que es bitácora,
+comunicación entre IAs y pruebas, y en otra lo que se arma ahora (las
+páginas que explican E Costos y RE545). `REGLAS.md`, `METODOLOGIA.md`,
+`MAPA.md`, `BITACORA_BESS.md`, `BITACORA_CRA.md` y `tests/` pasaron a
+`desarrollo/` con `git mv` (se conserva el historial). Las pruebas importan
+ahora `desarrollo.tests.*` y calculan la raíz con `parents[2]`; se agregó
+`desarrollo/__init__.py` para que `python -m unittest discover` desde la raíz
+las siga encontrando. README y REGLAS actualizados con las rutas nuevas.
+
+**Verificación:** 278 pruebas, 12 salteadas, antes y después del movimiento.
+
+
+## 2026-10-22 (2) — `explicacion/`: páginas paso a paso con contenido y diseño separados
+
+Pedido del usuario: trabajar las páginas de explicación con ChatGPT (diseño)
+y Claude (teoría) vía GitHub. Se armó `explicacion/` con `re545.html` y
+`ecostos.html`, que se abren con doble clic. Contenido en `contenido/*.js`
+(textos con `{placeholders}`), diseño en `estilos.css`, `pagina.js` y
+`figuras.js`. El ejemplo (`datos/ejemplo.js`) lo genera
+`generar_ejemplo.py` corriendo las funciones reales de `Script/nucleo`, así
+que si cambia el cálculo cambian los números. Contrato y reparto de archivos
+en `explicacion/README.md`. Sin letras de columnas de Excel en los textos.
+Se aclaró en RE545 que la energía almacenada suma solo cargas (pregunta del
+usuario en el artefacto).
+
+**Verificación:** las dos páginas renderizan sin errores de consola ni
+placeholders sin reemplazar; 278 pruebas OK (12 salteadas).
+
+## 2026-10-22 (3) — Obs. 4: curva descendente de RE545 por central + ventana
+
+`calcular_bk_bl_bm_bs_re545` buscaba el k-ésimo CMg de cada puesto (BM)
+entre todas las filas de la hoja con el mismo BK (suma de CMg promedio),
+como el `LARGE(IF(BK=BK(i), BL), k)` del .xlsm. Dos BESS en la misma barra
+tienen el mismo BK y sus bloques se mezclaban (curva 135, 135, 128, 128…).
+Ahora agrupa por central + ventana + BI, la misma clave G + T + BI que el
+usuario puso en la macro. Prueba nueva `desarrollo/tests/test_re545_curva.py`
+(una central y dos en la misma barra); falla con el código anterior.
+
+Nota: BI se reinicia solo cuando cambia la ventana, no la central. En un mes
+real no importa (la ventana pasa de la última a 1 al cambiar de central).
+
+**Verificación:** 280 pruebas OK (12 salteadas); el ejemplo de
+`explicacion/` no cambia (una sola central).
+
+## 2026-10-26 — Obs. reliquidación: remuneración por E Costos y RE545 a la vez
+
+Observación: en "Compensación Total" algunos ciclos aparecían pagados por los
+dos métodos. Venía de la planilla usada en febrero. En Python no pasa: el
+ciclo de E Costos es la misma ventana de RE545, cada ventana va a un solo
+método según su oferta completa y en la otra hoja queda con energía 0
+(comprobado con el caso de ejemplo: ventana completa → monto E Costos 0).
+**Cerrada: corregida.**
+
+## 2026-10-26 (2) — Obs. 4 revertida temporalmente
+
+A pedido del usuario se devolvió `Script/nucleo/re545_componentes.py` a su
+estado anterior a `b19e1b6` y se sacó `desarrollo/tests/test_re545_curva.py`:
+tiene que aplicar y comparar otro cambio primero, y la obs. 4 movería el
+resultado. Queda en Pendientes abiertos con cómo volver a aplicarla.
+
+## 2026-11-02 — Obs. 4 reaplicada y última ventana del mes pagada
+
+- **Obs. 4:** vuelven `Script/nucleo/re545_componentes.py` y
+  `desarrollo/tests/test_re545_curva.py` tal como quedaron en `b19e1b6`
+  (BM por central + ventana + BI).
+- **Última ventana del mes:** se quitó el `(AX<>31)` de la Energía
+  Disponible en `construir_resumen_ventanas_re545`. Criterio del usuario:
+  la primera ventana (0) y la última se pagan parciales en el mes, como ya
+  pasaba en meses de 28 a 30 días. Responde la observación de marzo 2026
+  (planillas 2603 Definitivo 01-03). Se aparta de la letra de la RE545
+  ("ventanas cuyo término haya ocurrido dentro del periodo de
+  facturación"). La macro `Calcular_RE545` se corrige igual (quitar el
+  bloque "AX <> 31" del cálculo de BC). Prueba nueva
+  `desarrollo/tests/test_re545_ultima_ventana.py`: la ventana 31 da la misma
+  Energía Disponible que la 30; falla con el código anterior.
+
+**Verificación:** 281 pruebas OK (12 salteadas). Página RE545 actualizada.
+
+## 2026-11-02 (2) — Cierre de pendientes con el usuario
+
+- **Eficiencia de RE545** (usar la de la central completa): no se acoge.
+- **Obs. 2** (tope de capacidad en la Energía Disponible): no se acoge.
+- **FD en E Costos y dirección del FD/umbrales:** el usuario indica que ya
+  está aplicado: lo hizo otro chat en `main` (commit `87c31a7`, "metodo
+  nuevo del FD"), traído a esta rama con un merge de `main`.
+- **Regla de los 10 kWh:** sigue en el tintero.
+- Inyección real por puesto (BS) y oferta completa por día: siguen abiertos,
+  en explicación al usuario.
 
 ## 2026-10-26 — Medidas (API v2): la hora 25 de abril no aparecía
 
@@ -5229,3 +5336,42 @@ siguiente (la 22 tomaba las 22:00, que sí participa; la 20 tomaba las
 
 **Verificación:** `tests/test_fma_cambio_hora.py` ajustada al reporte en
 hora local. 297 pruebas. Hay que volver a generar el FMA de septiembre.
+
+## 2026-11-02 (3) — Merge de `main` (FD nuevo de E Costos) en esta rama
+
+Se trajo `main` (método nuevo del FD en E Costos, hora 25 de abril en
+medidas/ofertas, FMA CPF). Las pruebas nuevas de `main`
+(`test_api_v2_abril.py`, `test_ecostos_fd_nuevo.py`) quedaron en
+`desarrollo/tests/`. 300 pruebas OK (12 salteadas).
+
+La página de E Costos quedó desactualizada con el merge; se rehízo en la
+entrada siguiente.
+
+## 2026-11-02 (4) — RE545: la inyección real de cada puesto sale del bloque correcto
+
+`calcular_bk_bl_bm_bs_re545`: BS (inyección real del puesto) ahora sale del
+mismo bloque que BM (el k-ésimo de mayor CMg de la hora), no del bloque en la
+posición k en el tiempo. Antes, si la inyección cambiaba dentro de la hora,
+la caja libre (Pmax/4 − BS) se calculaba con la inyección de otro bloque y el
+Componente 1 (y el 2) salían corridos. Prueba nueva en
+`desarrollo/tests/test_re545_curva.py`; falla con el código anterior.
+La macro `Calcular_RE545` tiene el mismo problema (BS por BR+S+G+E).
+
+Cerrados con el usuario: oferta completa por día (ventanas 24/25) **no se
+acoge**, queda como está.
+
+**Verificación:** 301 pruebas OK (12 salteadas).
+
+## 2026-11-02 (5) — Página de E Costos con el método nuevo del FD
+
+`explicacion/`: `generar_ejemplo.py` lee las columnas nuevas (energía
+ajustada, asignación, valorización, monto) y ya no genera el escenario "sin
+subasta en la hora 1". `contenido/ecostos.js` pasa a 9 pasos: filtrar → ajustar
+la energía de cada hora por prorrata × FD → Pmax → bloques → ordenar CMg →
+puestos → Componente 1 (sin descuento FD) → Componente 2 → monto, con una nota
+de qué cambió respecto del método anterior. `figuras.js`: nueva `ajuste`,
+fuera `dual` y `precios_descuento`; `puestos`, `bloques` y `wf_c1` usan la
+energía ajustada. Ejemplo: factor 0,9, descarga y carga ajustadas 5.400 kWh,
+C1 583.200, C2 494.000, monto 89.200.
+
+**Verificación:** las dos páginas renderizan sin errores ni placeholders.

@@ -18,7 +18,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests.test_ventana_rueda import _hay_ventana, tk
+from desarrollo.tests.test_ventana_rueda import _hay_ventana, tk
 
 
 @unittest.skipUnless(_hay_ventana(), "sin tkinter o sin display")

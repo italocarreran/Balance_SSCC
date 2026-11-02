@@ -29,7 +29,7 @@ import pandas as pd
 from Script import nucleo
 from Script.nucleo import proceso
 from Script.nucleo.parametros import HOJA_COMPENSACION_CENTRAL
-from tests.test_control_corrida import PagosBessEndToEndTest
+from desarrollo.tests.test_control_corrida import PagosBessEndToEndTest
 
 
 def armar_caso(carpeta):

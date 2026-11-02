@@ -15,7 +15,7 @@ import pandas as pd
 
 from Script.Medidas import Claves_Balance as cb
 from Script.nucleo.medidores import construir_medidores
-from tests.test_claves_balance import HOMOLOGACION, descarga
+from desarrollo.tests.test_claves_balance import HOMOLOGACION, descarga
 
 
 def _medidores(df_descarga, mes, timestamps):

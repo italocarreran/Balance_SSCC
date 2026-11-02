@@ -12,8 +12,8 @@ unittest discover`); sin ellos se saltea.
 import unittest
 
 from Script.nucleo import orquestador
-from tests import test_ventana_actualizar as base
-from tests.test_ventana_rueda import _hay_ventana
+from desarrollo.tests import test_ventana_actualizar as base
+from desarrollo.tests.test_ventana_rueda import _hay_ventana
 
 
 @unittest.skipUnless(_hay_ventana(), "sin tkinter o sin display")
