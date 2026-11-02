@@ -84,10 +84,17 @@ def calcular_bk_bl_bm_bs_re545(df_re545):
 
       BK = suma de R (CMg Promedio) de las filas cuyo S == BI(fila)
       BL = suma de Q (CMg) de las filas cuyo S == BI(fila)
-      BM = el k-esimo valor mas grande de BL entre TODAS las filas
-           (de toda la hoja, no del grupo) cuyo BK es igual al de la
-           fila, con k = Periodo/15 + 1
+      BM = el k-esimo valor mas grande de BL entre las filas de la
+           misma central + ventana + BI, con k = Periodo/15 + 1
       BS = el I (Descarga kWh) de la PRIMERA fila cuyo S == BI(fila)
+
+    BM (observacion 4 de la reliquidacion de enero 2026): el .xlsm
+    original hacia LARGE(IF(BK = BK(i), BL), k) sobre TODA la columna,
+    agrupando por el valor de BK (suma de CMg promedio). Dos BESS en la
+    misma barra tienen el mismo BK y sus bloques se mezclaban, corriendo
+    los precios de la curva. El usuario acogio la observacion y corrigio
+    la macro con la clave G + T + BI (central + ventana + orden); aca se
+    replica esa clave.
     """
 
     df = df_re545.reset_index(drop=True)
@@ -140,19 +147,27 @@ def calcular_bk_bl_bm_bs_re545(df_re545):
     bl = [suma_q.get(clave, 0.0) for clave in claves_busqueda]
     bs = [primer_i.get(clave, pd.NA) for clave in claves_busqueda]
 
-    # BM: LARGE(IF(BK = BK(i), BL), Periodo/15 + 1). El IF recorre
-    # TODA la columna, no el grupo: se indexa por valor de BK.
-    por_bk = {}
+    # BM: k-esimo mayor BL dentro de central + ventana + BI (obs. 4).
+    claves_bm = [
+        (
+            _normaliza_valor_vba(central),
+            _normaliza_valor_vba(ventana),
+            _normaliza_valor_vba(orden),
+        )
+        for central, ventana, orden in zip(df["clave"], df["T"], df["BI"])
+    ]
 
-    for valor_bk, valor_bl in zip(bk, bl):
-        por_bk.setdefault(round(float(valor_bk), 9), []).append(float(valor_bl))
+    por_grupo = {}
 
-    for lista in por_bk.values():
+    for clave, valor_bl in zip(claves_bm, bl):
+        por_grupo.setdefault(clave, []).append(float(valor_bl))
+
+    for lista in por_grupo.values():
         lista.sort(reverse=True)
 
     bm = []
 
-    for posicion, valor_bk in enumerate(bk):
+    for posicion, clave in enumerate(claves_bm):
 
         periodo = pd.to_numeric(
             pd.Series([df["BJ"].iloc[posicion]]), errors="coerce"
@@ -163,7 +178,7 @@ def calcular_bk_bl_bm_bs_re545(df_re545):
             continue
 
         k = int(periodo / 15) + 1
-        lista = por_bk.get(round(float(valor_bk), 9), [])
+        lista = por_grupo.get(clave, [])
 
         # LARGE con k fuera de rango da #NUM! -> el IFERROR lo deja "".
         bm.append(lista[k - 1] if 1 <= k <= len(lista) else pd.NA)

@@ -59,7 +59,7 @@ window.CONTENIDO = {
         "<b>mín(…, Capacidad):</b> la energía inicial se suma solo hasta llenar la batería.",
         "<b>máx(…, Almacenada):</b> lo cargado en la ventana nunca se recorta, aunque pase la capacidad, porque puede venir de varios ciclos.",
         "<b>mín(…, Reserva total):</b> no puede pasar lo que la reserva comprometió.",
-        "Vale 0 si la ventana no tuvo oferta completa, y también en la ventana 31.",
+        "Vale 0 si la ventana no tuvo oferta completa. La primera y la última ventana del mes se pagan parciales, con las horas que caen en el mes.",
       ],
       figura: "ed",
       calculo: "mín( máx( mín(Inicial + Almacenada, Capacidad), Almacenada ), Reserva total )\nmín( máx( mín({re_eini} + {re_ealm}, {re_capacidad_kwh}), {re_ealm} ), {re_res_total} ) = {re_edisp}",
@@ -69,7 +69,7 @@ window.CONTENIDO = {
           {titulo: "Varios ciclos: el paso 3 protege lo cargado", texto: "Capacidad 100, inicial 30. Carga 80, descarga y vuelve a cargar 70: almacenada 150.", cuenta: "mín(180, 100) = 100 → máx(100, 150) = 150 ✓"},
           {titulo: "Donde el tope recorta energía real", texto: "Capacidad 100, inicial 90. Descarga 50 y después carga 20. Pudo entregar 110 sin pasar la capacidad.", cuenta: "mín(110, 100) = 100 → máx(100, 20) = 100 ✗ se pierden 10", malo: true},
         ]},
-        {tipo: "revision", titulo: "En revisión (observación 2)", texto: "La fórmula usa solo totales y no mira el orden de cargas y descargas. La RE545, leída al pie de la letra, también limita la energía inicial a la capacidad («siempre que la suma de ambas no supere la capacidad»). Falta además el respaldo normativo de que la ventana 31 valga 0."},
+        {tipo: "revision", titulo: "En revisión (observación 2)", texto: "La fórmula usa solo totales y no mira el orden de cargas y descargas. La RE545, leída al pie de la letra, también limita la energía inicial a la capacidad («siempre que la suma de ambas no supere la capacidad»)."},
       ],
     },
     {
@@ -81,7 +81,7 @@ window.CONTENIDO = {
       id: "curva", titulo: "Abrir cada hora en sus bloques",
       texto: "Cada hora se abre en sus 4 bloques, de mayor a menor CMg. Así queda la <b>curva descendente</b>, con {n_bloques:0} puestos. Desde aquí cada fila es un <b>puesto de la curva</b>, no un bloque en el tiempo.",
       figura: "curva",
-      bloques: [{tipo: "revision", titulo: "En revisión (observación 4)", texto: "El código busca el precio de cada puesto entre todas las filas que tengan el mismo CMg promedio de la hora, sin limitarse a la central. Si dos BESS están en la misma barra, sus bloques se mezclan y los precios de la curva salen corridos. Ya está corregido en la macro; en Python está listo pero se aplicará después."}],
+      bloques: [{tipo: "nota", titulo: "Corregido (observación 4)", texto: "El precio de cada puesto se busca solo entre los bloques de la misma central y ventana. Antes se buscaba en toda la hoja y dos BESS en la misma barra mezclaban sus bloques. Corregido en la macro y en Python."}],
     },
     {
       id: "inyeccion", titulo: "Inyección real de cada puesto",

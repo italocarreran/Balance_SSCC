@@ -14,27 +14,6 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 - **Reliquidación enero 2601 — observaciones (2026-10-21, revisión con el
   usuario, sin cambios de código todavía):**
-  - **Ventana 31 fija en RE545:** `construir_resumen_ventanas_re545` anula
-    la Energía Disponible con `ventana != 31` a fuego. La regla tiene
-    respaldo (RE545: solo cuentan las ventanas "cuyo término haya ocurrido
-    dentro del periodo de facturación"; la última ventana del mes termina
-    el mes siguiente), pero el 31 solo sirve en meses de 31 días: en meses
-    de 30 días (ventana 30) y en febrero (28/29) la última ventana no se
-    anula. **Criterio decidido por el usuario (2026-10-26):** la primera
-    ventana (0) y la última del mes quedan parciales y se pagan en el mes,
-    como hoy pasa en meses de 28 a 30 días. Arreglo: quitar el `!= 31` de la
-    Energía Disponible (Python y macro `Calcular_RE545`). Es lo que pide la
-    observación de marzo 2026 (planillas 2603 Definitivo 01-03). Se aparta de
-    la letra de la RE545 ("ventanas cuyo término haya ocurrido dentro del
-    periodo de facturación"), que dejaría la última para el mes siguiente.
-    **Pendiente de implementar.**
-  - **Obs. 4 (curva descendente de RE545 por central + ventana + BI):**
-    implementada en el commit `b19e1b6` (código + prueba
-    `desarrollo/tests/test_re545_curva.py`) y **revertida a pedido del
-    usuario (2026-10-26)** para comparar antes otro cambio sin que se mezclen
-    los efectos. Para aplicarla de nuevo: `git revert` del commit que la
-    revirtió, o `git checkout b19e1b6 -- Script/nucleo/re545_componentes.py
-    desarrollo/tests/test_re545_curva.py`. **Pendiente de volver a aplicar.**
   - **Eficiencia de RE545 (obs. reliquidación):** se usa la "Eficiencia" de
     Resumen BESS (`Centrales.xlsx`), que hoy es la de celdas (Pruebas de
     Potencia Máxima). La RE545 §2.2.2.2 pide factores de eficiencia que
@@ -5235,3 +5214,21 @@ A pedido del usuario se devolvió `Script/nucleo/re545_componentes.py` a su
 estado anterior a `b19e1b6` y se sacó `desarrollo/tests/test_re545_curva.py`:
 tiene que aplicar y comparar otro cambio primero, y la obs. 4 movería el
 resultado. Queda en Pendientes abiertos con cómo volver a aplicarla.
+
+## 2026-11-02 — Obs. 4 reaplicada y última ventana del mes pagada
+
+- **Obs. 4:** vuelven `Script/nucleo/re545_componentes.py` y
+  `desarrollo/tests/test_re545_curva.py` tal como quedaron en `b19e1b6`
+  (BM por central + ventana + BI).
+- **Última ventana del mes:** se quitó el `(AX<>31)` de la Energía
+  Disponible en `construir_resumen_ventanas_re545`. Criterio del usuario:
+  la primera ventana (0) y la última se pagan parciales en el mes, como ya
+  pasaba en meses de 28 a 30 días. Responde la observación de marzo 2026
+  (planillas 2603 Definitivo 01-03). Se aparta de la letra de la RE545
+  ("ventanas cuyo término haya ocurrido dentro del periodo de
+  facturación"). La macro `Calcular_RE545` se corrige igual (quitar el
+  bloque "AX <> 31" del cálculo de BC). Prueba nueva
+  `desarrollo/tests/test_re545_ultima_ventana.py`: la ventana 31 da la misma
+  Energía Disponible que la 30; falla con el código anterior.
+
+**Verificación:** 281 pruebas OK (12 salteadas). Página RE545 actualizada.
