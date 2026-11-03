@@ -48,6 +48,7 @@ Script/
         re545_componentes.py   <- RE545 BI:CE
         prorrata_retiros.py    <- prorrata 15-min: quien paga, cuarto a cuarto
         compensacion.py        <- quien recibe: por central/ciclo, por central y por empresa
+        equivalencias.py       <- buscar una central con todos sus nombres del Diccionario (aviso DIC-002)
         cambio_hora.py         <- cambios de hora del mes (America/Santiago), detectados solos
         medidores.py           <- la hoja Medidores
         escritura.py           <- los dos libros de salida
