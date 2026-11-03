@@ -584,17 +584,21 @@ def main():
     frame_carpeta = tk.LabelFrame(
         contenedor, text="Carpeta base del caso", padx=10, pady=8
     )
-    frame_carpeta.pack(fill="x", padx=20, pady=(14, 6))
+    frame_carpeta.pack(fill="x", padx=14, pady=(10, 4))
 
+    # Diseño de esta parte tomado del Revisor_Relq_15min (repo abby),
+    # pedido del usuario: ruta alineada a la izquierda y botones debajo,
+    # marcos mas juntos.
     lbl_base = tk.Label(
         frame_carpeta,
         textvariable=var_base,
-        wraplength=940,
-        justify="center",
+        wraplength=980,
+        justify="left",
+        anchor="w",
         cursor="hand2",
         font=("Segoe UI", 9),
     )
-    lbl_base.pack()
+    lbl_base.pack(anchor="w")
 
     lbl_base.bind(
         "<Button-1>",
@@ -611,9 +615,9 @@ def main():
     # --------------------------------------------------------
 
     frame_periodo = tk.LabelFrame(
-        contenedor, text="Periodo del caso (AAMM)", padx=10, pady=8
+        contenedor, text="Periodo del caso (AAMM)", padx=10, pady=6
     )
-    frame_periodo.pack(fill="x", padx=20, pady=6)
+    frame_periodo.pack(fill="x", padx=14, pady=4)
 
     fila_aamm = tk.Frame(frame_periodo)
     fila_aamm.pack(fill="x")
@@ -626,13 +630,21 @@ def main():
     entry_aamm = tk.Entry(
         fila_aamm,
         textvariable=var_aamm,
-        width=10,
+        width=8,
         justify="center",
-        font=("Segoe UI", 10, "bold"),
+        font=("Consolas", 11, "bold"),
         validate="key",
         validatecommand=validador_aamm,
     )
     entry_aamm.pack(side="left")
+
+    # Como en el Revisor_Relq_15min: un boton explicito para aplicar el
+    # mes (ademas de Enter y de salir del campo).
+    boton_ir_mes = tk.Button(
+        fila_aamm, text="Ir a este mes", bg="#1f5fa8", fg="white",
+        font=("Segoe UI", 9, "bold"),
+    )
+    boton_ir_mes.pack(side="left", padx=8)
 
     tk.Label(
         fila_aamm,
@@ -641,11 +653,12 @@ def main():
             "2026. Con el se buscan el archivo de SoC dentro de "
             "Medidas/ y el CSV 15-minutal dentro de Cmg/."
         ),
-        fg=COLOR_NEUTRO,
+        fg="#444444",
         font=("Segoe UI", 8),
-        wraplength=820,
+        wraplength=760,
         justify="left",
-    ).pack(side="left", padx=(10, 0))
+        anchor="w",
+    ).pack(side="left", padx=6)
 
     # Cambio de hora del mes: se detecta solo con el AAMM (ver
     # nucleo.cambio_hora) y queda a la vista mientras se trabaja.
@@ -1536,7 +1549,34 @@ def main():
             crear_carpetas_en(var_base.get())
 
     entry_aamm.bind("<FocusOut>", aamm_cambiado)
-    entry_aamm.bind("<Return>", aamm_cambiado)
+    entry_aamm.bind("<Return>", lambda e: root.focus_set())
+    boton_ir_mes.config(command=lambda: (root.focus_set(), aamm_cambiado()))
+
+    # --------------------------------------------------------
+    # CURSOR DE TEXTO
+    #
+    # Pedido del usuario: "el cursor de texto se queda parpadeando
+    # siempre en el cuadro de AAMM... que se quite cuando se hace clic
+    # en otra parte". En Tk un clic en un boton, etiqueta o fondo NO
+    # le quita el foco al campo; aca se lo quita cualquier clic fuera
+    # de un campo de texto (el foco pasa a la ventana, el cursor deja
+    # de parpadear y <FocusOut> aplica el AAMM escrito, como antes).
+    # --------------------------------------------------------
+
+    CAMPOS_DE_TEXTO = (tk.Entry, tk.Text, tk.Spinbox, ttk.Entry)
+
+    def soltar_foco(evento):
+        widget = evento.widget
+        if isinstance(widget, str) or isinstance(widget, CAMPOS_DE_TEXTO):
+            return
+        try:
+            enfocado = widget.focus_get()
+        except (KeyError, tk.TclError):
+            return
+        if isinstance(enfocado, (tk.Entry, tk.Spinbox, ttk.Entry)):
+            widget.winfo_toplevel().focus_set()
+
+    root.bind_all("<Button-1>", soltar_foco, add="+")
 
     # --------------------------------------------------------
     # LANZADOR GENERICO (hilo aparte; log, barra y timer de la

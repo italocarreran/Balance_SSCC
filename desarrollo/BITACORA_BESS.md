@@ -5789,3 +5789,15 @@ ventana con xvfb. 332 pruebas.
 
 **Verificación:** `test_ofertas_por_central` (+4), `test_matriz_centrales`
 (+2).
+
+## 2026-11-03 (18) — Cursor del AAMM y parte superior al estilo Revisor_Relq_15min
+
+- Pedido: "el cursor de texto se queda parpadeando siempre en el cuadro de
+  AAMM... que se quite cuando se hace clic en otra parte" y guiarse por la
+  ventana del Revisor_Relq_15min (repo abby).
+- `Balance_BESS.py`: `soltar_foco` (bind_all `<Button-1>`) le quita el foco a
+  un campo de texto cuando se hace clic fuera de uno; el `<FocusOut>` sigue
+  aplicando el AAMM. Enter tambien suelta el foco.
+- Parte superior como en el Revisor: ruta de la carpeta alineada a la
+  izquierda, marcos mas juntos (padx 14, pady 4), AAMM en Consolas 11 y
+  boton azul "Ir a este mes".
