@@ -43,6 +43,7 @@ from .estructura import revisar_estructura
 from .externos import Homologacion
 from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, ARCHIVO_MEDIDAS_SAE, ARCHIVO_SALIDA,
+    FMA_CON_CTF,
     HOJA_COMPENSACION_CENTRAL, HOJA_DICCIONARIO, HOJA_RESUMEN_BESS,
 )
 from .proceso import generar_consolidado, generar_pagos_bess
@@ -242,7 +243,8 @@ TAREAS = (
         # pero si se generan en esta corrida tienen que ir antes.
         "consolidado:fma", "hoja 'FMA'",
         "consolidado", "fma", "consolidado:fma",
-        (), (), ("fma_cpf", "fma_csf", "fma_ctf"),
+        (), (),
+        ("fma_cpf", "fma_csf") + (("fma_ctf",) if FMA_CON_CTF else ()),
     ),
     Tarea(
         # Ya no lleva FD ni FMA (se aplican en RE545): solo los Access.
@@ -299,6 +301,11 @@ TAREAS = (
         ("pagos:prorrata_retiros",), ("consolidado:centrales",),
     ),
 )
+
+# El CTF no se usa (FMA_CON_CTF): su tarea sale de la ventana y de
+# "Ejecutar todo" (y de la dependencia opcional de la hoja FMA).
+if not FMA_CON_CTF:
+    TAREAS = tuple(tarea for tarea in TAREAS if tarea.id != "fma_ctf")
 
 TAREA_POR_ID = {tarea.id: tarea for tarea in TAREAS}
 

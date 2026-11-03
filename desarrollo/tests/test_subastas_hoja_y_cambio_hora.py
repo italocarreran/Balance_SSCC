@@ -48,10 +48,11 @@ class TestHojaSubastas(unittest.TestCase):
                 pd.DataFrame({"Mes": [7]}), ruta, [], [],
                 df_subastas=original,
             )
-            encabezado = [
-                c.value for c in openpyxl.load_workbook(ruta)["Subastas"][1]
-            ]
-            leida = pd.read_excel(ruta, sheet_name="Subastas")
+            # Fila 1 vacia, encabezado en la 2.
+            hoja = openpyxl.load_workbook(ruta)["Subastas"]
+            self.assertTrue(all(c.value is None for c in hoja[1]))
+            encabezado = [c.value for c in hoja[2]]
+            leida = nucleo.leer_hoja_con_fila_vacia(ruta, "Subastas")
 
         for auxiliar in ("Control", "Sub_Baj", "Clave horaria", "Ciclo"):
             self.assertNotIn(auxiliar, encabezado)

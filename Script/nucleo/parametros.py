@@ -114,6 +114,12 @@ HOJA_SUBASTAS = "Subastas"
 # lo usa (RE545), a partir de esta hoja. Ver factores_subastas.py.
 HOJA_FMA = "FMA"
 
+# El FMA del CTF (fma_cft): las BESS no prestan CTF, asi que no se usa.
+# Apagado sale de la ventana (fila y boton "Generar fma_cft"), de la
+# hoja FMA y de la lectura; el codigo que lo arma (Script/Fd/
+# Indices_FMA.py, fma.py) queda intacto: con True vuelve todo.
+FMA_CON_CTF = False
+
 # La foto de Centrales.xlsx dentro de la planilla (pedido del usuario:
 # "que la hoja de resumen de Centrales.xlsx se agregue en una nueva
 # hoja"): 'Resumen BESS' y 'Diccionario' copiados una vez con su

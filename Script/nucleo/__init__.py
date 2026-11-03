@@ -135,6 +135,7 @@ from .lectura import (
     _leer_resumen_bess, construir_homologacion, leer_centrales,
     leer_medidas_sae, TITULO_CENTRALES_DICCIONARIO,
     TITULO_CENTRALES_RESUMEN, leer_centrales_planilla, obtener_centrales,
+    leer_hoja_con_fila_vacia,
 )
 from .soc import (
     _extraer_nombre_desde_ruta_scada, detectar_bloques,
@@ -320,7 +321,7 @@ __all__ = [
     "_leer_hoja_con_encabezado", "_leer_resumen_bess",
     "construir_homologacion", "leer_centrales", "leer_medidas_sae",
     "TITULO_CENTRALES_DICCIONARIO", "TITULO_CENTRALES_RESUMEN",
-    "leer_centrales_planilla", "obtener_centrales",
+    "leer_centrales_planilla", "obtener_centrales", "leer_hoja_con_fila_vacia",
     "agregar_central_ofertas", "centrales_ofertas",
     "agregar_central_fd", "dic_mapeo_desde_fd", "mapa_unidad_fd_a_central",
     "_extraer_nombre_desde_ruta_scada", "detectar_bloques",

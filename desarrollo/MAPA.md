@@ -152,7 +152,7 @@ importable como cualquier módulo.
   | `FD y FMA/SSCC_Desempeño_*` | **Traer** | `nucleo.traer_fd` — baja el FD del período del árbol de indicadores del DCO y descomprime el zip |
   | `FD y FMA/fma_cpf_<AAMM>.xlsx` | **Generar** | `nucleo.generar_fma` con `{"cpf"}` — desde los reportes diarios del DCO |
   | `FD y FMA/fma_csf_<AAMM>.xlsx` | **Generar** | `nucleo.generar_fma` con `{"csf"}` — trae los reportes del AGC a `agcface/` y los concatena |
-  | `FD y FMA/fma_cft_<AAMM>.xlsx` | **Generar** | `nucleo.generar_fma` con `{"ctf"}` — desde el `CTF_<AAAA><MM>.csv` del DCO |
+  | `FD y FMA/fma_cft_<AAMM>.xlsx` | **Generar** | `nucleo.generar_fma` con `{"ctf"}` — desde el `CTF_<AAAA><MM>.csv` del DCO | **Oculta** desde 2026-11-03 (`parametros.FMA_CON_CTF = False`): no aparece en la ventana ni en la hoja FMA; el código sigue.
   | `Subastas/DB subastas/` | **Traer** | `nucleo.traer_subastas` — copia los `OfertasSSCCAdj*.accdb` del período desde la unidad de red |
   | `Subastas/subastas_AAMM.xlsx` | **Consolidar** | `nucleo.consolidar_subastas` — junta los Access del período (PO + PID desde su hora) en un Excel; la hoja `Subastas` se lleva de ahí |
   | `Balance_BESS.xlsx` | **Actualizar** | las dos mitades de un viaje: `generar_consolidado` con todas las secciones y después `generar_pagos_bess` con todas |

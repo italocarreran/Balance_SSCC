@@ -178,10 +178,38 @@ def _sin_filas_vacias_al_final(df):
     return df.iloc[: ultimas[-1] + 1] if ultimas else df.iloc[:0]
 
 
-def leer_tabla_bajo_titulo(fuente, hoja, crudo, columna, ancho):
+def fila_de_titulos(crudo):
+    """
+    Fila (0-indexada) del primer renglon con algo de una hoja leida con
+    header=None: 0 en los libros de antes, 1 en las hojas que dejan la
+    fila 1 vacia (FMA, Subastas).
+    """
+
+    for fila in range(min(len(crudo), 2)):
+        if crudo.iloc[fila].notna().any():
+            return fila
+    return 0
+
+
+def leer_hoja_con_fila_vacia(fuente, hoja):
+    """
+    pd.read_excel de una hoja con encabezado en la fila 1 o, si la
+    fila 1 esta vacia (Subastas ahora), en la 2.
+    """
+
+    df = pd.read_excel(fuente, sheet_name=hoja)
+    if len(df.columns) and all(
+        str(nombre).startswith("Unnamed:") for nombre in df.columns
+    ):
+        df = pd.read_excel(fuente, sheet_name=hoja, header=1)
+    return df
+
+
+def leer_tabla_bajo_titulo(fuente, hoja, crudo, columna, ancho, fila_titulo=0):
     """
     Una tabla escrita con _escribir_tabla_con_titulo(): titulo en la
-    fila 1, encabezados en la 2 y datos desde la 3, en las columnas
+    fila 1 (o en fila_titulo + 1, si arriba hay filas vacias),
+    encabezados en la siguiente y datos desde la otra, en las columnas
     columna..columna+ancho-1.
 
     Los datos se releen sin encabezado para que cada columna vuelva con
@@ -193,10 +221,13 @@ def leer_tabla_bajo_titulo(fuente, hoja, crudo, columna, ancho):
     de columnas.
     """
 
-    nombres = [_texto_seguro(crudo.iloc[1, columna + i]) for i in range(ancho)]
+    nombres = [
+        _texto_seguro(crudo.iloc[fila_titulo + 1, columna + i])
+        for i in range(ancho)
+    ]
 
     datos = pd.read_excel(
-        fuente, sheet_name=hoja, header=None, skiprows=2,
+        fuente, sheet_name=hoja, header=None, skiprows=fila_titulo + 2,
         usecols=list(range(columna, columna + ancho)),
     )
 

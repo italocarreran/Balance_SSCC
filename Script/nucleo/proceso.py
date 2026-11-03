@@ -31,7 +31,7 @@ from .hojas_entrada import (
 )
 from .lectura import (
     construir_homologacion, leer_centrales, leer_centrales_planilla,
-    leer_medidas_sae, obtener_centrales,
+    leer_hoja_con_fila_vacia, leer_medidas_sae, obtener_centrales,
 )
 from .medidores import (
     completar_ofertas_en_medidores, construir_medidores,
@@ -485,7 +485,7 @@ def _leer_entradas_del_consolidado(
         registrar(f"Leyendo hoja 'Subastas' de {ruta_salida.name}...")
 
         try:
-            df_subastas = pd.read_excel(libro, sheet_name="Subastas")
+            df_subastas = leer_hoja_con_fila_vacia(libro, "Subastas")
         except ValueError as error:
             raise ErrorEntrada(
                 f"{ruta_salida.name} no tiene la hoja 'Subastas' "

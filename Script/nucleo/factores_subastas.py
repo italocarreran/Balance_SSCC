@@ -38,8 +38,8 @@ from .fma import (
     calcular_fma_subastas, construir_dic_bloque_diccionario,
 )
 from .ecostos_prorratas import construir_dic_mapeo_diccionario
-from .parametros import HOJA_FMA
-from .lectura import leer_tabla_bajo_titulo
+from .parametros import FMA_CON_CTF, HOJA_FMA
+from .lectura import fila_de_titulos, leer_tabla_bajo_titulo
 from .utiles import ErrorEntrada, _texto_seguro, _tiene_valor
 
 # Los nombres con que quedan las dos columnas en la copia EN MEMORIA de
@@ -138,11 +138,27 @@ def tablas_fd_desde_hoja(df_fd_csf, df_fd_cpf, registrar=print):
 # Una tabla por salida de FMA, una al lado de la otra con su titulo
 # (mismo formato que 'Ofertas SSCC' y 'Centrales'). La clave es la que
 # usa cargar_tablas_fma().
-TITULOS_FMA = {
+_NOMBRES_FMA = {
     "cpf": "FMA CPF (fma_cpf)",
     "csf": "FMA CSF (fma_csf)",
     "ctf_unidad": "FMA CTF por unidad (fma_cft)",
     "ctf_configuracion": "FMA CTF por configuracion (fma_cft)",
+}
+# Todas las tablas que puede tener la hoja (las claves que devuelve
+# leer_fma_consolidado, aunque el CTF este apagado).
+CLAVES_FMA = tuple(_NOMBRES_FMA)
+# Las que se escriben, con su titulo de cuadro ("Cuadro N° 1 — ...",
+# mismo formato que PRORRATA_RETIROS). Sin el CTF (FMA_CON_CTF) quedan
+# solo CPF y CSF.
+TITULOS_FMA = {
+    clave: f"Cuadro N° {numero} — {nombre}"
+    for numero, (clave, nombre) in enumerate(
+        (
+            (clave, nombre) for clave, nombre in _NOMBRES_FMA.items()
+            if FMA_CON_CTF or not clave.startswith("ctf")
+        ),
+        start=1,
+    )
 }
 
 
@@ -166,27 +182,32 @@ def leer_fma_consolidado(ruta_salida, registrar=print, libro=None):
             f"sale de ahi)."
         ) from error
 
-    tablas = {clave: None for clave in TITULOS_FMA}
+    tablas = {clave: None for clave in CLAVES_FMA}
 
     if crudo.empty:
         return tablas
 
+    # Los titulos van en la fila 2 (la 1 queda vacia); un libro de
+    # antes los tiene en la 1.
+    fila = fila_de_titulos(crudo)
     titulos = {
-        _texto_seguro(crudo.iloc[0, col]): col
+        _texto_seguro(crudo.iloc[fila, col]): col
         for col in range(crudo.shape[1])
-        if _tiene_valor(crudo.iloc[0, col])
+        if _tiene_valor(crudo.iloc[fila, col])
     }
 
     for clave, titulo in TITULOS_FMA.items():
 
-        columna = titulos.get(titulo)
+        # El titulo de ahora o el de antes de los "Cuadro N°".
+        columna = titulos.get(titulo, titulos.get(_NOMBRES_FMA[clave]))
         if columna is None:
             continue
 
         ancho = 0
         while (
             columna + ancho < crudo.shape[1]
-            and _tiene_valor(crudo.iloc[1, columna + ancho])
+            and fila + 1 < crudo.shape[0]
+            and _tiene_valor(crudo.iloc[fila + 1, columna + ancho])
         ):
             ancho += 1
 
@@ -194,7 +215,7 @@ def leer_fma_consolidado(ruta_salida, registrar=print, libro=None):
             continue
 
         tablas[clave] = leer_tabla_bajo_titulo(
-            fuente, HOJA_FMA, crudo, columna, ancho
+            fuente, HOJA_FMA, crudo, columna, ancho, fila_titulo=fila
         )
 
     registrar(

@@ -443,7 +443,7 @@ class TestCorrida(unittest.TestCase):
 
         corridos, simultaneos, _ = self.correr(
             caso_vacio(),
-            seleccion={"fd_sscc", "fma_cpf", "fma_csf", "fma_ctf"},
+            seleccion={"fd_sscc", "fma_cpf", "fma_csf"},
         )
 
         self.assertEqual(simultaneos, 1)

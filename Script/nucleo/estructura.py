@@ -13,7 +13,7 @@ from .externos import (
 from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, ARCHIVO_CONTROL, ARCHIVO_MEDIDAS_SAE,
     ARCHIVO_PUNTOS_FALLIDOS, ARCHIVO_SALIDA, CARPETA_AUXILIARES, CARPETA_CMG,
-    CARPETA_DB_SUBASTAS, CARPETA_FD_FMA, CARPETA_MEDIDAS,
+    CARPETA_DB_SUBASTAS, CARPETA_FD_FMA, CARPETA_MEDIDAS, FMA_CON_CTF,
     CARPETA_OFERTAS, CARPETA_PRORRATA_RETIROS, CARPETA_SUBASTAS,
     HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545, HOJA_CENTRALES, HOJA_CMG,
     HOJA_COMPENSACION_CENTRAL, HOJA_DICCIONARIO, HOJA_FD, HOJA_FMA,
@@ -638,9 +638,13 @@ def revisar_estructura(carpeta_base, aamm=None):
     )
     rutas["fma"] = archivos_fma
 
-    for tipo, etiqueta in (
+    # El CTF no se usa (FMA_CON_CTF): su fila no aparece en la ventana.
+    tipos_fma = (
         ("cpf", "fma_cpf"), ("csf", "fma_csf"), ("ctf", "fma_cft"),
-    ):
+    )
+    for tipo, etiqueta in tipos_fma:
+        if tipo == "ctf" and not FMA_CON_CTF:
+            continue
         archivo = archivos_fma.get(tipo)
 
         if archivo:
@@ -921,8 +925,9 @@ SECCIONES_CONSOLIDADO = (
     (
         "fma",
         HOJA_FMA,
-        f"Usa las salidas de FMA de {CARPETA_FD_FMA}/ (fma_cpf, fma_csf y "
-        f"fma_cft). No se aplica aca: Calculo RE545 lo multiplica en el "
+        f"Usa las salidas de FMA de {CARPETA_FD_FMA}/ (fma_cpf"
+        + (", fma_csf y fma_cft" if FMA_CON_CTF else " y fma_csf")
+        + "). No se aplica aca: Calculo RE545 lo multiplica en el "
         f"momento.",
         (HOJA_FMA,),
     ),

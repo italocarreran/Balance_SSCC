@@ -5408,3 +5408,31 @@ la columna del cuarto de hora al ancho de su nombre.
 combinados; títulos, alto, comentarios, filtro y filas ocultas en el libro
 escrito dos veces); `test_pasos_sueltos` revisa los tres títulos. 305
 pruebas, 17 salteadas.
+
+## 2026-11-03 (2) — FMA sin CTF; fila vacía arriba en Subastas y FMA
+
+Pedido del usuario: sacar el CTF de la hoja FMA y de la ventana (no se usa:
+las BESS no prestan CTF), **sin borrar el programa**; una fila vacía al
+inicio de Subastas y de FMA, y en FMA cada tabla con su "Cuadro N° …" en el
+formato de PRORRATA_RETIROS (letra azul, sin fondo).
+
+- `parametros.FMA_CON_CTF = False` es el único interruptor. Apagado: la fila
+  `fma_ctf` sale de `revisar_estructura` (ventana), la tarea `fma_ctf` sale de
+  `orquestador.TAREAS` (y de la dependencia opcional de la hoja FMA),
+  `cargar_tablas_fma` no lee el `fma_cft` ni avisa que falta, y
+  `TITULOS_FMA` queda con CPF y CSF. `Indices_FMA.py`, `construir_fma_ctf`,
+  `generar_fma(tipos={"ctf"})` y el cálculo del CTF en `fma.py` quedan como
+  estaban: con `True` vuelve todo. Las filas CTF de Subastas (si hubiera)
+  quedan con FMA 0, igual que cuando faltaba el archivo.
+- Hoja FMA: fila 1 vacía, `Cuadro N° 1 — FMA CPF (fma_cpf)` /
+  `Cuadro N° 2 — FMA CSF (fma_csf)` en la fila 2 (combinado sobre su tabla),
+  encabezados en la 3. `leer_fma_consolidado` busca la fila de títulos
+  (`lectura.fila_de_titulos`) y acepta también los títulos de antes, así que
+  un libro viejo se sigue leyendo sin regenerar la hoja.
+- Hoja Subastas: fila 1 vacía (alto 14,5), encabezados en la 2. Se lee con
+  `lectura.leer_hoja_con_fila_vacia` (encabezado en la 1 si el libro es de
+  antes).
+
+**Verificación:** `test_pasos_sueltos` +2 (FMA con cuadros y sin CTF; FMA de
+antes se sigue leyendo); `test_subastas_hoja_y_cambio_hora` y
+`test_origenes_fd` ajustadas. 307 pruebas, 17 salteadas.

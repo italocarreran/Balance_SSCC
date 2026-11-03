@@ -216,7 +216,8 @@ _FILAS_ENCABEZADO = {
     HOJA_COMPENSACION_CENTRAL: 3,
     HOJA_OFERTAS_SSCC: 2,
     HOJA_CENTRALES: 2,
-    HOJA_FMA: 2,
+    HOJA_FMA: 3,
+    HOJA_SUBASTAS: 2,
 }
 
 # Hojas con varios cuadros lado a lado y el titulo de cada uno en esta
@@ -225,6 +226,7 @@ _FILAS_ENCABEZADO = {
 _FILAS_TITULO_CUADRO = {
     HOJA_PRORRATA_RETIROS: 2,
     HOJA_COMPENSACION_CENTRAL: 2,
+    HOJA_FMA: 2,
 }
 
 # Comentario con la formula en el nombre de la columna de plata de los
@@ -979,11 +981,14 @@ def escribir_salida(
 
         if HOJA_SUBASTAS in regenerar:
             if df_subastas is not None:
+                # Fila 1 vacia (pedido del usuario), encabezado en la 2.
                 subastas_para_hoja(df_subastas).to_excel(
                     writer,
                     sheet_name=HOJA_SUBASTAS,
                     index=False,
+                    startrow=1,
                 )
+                writer.sheets[HOJA_SUBASTAS].row_dimensions[1].height = 14.5
         else:
             _preservar_o_avisar(writer, HOJA_SUBASTAS)
 
@@ -992,10 +997,12 @@ def escribir_salida(
                 columna = 0
                 for clave, titulo in TITULOS_FMA.items():
                     tabla = tablas_fma.get(clave)
+                    # Fila 1 vacia, "Cuadro N° ..." en la 2 (como
+                    # PRORRATA_RETIROS), encabezado en la 3.
                     _, columna = _escribir_tabla_con_titulo(
                         writer, HOJA_FMA,
                         tabla if tabla is not None else pd.DataFrame(),
-                        titulo, columna_inicio=columna,
+                        titulo, fila_inicio=1, columna_inicio=columna,
                     )
             else:
                 _copiar_hoja_existente(wb_existente, HOJA_FMA, writer.book)

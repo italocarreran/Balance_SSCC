@@ -40,7 +40,7 @@ Script/nucleo/orquestador.py; esta ventana solo los dibuja.
             SSCC_Desempeño_<algo>.xlsx     [Traer]
             fma_cpf_<AAMM>.xlsx            [Generar]
             fma_csf_<AAMM>.xlsx            [Generar]
-            fma_cft_<AAMM>.xlsx            [Generar]
+            (fma_cft_<AAMM>.xlsx: oculto, FMA_CON_CTF = False)
         Subastas/
             DB subastas/                   [Traer]
         Balance_BESS.xlsx                  [Actualizar]
