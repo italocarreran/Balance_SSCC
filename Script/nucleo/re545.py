@@ -11,7 +11,7 @@ from .columnas_compartidas import calcular_l, calcular_m, calcular_n_o
 from .diccionarios import _buscar_cmg
 from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, HOJA_CALCULO_RE545,
-    HOJA_RESUMEN_BESS,
+    HOJA_RESUMEN_BESS, INICIO_VENTANA,
 )
 from .re545_reservas import (
     calcular_reservas_re545, construir_dic_reservas_subastas,
@@ -79,32 +79,34 @@ NOMBRES_CALCULO_RE545 = {
     "T": "Ventana de valorizacion",
     "U": "EiniT",
     "V": "EalmT",
-    "AC": "CPF(-)",
-    "AD": "CSF(-)",
+    # Reservas, FD y FMA llevan el prefijo en el nombre (antes se
+    # distinguian por un encabezado de grupo).
+    "AC": "Reserva CPF(-)",
+    "AD": "Reserva CSF(-)",
     "AE": "CTF(-)",
-    "AF": "CPF(+)",
-    "AG": "CSF(+)",
+    "AF": "Reserva CPF(+)",
+    "AG": "Reserva CSF(+)",
     "AH": "CTF(+)",
-    "AI": "CPF(-)",
-    "AJ": "CSF(-)",
+    "AI": "FD CPF(-)",
+    "AJ": "FD CSF(-)",
     "AK": "CTF(-)",
-    "AL": "CPF(+)",
-    "AM": "CSF(+)",
+    "AL": "FD CPF(+)",
+    "AM": "FD CSF(+)",
     "AN": "CTF(+)",
-    "AO": "CPF(-)",
-    "AP": "CSF(-)",
+    "AO": "FMA CPF(-)",
+    "AP": "FMA CSF(-)",
     "AQ": "CTF(-)",
-    "AR": "CPF(+)",
-    "AS": "CSF(+)",
+    "AR": "FMA CPF(+)",
+    "AS": "FMA CSF(+)",
     "AT": "CTF(+)",
-    "AU": "SUMA Reservas*FMA*FD",
+    "AU": "Reserva con FD y FMA",
     "BI": "Orden",
     "BJ": "Periodo",
     "BK": "Curva Cmg Decendente promedio horario",
     "BL": "",
     "BM": "Curva Cmg Decendente",
-    "BN": "Edisp_Asig",
-    "BO": "Total  C1_545",
+    "BN": "Energía asignada",
+    "BO": "Total C1",
     "BQ": "Energia Total",
     "BR": "Ventana de Valorizacion",
     "BS": "inyeccion en el periodo del Cmg Descendente",
@@ -116,7 +118,7 @@ NOMBRES_CALCULO_RE545 = {
     "BY": "Energía ya Asignada ultima hora",
     "BZ": "Energia Asignada Ultima hora",
     "CA": "Asignacion Edisponible+SSCC ultima hora",
-    "CC": "Total C2_545",
+    "CC": "Total C2",
     "CE": "Monto a compensar",
 }
 
@@ -154,31 +156,214 @@ NOMBRES_CALCULO_RE545 = {
 # El resto de los intermedios (BK, BM, BN, BS:CA, U/V, S) se quedan:
 # son el paso a paso del Componente 1 y 2 que un coordinado necesita
 # para seguir el calculo.
-COLUMNAS_AUXILIARES_RE545 = ("BL", "BR")
+#
+# Pedido del usuario (2026-11-03, "ordenar RE545", igual que E Costos)
+# salen tambien, sin dejar de calcularse:
+#   - las CTF de Reservas, FD y FMA (AE, AH, AK, AN, AQ, AT);
+#   - M "SoC sobre el minimo", N / O "Energía SSCC (-)/(+) por
+#     remunerar": no las usa ninguna otra columna;
+#   - BK "Curva Cmg Decendente promedio horario": desde la observacion
+#     4 la curva ya no se agrupa por ella, solo se mostraba;
+#   - BY "Energía ya Asignada ultima hora": no la usa ninguna columna.
+COLUMNAS_AUXILIARES_RE545 = (
+    "BL", "BR", "AE", "AH", "AK", "AN", "AQ", "AT", "M", "N", "O", "BK",
+    "BY",
+)
+COLUMNAS_CTF_RE545 = ("AE", "AH", "AK", "AN", "AQ", "AT")
 
-# Orden final de columnas internas de la hoja (el de
-# NOMBRES_CALCULO_RE545 sin los auxiliares). Lo usan
-# renombrar_calculo_re545() y, para ubicar los encabezados de grupo,
-# escribir_pagos_bess().
+# La hoja en cuadros, en el orden del calculo (titulo, [claves]). El
+# quinto (resumen por central + ventana, otro largo) lo agrega la
+# escritura despues de estos.
+CUADROS_CALCULO_RE545 = (
+    ("Información y reservas", [
+        "Mes", "Dia", "Hora", "Hora Mes", "Minutos", "Cuarto de Hora",
+        "clave", "Barra", "Energia_Positiva", "Energia_Negativa", "SoC",
+        "Copia_Ventana", "T", "CMg", "R", "L",
+        "AC", "AD", "AF", "AG", "AI", "AJ", "AL", "AM",
+        "AO", "AP", "AR", "AS", "AU", "U", "V",
+    ]),
+    ("Componente 1", ["S", "BI", "BJ", "BM", "BN", "BO"]),
+    ("Componente 2", [
+        "BS", "BT", "BQ", "BU", "BV", "BW", "BX", "BZ", "CA", "CC",
+    ]),
+    ("Monto a compensar", ["CE"]),
+)
+TITULO_RESUMEN_RE545 = "Resumen por central y ventana"
+
+# Orden final de columnas internas de la hoja: los cuadros seguidos.
 COLUMNAS_SALIDA_RE545 = [
-    clave for clave in NOMBRES_CALCULO_RE545
-    if clave not in COLUMNAS_AUXILIARES_RE545
+    clave for _, claves in CUADROS_CALCULO_RE545 for clave in claves
 ]
 
+# Sin encabezados de grupo desde que la hoja va en cuadros.
+GRUPOS_CALCULO_RE545 = ()
 
-GRUPOS_CALCULO_RE545 = (
-    ("Dia", ["Mes", "Dia", "Hora"]),
-    ("Nombre", ["clave", "Barra"]),
-    ("BESS", ["Energia_Positiva", "Energia_Negativa", "SoC"]),
-    ("Subastas", ["AC", "AD", "AE", "AF", "AG", "AH"]),
-    ("FD", ["AI", "AJ", "AK", "AL", "AM", "AN"]),
-    ("FMA", ["AO", "AP", "AQ", "AR", "AS", "AT"]),
-    ("Componente 1", ["BK", "BM", "BN", "BO"]),
-    (
-        "Componente 2",
-        ["BS", "BT", "BU", "BV", "BW", "BX", "BY", "BZ", "CA", "CC"],
-    ),
+# Lo que se calcula con datos de la MISMA fila va como formula de Excel
+# (mismo criterio que FORMULAS_E_COSTOS). Dan lo mismo que el calculo en
+# Python, que sigue siendo el que alimenta el monto. AU solo va como
+# formula si las CTF (que no se escriben) son 0 en todas las filas: si
+# no, la formula no las veria (ver renombrar_calculo_re545).
+FORMULAS_RE545 = {
+    "AU": "=({AC}*{AI}*{AO}+{AD}*{AJ}*{AP}+{AF}*{AL}*{AR}+{AG}*{AM}*{AS})"
+          "/4*1000",
+    "BO": '=IF(COUNT({BN},{BM})<2,"",{BN}*{BM})',
+    "BQ": "={BS}+{BN}",
+    "BV": f"=IF(AND({{Hora}}={INICIO_VENTANA - 1},{{AU}}<>0),{{AU}},0)",
+    "BW": "={Energia_Positiva}+{Energia_Negativa}",
+    "CA": "={BU}+{BZ}",
+    "CC": '=IF(COUNT({CA},{BM})<2,"",{CA}*{BM})',
+}
+TOTALES_RE545 = ("BO", "CC", "CE")
+
+_MEDIDORES = "Hoja origen: Medidores, Cuadro 1"
+_GRUPO = "central + ventana (Configuracion + Ventana de valorizacion)"
+_SUBASTAS = (
+    "Se suma desde Subastas, Cuadro 1: filas con la misma Configuración, "
+    "Hora_mes y Concepto"
 )
+ORIGEN_COLUMNAS_RE545 = {
+    # B:H (Mes ... Configuracion) sin comentario, como en E Costos.
+    "Barra": (
+        "Hoja origen: Centrales, Cuadro 1 Resumen BESS (Barra inyección). "
+        "Se busca por Configuracion."
+    ),
+    "Energia_Positiva": (
+        f"{_MEDIDORES} (Gen_Unidad). Solo la parte positiva y solo en las "
+        "filas que van a RE545 (Ventana_No_Completa distinta de 1); en las "
+        "demás, 0."
+    ),
+    "Energia_Negativa": (
+        f"{_MEDIDORES} (Gen_Unidad). Solo la parte negativa y solo en las "
+        "filas que van a RE545 (Ventana_No_Completa distinta de 1); en las "
+        "demás, 0."
+    ),
+    "SoC": f"{_MEDIDORES} (SoC). Copia directa.",
+    "Copia_Ventana": f"{_MEDIDORES} (Copia_Ventana). Copia directa.",
+    "T": f"{_MEDIDORES} (Ventana). Copia directa.",
+    "CMg": (
+        "Hoja origen: CMg, Cuadro 1 (F_CMg). Se busca por Barra + Bloque "
+        "horario."
+    ),
+    "R": (
+        "Hoja origen: CMg, Cuadro 1 (I_CMgProm, promedio de la hora). Se "
+        "busca por Barra + Bloque horario."
+    ),
+    "L": (
+        "Hoja origen: Subastas, Cuadro 1. 1 si la central tiene subasta "
+        "adjudicada (BAJADA o SUBIDA) en ese mes, día y hora; si no, 0."
+    ),
+    **{
+        clave: f"{_SUBASTAS} {servicio}: suma de Energía SSCC [MW]."
+        for clave, servicio in (
+            ("AC", "CPF(-)"), ("AD", "CSF(-)"),
+            ("AF", "CPF(+)"), ("AG", "CSF(+)"),
+        )
+    },
+    **{
+        clave: (
+            f"{_SUBASTAS} {servicio}: suma del FD de esas filas (el FD de "
+            "cada fila sale de la hoja FD por Hora mes + unidad)."
+        )
+        for clave, servicio in (
+            ("AI", "CPF(-)"), ("AJ", "CSF(-)"),
+            ("AL", "CPF(+)"), ("AM", "CSF(+)"),
+        )
+    },
+    **{
+        clave: (
+            f"{_SUBASTAS} {servicio}: suma del FMA de esas filas (el FMA de "
+            "cada fila sale de la hoja FMA)."
+        )
+        for clave, servicio in (("AO", "CPF(-)"), ("AP", "CSF(-)"))
+    },
+    "AR": "Constante 1, como en la planilla original (FMA de subida).",
+    "AS": "Constante 1, como en la planilla original (FMA de subida).",
+    "U": (
+        "SoC × Capacidad (MWh) × 1000. La Capacidad sale de Centrales, "
+        "Cuadro 1 Resumen BESS (se busca por Configuracion); sin ella, vacía."
+    ),
+    "V": (
+        f"−(suma de la Carga de su {_GRUPO}) × Eficiencia. La Eficiencia "
+        "sale de Centrales, Cuadro 1 Resumen BESS (se busca por "
+        "Configuracion); sin ella, vacía."
+    ),
+    "S": (
+        f"Puesto de la hora en la curva de su {_GRUPO}: (filas con mayor CMg "
+        "Promedio + filas con igual CMg Promedio y Hora mayor) / 4 + 1."
+    ),
+    "BI": (
+        "Número de la hora dentro de la ventana: empieza en 1 y sube en 1 "
+        "cada 4 filas (4 cuartos de hora) mientras la ventana sea la misma."
+    ),
+    "BJ": (
+        "Minuto del cuarto de hora de esta fila dentro de su hora (0, 15, "
+        "30, 45), tomado de la fila 4 más arriba."
+    ),
+    "BM": (
+        f"Curva de CMg descendente de su {_GRUPO}: la hora cuyo ranking cmg "
+        "es igual al Orden de esta fila; de sus cuartos de hora, el k-ésimo "
+        "de mayor CMg, con k = Periodo / 15 + 1."
+    ),
+    "BN": (
+        "Energía asignada a este puesto: lo que cabe en el cuarto de hora "
+        "(Pmax/4 × 1000 − inyección del periodo), sin pasar el Edisp_T de su "
+        f"{_GRUPO} (cuadro 5) menos lo asignado en las filas anteriores. "
+        "Pmax de Centrales, Cuadro 1 Resumen BESS; sin Pmax, vacía."
+    ),
+    "BS": (
+        "Descarga del mismo cuarto de hora del que sale la Curva Cmg "
+        "Decendente (el k-ésimo de mayor CMg de la hora del puesto)."
+    ),
+    "BT": (
+        f"Suma de la Asignacion Edisponible de las filas siguientes de su "
+        f"{_GRUPO}."
+    ),
+    "BU": (
+        "Si la inyección del periodo es 0, 0. Si no, la Energia Total sin "
+        "pasar el tope: Edisp_T (cuadro 5) − Energía ya Asignada − suma de "
+        f"SSCC ultima hora de su {_GRUPO}."
+    ),
+    "BX": f"Margen ultima hora de su {_GRUPO} (cuadro 5).",
+    "BZ": (
+        "8 × flag ultima hora de su central + ventana (cuadro 5) si la "
+        "inyeccion orden cronologico es mayor o igual a 0; si no, 0."
+    ),
+    "CE": (
+        f"Por {_GRUPO}: máx(0, Σ Total C1 − Σ Total C2), repartido entre sus "
+        "filas en proporción a la Reserva con FD y FMA (la de la fila / la "
+        "suma del grupo). Arriba, el total del mes."
+    ),
+}
+
+# Comentarios de la tabla resumen (cuadro 5), por nombre de columna.
+ORIGEN_RESUMEN_RE545 = {
+    "Oferta Completa": (
+        "Hoja origen: Ofertas SSCC, Cuadro 2 Resumen ventana oferta "
+        "(Completa), por central + ventana."
+    ),
+    "EiniT": "El EiniT de la primera fila de la central + ventana (cuadro 1).",
+    "EalmT": "El EalmT de la primera fila de la central + ventana (cuadro 1).",
+    "Total Reservas* FD *FMA": (
+        "Suma de la Reserva con FD y FMA (cuadro 1) de la central + ventana."
+    ),
+    "Edisp_T": (
+        "MIN(MAX(MIN(EiniT + EalmT, Capacidad × 1000), EalmT), Total "
+        "Reservas) × Oferta Completa. Capacidad de Centrales, Cuadro 1 "
+        "Resumen BESS. Es el tope de energía de la ventana."
+    ),
+    "check 1": "Control: suma de Energía asignada de la ventana − Edisp_T.",
+    "check 2": (
+        "Control: suma de Asignacion Edisponible de la ventana − Edisp_T + "
+        "Margen ultima hora."
+    ),
+    "Margen ultima hora": (
+        "Suma de SSCC ultima hora (cuadro 3) de la central + ventana."
+    ),
+    "flag ultima hora": (
+        "1 si EiniT + EalmT − Margen ultima hora de la ventana anterior "
+        "supera la Capacidad × 1000 y ese margen es distinto de 0."
+    ),
+}
 
 
 def construir_calculo_re545(
@@ -516,7 +701,21 @@ def renombrar_calculo_re545(df_re545):
     BI:CE necesitan el DataFrame con los nombres internos.
     """
 
-    return (
+    salida = (
         df_re545[COLUMNAS_SALIDA_RE545]
         .rename(columns=NOMBRES_CALCULO_RE545)
     )
+    # La formula de la reserva (AU) no ve las CTF, que no se escriben:
+    # solo se usa si su aporte (reserva x FD x FMA de CTF(-) y CTF(+))
+    # es 0 en todas las filas. El FMA CTF(+) (AT) es la constante 1.
+    def _num(columna):
+        if columna not in df_re545.columns:
+            return pd.Series(0.0, index=df_re545.index)
+        return pd.to_numeric(df_re545[columna], errors="coerce").fillna(0.0)
+
+    aporte_ctf = (
+        _num("AE") * _num("AK") * _num("AQ")
+        + _num("AH") * _num("AN") * _num("AT")
+    )
+    salida.attrs["ctf_en_cero"] = bool(aporte_ctf.eq(0.0).all())
+    return salida

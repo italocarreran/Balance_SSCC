@@ -1,4 +1,6 @@
-# Ordenar la hoja "Calculo RE545" — notas (sin programar todavía)
+# Ordenar la hoja "Calculo RE545" — notas
+
+**Estado: aplicado** (BITACORA_BESS 2026-11-03 (11)).
 
 Pedido del usuario (2026-11-03): mismo trabajo que E Costos
 (`notas_orden_ecostos.md`). Formato: fila 1 vacía, "Cuadro N°" en la 2,
@@ -34,10 +36,10 @@ Fórmula de Excel (misma fila): AU, BO = BN×BM, BQ = BS+BN, BV, BW = I+J,
 CA = BU+BZ, CC = CA×BM. Comentario: lo demás (mira otras filas o la tabla
 resumen) y lo traído de otras hojas.
 
-## Dudas en curso
+## Dudas resueltas (usuario: "1. quitalas, 2. si, 3. si")
 
-1. ¿Quitar BK y BY?
-2. Cuadro 5 al final (a la derecha); su primera columna sin nombre →
-   "Central".
-3. ¿Renombrar? p. ej. "SUMA Reservas*FMA*FD" → "Reserva con FD y FMA [kWh]",
-   "Edisp_Asig" → "Energía asignada [kWh]".
+1. BK y BY salen de la hoja.
+2. Cuadro 5 al final; su primera columna se llama "Central".
+3. Renombradas: "Reserva con FD y FMA [kWh]" (AU), "Energía asignada [kWh]"
+   (BN), "Total C1" / "Total C2", prefijos "Reserva / FD / FMA" en los tres
+   bloques (antes por encabezado de grupo).

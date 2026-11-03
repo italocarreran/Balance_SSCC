@@ -45,7 +45,7 @@ from .utiles import _normaliza_valor_vba, normalizar
 # ------------------------------------------------------------
 
 NOMBRES_RESUMEN_RE545 = {
-    "AW": "",
+    "AW": "Central",
     "AX": "Ventana",
     "AY": "Oferta Completa",
     "AZ": "EiniT",

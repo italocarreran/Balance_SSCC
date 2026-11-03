@@ -142,8 +142,13 @@ class TestColumnasDeSalidaDeLosCalculos(unittest.TestCase):
         for clave in ("AI", "AL", "AO", "AR", "M", "N", "O", "AE", "AF"):
             self.assertNotIn(clave, nucleo.COLUMNAS_SALIDA_E_COSTOS)
 
-        for clave in ("S", "U", "V", "BK", "BM", "BN", "BS", "BT"):
+        for clave in ("S", "U", "V", "BM", "BN", "BS", "BT"):
             self.assertIn(clave, nucleo.COLUMNAS_SALIDA_RE545)
+
+        # Salen (pedido 2026-11-03): CTF, las que no llegan al monto.
+        for clave in ("AE", "AH", "AK", "AN", "AQ", "AT", "M", "N", "O",
+                      "BK", "BY"):
+            self.assertNotIn(clave, nucleo.COLUMNAS_SALIDA_RE545)
 
     def test_los_grupos_siguen_cayendo_sobre_columnas_de_la_hoja(self):
         """
@@ -214,6 +219,61 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
             [ws[f"{descarga}{f}"].value for f in (4, 5, 6)], [1, "–", "–"]
         )
         self.assertEqual([ws[f"{carga}{f}"].value for f in (4, 5, 6)], [1, 2, "–"])
+
+    def _escribir_re545(self, carpeta, ctf_en_cero=True):
+        filas = 3
+        base = {c: [1.0, 2.0, 3.0] for c in nucleo.COLUMNAS_SALIDA_RE545}
+        base["clave"] = ["SAE UNO"] * filas
+        base["Barra"] = ["BARRA A"] * filas
+        df = (
+            pd.DataFrame(base)[nucleo.COLUMNAS_SALIDA_RE545]
+            .rename(columns=nucleo.NOMBRES_CALCULO_RE545)
+        )
+        df.attrs["ctf_en_cero"] = ctf_en_cero
+        resumen = pd.DataFrame({
+            nombre: [1.0] for nombre in nucleo.NOMBRES_RESUMEN_RE545.values()
+        })
+        ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+        nucleo.escribir_pagos_bess(
+            ruta, df_re545=df, df_resumen_re545=resumen,
+            registrar=lambda *a: None,
+        )
+        return openpyxl.load_workbook(ruta)[nucleo.HOJA_CALCULO_RE545]
+
+    def test_re545_en_cinco_cuadros_con_formulas_y_totales(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            ws = self._escribir_re545(carpeta)
+        titulos = [c.value for c in ws[2] if c.value]
+        self.assertEqual(len(titulos), 5, titulos)
+        self.assertTrue(titulos[4].endswith("Resumen por central y ventana"))
+        self.assertEqual(ws.freeze_panes, "I4")
+        nombres = {c.value: c.column_letter for c in ws[3] if c.value}
+        self.assertIn("Central", nombres)  # antes sin nombre
+        self.assertIn("Reserva CPF(-) [MW]", nombres)
+        self.assertNotIn("CTF(-)", nombres)
+        reserva = nombres["Reserva con FD y FMA [kWh]"]
+        self.assertTrue(str(ws[f"{reserva}4"].value).startswith("=("))
+        c1 = nombres["Total C1 [CLP]"]
+        self.assertEqual(
+            ws[f"{c1}4"].value,
+            f'=IF(COUNT({nombres["Energía asignada [kWh]"]}4,'
+            f'{nombres["Curva Cmg Decendente [CLP/kWh]"]}4)<2,"",'
+            f'{nombres["Energía asignada [kWh]"]}4*'
+            f'{nombres["Curva Cmg Decendente [CLP/kWh]"]}4)',
+        )
+        monto = nombres["Monto a compensar [CLP]"]
+        self.assertEqual(ws[f"{monto}1"].value, f"=SUM({monto}4:{monto}6)")
+        self.assertEqual(ws[f"{monto}3"].fill.start_color.rgb[-6:], "375623")
+        self.assertTrue(all(ws.cell(3, c).comment is None for c in range(2, 9)))
+        self.assertIn("Hoja origen: CMg", ws[f'{nombres["CMg Promedio [CLP/kWh]"]}3'].comment.text)
+        self.assertIn("Edisp_T", ws[f'{nombres["Energía asignada [kWh]"]}3'].comment.text)
+
+    def test_re545_con_aporte_ctf_deja_la_reserva_como_valor(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            ws = self._escribir_re545(carpeta, ctf_en_cero=False)
+        nombres = {c.value: c.column_letter for c in ws[3] if c.value}
+        reserva = nombres["Reserva con FD y FMA [kWh]"]
+        self.assertEqual(ws[f"{reserva}4"].value, 1)
 
     def test_el_resumen_queda_primero_y_el_calculo_detras(self):
         with tempfile.TemporaryDirectory() as carpeta:

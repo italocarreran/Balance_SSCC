@@ -5617,3 +5617,32 @@ el ciclo, como la macro (decidido con el usuario; ver notas).
 **Verificación:** prueba nueva (puestos sin fila con guion); caso completo:
 COMPENSACION_CENTRAL, PRORRATA_RETIROS y Resumen idénticos. 320 pruebas, 17
 salteadas.
+
+## 2026-11-03 (11) — Calculo RE545 en cinco cuadros
+
+Pedido del usuario, armado en `desarrollo/notas_orden_re545.md` con el
+mismo criterio que E Costos.
+
+- `re545.CUADROS_CALCULO_RE545`: (1) Información y reservas, (2)
+  Componente 1, (3) Componente 2, (4) Monto a compensar (verde); la tabla
+  por central + ventana va como (5) "Resumen por central y ventana" (su
+  primera columna ahora se llama "Central"). Fila 1 vacía (totales del mes
+  sobre Total C1, Total C2 y Monto), título en la 2, nombres en la 3, margen
+  en A, una columna entre cuadros, panel en I4.
+- Fuera de la hoja (siguen calculándose): CTF ×6, M, N, O, BK y BY.
+  `GRUPOS_CALCULO_RE545 = ()`; prefijos "Reserva / FD / FMA"; renombradas
+  AU "Reserva con FD y FMA", BN "Energía asignada", BO/CC "Total C1/C2".
+- `FORMULAS_RE545` (misma fila): AU, BO, BQ, BV, BW, CA, CC. AU solo como
+  fórmula si el aporte de las CTF (que no se escriben) es 0 en todas las
+  filas (`attrs["ctf_en_cero"]` en `renombrar_calculo_re545`; el FMA CTF(+)
+  es la constante 1). Verificado en LibreOffice: mismas cifras, incluidas
+  las celdas vacías (BO / CC con `IF(COUNT(...)<2,"",...)`).
+- `ORIGEN_COLUMNAS_RE545` / `ORIGEN_RESUMEN_RE545`: comentario de origen y
+  condición (B:H sin comentario).
+- `escritura._escribir_cuadros` / `_terminar_cuadros`: lo común de las dos
+  hojas de cálculo (E Costos los usa igual que antes).
+
+**Verificación:** +2 pruebas (cinco cuadros, fórmulas, totales, verde,
+comentarios; reserva como valor si hay aporte CTF). Caso completo:
+COMPENSACION_CENTRAL, PRORRATA_RETIROS y Resumen idénticos; la reserva sale
+como fórmula (aporte CTF = 0). 322 pruebas, 17 salteadas.

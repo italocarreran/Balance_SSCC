@@ -95,12 +95,16 @@ NOMBRES_CON_UNIDAD = {
         "CMg Promedio": f"CMg Promedio {CLP_KWH}",
         "EiniT": f"EiniT {KWH}",
         "EalmT": f"EalmT {KWH}",
-        "SUMA Reservas*FMA*FD": f"SUMA Reservas*FMA*FD {KWH}",
+        "Reserva con FD y FMA": f"Reserva con FD y FMA {KWH}",
+        "Reserva CPF(-)": "Reserva CPF(-) [MW]",
+        "Reserva CSF(-)": "Reserva CSF(-) [MW]",
+        "Reserva CPF(+)": "Reserva CPF(+) [MW]",
+        "Reserva CSF(+)": "Reserva CSF(+) [MW]",
         "Curva Cmg Decendente promedio horario":
             f"Curva Cmg Decendente promedio horario {CLP_KWH}",
         "Curva Cmg Decendente": f"Curva Cmg Decendente {CLP_KWH}",
-        "Edisp_Asig": f"Edisp_Asig {KWH}",
-        "Total  C1_545": f"Total C1_545 {CLP}",
+        "Energía asignada": f"Energía asignada {KWH}",
+        "Total C1": f"Total C1 {CLP}",
         "Energia Total": f"Energia Total {KWH}",
         "inyeccion en el periodo del Cmg Descendente":
             f"inyeccion en el periodo del Cmg Descendente {KWH}",
@@ -114,7 +118,7 @@ NOMBRES_CON_UNIDAD = {
         "Energia Asignada Ultima hora": f"Energia Asignada Ultima hora {KWH}",
         "Asignacion Edisponible+SSCC ultima hora":
             f"Asignacion Edisponible+SSCC ultima hora {KWH}",
-        "Total C2_545": f"Total C2_545 {CLP}",
+        "Total C2": f"Total C2 {CLP}",
         "Total Reservas* FD *FMA": f"Total Reservas* FD *FMA {KWH}",
         "Edisp_T": f"Edisp_T {KWH}",
     },

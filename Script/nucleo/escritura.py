@@ -54,7 +54,10 @@ from .parametros import (
     HOJA_MEDIDORES, HOJA_PRORRATA_RETIROS, HOJA_RESUMEN, HOJA_SUBASTAS,
     ORDEN_HOJAS_CONTROL, ORDEN_HOJAS_SALIDA,
 )
-from .re545 import COLUMNAS_SALIDA_RE545, GRUPOS_CALCULO_RE545
+from .re545 import (
+    CUADROS_CALCULO_RE545, FORMULAS_RE545, ORIGEN_COLUMNAS_RE545,
+    ORIGEN_RESUMEN_RE545, TITULO_RESUMEN_RE545, TOTALES_RE545,
+)
 from .xlsx_rapido import nombres_de_hojas, pegar_hojas
 
 
@@ -220,7 +223,7 @@ def _ordenar_hojas(wb, orden):
 # preservadas de la otra).
 _FILAS_ENCABEZADO = {
     HOJA_CALCULO_ECOSTOS: 3,
-    HOJA_CALCULO_RE545: 2,
+    HOJA_CALCULO_RE545: 3,
     HOJA_PRORRATA_RETIROS: 3,
     HOJA_COMPENSACION_CENTRAL: 3,
     HOJA_OFERTAS_SSCC: 3,
@@ -238,6 +241,7 @@ _FILAS_ENCABEZADO = {
 # encabezados (la fila 1 queda vacia). Ver formato.formatear_hoja.
 _FILAS_TITULO_CUADRO = {
     HOJA_CALCULO_ECOSTOS: 2,
+    HOJA_CALCULO_RE545: 2,
     HOJA_PRORRATA_RETIROS: 2,
     HOJA_COMPENSACION_CENTRAL: 2,
     HOJA_FMA: 2,
@@ -530,36 +534,9 @@ def escribir_pagos_bess(
         if HOJA_CALCULO_RE545 in regenerar:
             if df_re545 is not None:
                 escritas.append(HOJA_CALCULO_RE545)
-                df_re545.to_excel(
-                    writer,
-                    sheet_name=HOJA_CALCULO_RE545,
-                    index=False,
-                    startrow=1,
-                    startcol=COLUMNA_MARGEN,
+                letras_re545 = _escribir_cuadros_re545(
+                    writer, df_re545, df_resumen_re545
                 )
-                _escribir_encabezados_grupo(
-                    writer.sheets[HOJA_CALCULO_RE545],
-                    COLUMNAS_SALIDA_RE545,
-                    GRUPOS_CALCULO_RE545,
-                    columna_inicio=COLUMNA_MARGEN + 1,
-                )
-
-                if df_resumen_re545 is not None:
-                    # Tabla de otro largo, al lado del bloque
-                    # principal con una columna en blanco de
-                    # separacion (mismo criterio que CSF/CPF de FD).
-                    # startrow=1 tambien, para que sus nombres de
-                    # columna queden en la misma fila que los del
-                    # bloque principal (no tiene encabezado de grupo
-                    # propio: no hay evidencia de uno en el archivo
-                    # real).
-                    df_resumen_re545.to_excel(
-                        writer,
-                        sheet_name=HOJA_CALCULO_RE545,
-                        index=False,
-                        startrow=1,
-                        startcol=COLUMNA_MARGEN + len(df_re545.columns) + 1,
-                    )
         else:
             _preservar_o_avisar(writer, HOJA_CALCULO_RE545)
 
@@ -636,6 +613,11 @@ def escribir_pagos_bess(
             _terminar_e_costos(ws_e_costos, letras_e_costos, len(df_ecostos))
             # Formulas sin valor guardado: que Excel las calcule al abrir.
             writer.book.calculation.fullCalcOnLoad = True
+        if HOJA_CALCULO_RE545 in escritas:
+            ws_re545 = writer.sheets[HOJA_CALCULO_RE545]
+            ws_re545.freeze_panes = PANEL_RE545
+            _terminar_re545(ws_re545, letras_re545, df_re545)
+            writer.book.calculation.fullCalcOnLoad = True
         crono.tramo("formato (encabezados, anchos, numeros, marco)")
         relleno = _asegurar_una_hoja(writer)
 
@@ -673,34 +655,70 @@ def _poner_unidades(wb):
         con_unidades(wb[nombre], nombre, _FILAS_ENCABEZADO.get(nombre, 1))
 
 
-def _escribir_cuadros_e_costos(writer, df_ecostos):
+def _escribir_cuadros(writer, hoja, df, cuadros, origen):
     """
-    "Calculo E Costos" en sus tres cuadros (CUADROS_CALCULO_E_COSTOS),
-    lado a lado con una columna de separacion: fila 1 vacia, "Cuadro
-    N° ..." en la 2, nombres en la 3. df_ecostos llega ya renombrado y
-    en el orden de COLUMNAS_SALIDA_E_COSTOS (los cuadros seguidos): se
-    parte por posicion. Las columnas que vienen de otra hoja llevan el
-    origen como comentario en su nombre (ORIGEN_COLUMNAS_E_COSTOS).
+    Una hoja de calculo en sus cuadros, lado a lado con una columna de
+    separacion: fila 1 vacia, "Cuadro N° ..." en la 2, nombres en la 3.
+    df llega ya renombrado y en el orden de los cuadros seguidos: se
+    parte por posicion. Las columnas con texto en 'origen' (clave
+    interna -> texto) lo llevan como comentario en su nombre.
+
+    Devuelve ({clave interna: letra de su columna}, columna donde iria
+    el cuadro siguiente).
     """
 
-    ws_nombre = HOJA_CALCULO_ECOSTOS
     columna = COLUMNA_MARGEN
     desde = 0
     letras = {}
-    for numero, (titulo, claves) in enumerate(CUADROS_CALCULO_E_COSTOS, 1):
-        cuadro = df_ecostos.iloc[:, desde:desde + len(claves)]
+    for numero, (titulo, claves) in enumerate(cuadros, 1):
+        cuadro = df.iloc[:, desde:desde + len(claves)]
         _, siguiente = _escribir_tabla_con_titulo(
-            writer, ws_nombre, cuadro, titulo_de_cuadro(numero, titulo),
+            writer, hoja, cuadro, titulo_de_cuadro(numero, titulo),
             fila_inicio=1, columna_inicio=columna,
         )
-        ws = writer.sheets[ws_nombre]
+        ws = writer.sheets[hoja]
         for posicion, clave in enumerate(claves):
-            nota = ORIGEN_COLUMNAS_E_COSTOS.get(clave)
+            nota = origen.get(clave)
             if nota:
                 ws.cell(3, columna + posicion + 1).comment = _comentario(nota)
             letras[clave] = get_column_letter(columna + posicion + 1)
         desde += len(claves)
         columna = siguiente
+    return letras, columna
+
+
+def _escribir_cuadros_e_costos(writer, df_ecostos):
+    """Calculo E Costos en sus cuadros (CUADROS_CALCULO_E_COSTOS)."""
+
+    letras, _ = _escribir_cuadros(
+        writer, HOJA_CALCULO_ECOSTOS, df_ecostos, CUADROS_CALCULO_E_COSTOS,
+        ORIGEN_COLUMNAS_E_COSTOS,
+    )
+    return letras
+
+
+def _escribir_cuadros_re545(writer, df_re545, df_resumen):
+    """
+    Calculo RE545 en sus cuadros (CUADROS_CALCULO_RE545) y, despues, la
+    tabla por central + ventana (otro largo) como ultimo cuadro.
+    """
+
+    letras, columna = _escribir_cuadros(
+        writer, HOJA_CALCULO_RE545, df_re545, CUADROS_CALCULO_RE545,
+        ORIGEN_COLUMNAS_RE545,
+    )
+    if df_resumen is not None:
+        numero = len(CUADROS_CALCULO_RE545) + 1
+        _escribir_tabla_con_titulo(
+            writer, HOJA_CALCULO_RE545, df_resumen,
+            titulo_de_cuadro(numero, TITULO_RESUMEN_RE545),
+            fila_inicio=1, columna_inicio=columna,
+        )
+        ws = writer.sheets[HOJA_CALCULO_RE545]
+        for posicion, nombre in enumerate(df_resumen.columns):
+            nota = ORIGEN_RESUMEN_RE545.get(nombre)
+            if nota:
+                ws.cell(3, columna + posicion + 1).comment = _comentario(nota)
     return letras
 
 
@@ -710,17 +728,19 @@ COLOR_MONTO = "375623"
 RELLENO_MONTO_DATOS = "E2EFDA"
 
 
-def _terminar_e_costos(ws, letras, filas):
+def _terminar_cuadros(
+    ws, letras, filas, formulas, totales, monto, sin_puesto=(),
+):
     """
-    Lo que va DESPUES del formato general en Calculo E Costos (que mira
-    los valores para decidir anchos y formatos de numero):
+    Lo que va DESPUES del formato general en una hoja de calculo (el
+    formato mira los valores para decidir anchos y formatos de numero):
 
       - formula de Excel en las columnas que se calculan con la misma
-        fila (FORMULAS_E_COSTOS), en vez del valor;
-      - el total del mes en la fila 1, sobre Total C1, Total C2 y el
-        Monto a compensar (TOTALES_E_COSTOS);
-      - el cuadro del Monto en verde;
-      - un guion en los puestos de las curvas monotonas sin fila.
+        fila ('formulas': clave -> plantilla con {clave}), en vez del
+        valor;
+      - el total del mes en la fila 1, sobre las columnas de 'totales';
+      - el cuadro del Monto a compensar ('monto') en verde;
+      - un guion en las celdas vacias de las columnas 'sin_puesto'.
     """
 
     from openpyxl.styles import Alignment, Font, PatternFill
@@ -728,7 +748,7 @@ def _terminar_e_costos(ws, letras, filas):
     primera, ultima = 4, 3 + filas
     marcador = re.compile(r"\{(\w+)\}")
 
-    for clave, plantilla in FORMULAS_E_COSTOS.items():
+    for clave, plantilla in formulas.items():
         if clave not in letras:
             continue
         for fila in range(primera, ultima + 1):
@@ -737,7 +757,7 @@ def _terminar_e_costos(ws, letras, filas):
             )
 
     derecha = Alignment(horizontal="right")
-    for clave in SIN_PUESTO_E_COSTOS:
+    for clave in sin_puesto:
         if clave not in letras:
             continue
         for fila in range(primera, ultima + 1):
@@ -747,35 +767,53 @@ def _terminar_e_costos(ws, letras, filas):
                 celda.value = GUION_SIN_PUESTO
                 celda.alignment = derecha
 
-    for clave in TOTALES_E_COSTOS:
+    for clave in totales:
         if clave not in letras or not filas:
             continue
         celda = ws[f"{letras[clave]}1"]
         celda.value = f"=SUM({letras[clave]}{primera}:{letras[clave]}{ultima})"
         celda.number_format = '"Total: "#,##0'
         celda.font = Font(
-            bold=True, color=COLOR_MONTO if clave == "BC" else "244062"
+            bold=True, color=COLOR_MONTO if clave == monto else "244062"
         )
 
-    monto = letras.get("BC")
-    if monto:
+    letra_monto = letras.get(monto)
+    if letra_monto:
         verde = PatternFill(
             fill_type="solid", start_color=COLOR_MONTO, end_color=COLOR_MONTO
         )
-        ws[f"{monto}3"].fill = verde
-        ws[f"{monto}2"].font = Font(bold=True, color=COLOR_MONTO)
+        ws[f"{letra_monto}3"].fill = verde
+        ws[f"{letra_monto}2"].font = Font(bold=True, color=COLOR_MONTO)
         claro = PatternFill(
             fill_type="solid", start_color=RELLENO_MONTO_DATOS,
             end_color=RELLENO_MONTO_DATOS,
         )
         for fila in range(primera, ultima + 1):
-            ws[f"{monto}{fila}"].fill = claro
+            ws[f"{letra_monto}{fila}"].fill = claro
 
 
-# Columnas que quedan fijas al moverse a la derecha en Calculo E Costos
-# (pedido del usuario: "que se inmovilicen C:H", Dia..Configuracion):
-# el panel se corta en la I, debajo de los nombres de columna.
+def _terminar_e_costos(ws, letras, filas):
+    _terminar_cuadros(
+        ws, letras, filas, FORMULAS_E_COSTOS, TOTALES_E_COSTOS, "BC",
+        SIN_PUESTO_E_COSTOS,
+    )
+
+
+def _terminar_re545(ws, letras, df_re545):
+    formulas = dict(FORMULAS_RE545)
+    if not df_re545.attrs.get("ctf_en_cero", True):
+        # Hay aporte de CTF a la reserva y la formula no lo veria.
+        formulas.pop("AU", None)
+    _terminar_cuadros(
+        ws, letras, len(df_re545), formulas, TOTALES_RE545, "CE",
+    )
+
+
+# Columnas que quedan fijas al moverse a la derecha en las hojas de
+# calculo (pedido del usuario: "que se inmovilicen C:H",
+# Dia..Configuracion): el panel se corta en la I, debajo de los nombres.
 PANEL_E_COSTOS = "I4"
+PANEL_RE545 = "I4"
 
 
 def _central_primero(df):
