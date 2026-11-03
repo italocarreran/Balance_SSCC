@@ -401,7 +401,12 @@ class TestCorrida(unittest.TestCase):
         _, _, error = self.correr(caso_vacio(), mensajes=mensajes)
         self.assertIsNone(error)
         texto = "\n".join(mensajes)
-        self.assertRegex(texto, r"\[cmg_csv\] Listo \(\d+,\d s\)\.")
+        # Cada paso abre con su encabezado y cierra con su tiempo.
+        etiqueta = nucleo.GRUPO_POR_ID["cmg_csv"].etiqueta
+        self.assertIn(f"{nucleo.ENCABEZADO_REGISTRO}{etiqueta}", texto)
+        self.assertRegex(
+            texto, rf"{nucleo.FIN_REGISTRO}{etiqueta}: listo en \d+,\d s"
+        )
         self.assertRegex(texto, r"Resumen de la corrida \(total \d+,\d s")
         resumen = [m for m in mensajes if ": ok - tardo" in m]
         self.assertEqual(len(resumen), 9, mensajes)

@@ -231,6 +231,17 @@ def calcular_componentes_re545(
     df = df_re545.reset_index(drop=True).copy()
     n = len(df)
 
+    # Rendimiento: los bucles de abajo leian cada Serie con .iloc fila
+    # por fila; ahora leen una lista (los mismos valores, numpy) que se
+    # arma una vez por Serie.
+    listas = {}
+
+    def _pos(serie):
+        clave = id(serie)
+        if clave not in listas:
+            listas[clave] = (serie, list(serie.to_numpy()))
+        return listas[clave][1]
+
     # Sin Pmax, BN queda vacio; BQ = BS + BN lo convierte en 0 con
     # fillna(0.0), asi que el faltante desaparece sin dejar rastro.
     # El aviso va antes de calcular nada para que salga igual si algo
@@ -281,7 +292,7 @@ def calcular_componentes_re545(
 
         clave = claves[posicion]
         capacidad_pmax = pmax[posicion]
-        valor_bs = bs_num.iloc[posicion]
+        valor_bs = _pos(bs_num)[posicion]
 
         if pd.isna(capacidad_pmax) or pd.isna(valor_bs):
             bn[posicion] = pd.NA
@@ -317,7 +328,7 @@ def calcular_componentes_re545(
         # BT = suma de los BU de las filas POSTERIORES del grupo.
         bt[posicion] = acumulado_bu.get(clave, 0.0)
 
-        valor_bs = bs_num.iloc[posicion]
+        valor_bs = _pos(bs_num)[posicion]
 
         if pd.isna(valor_bs) or float(valor_bs) == 0.0:
             bu[posicion] = 0.0
@@ -327,7 +338,7 @@ def calcular_componentes_re545(
                 - bt[posicion]
                 - suma_bv.get(clave, 0.0)
             )
-            bu[posicion] = max(0.0, min(float(bq.iloc[posicion]), techo))
+            bu[posicion] = max(0.0, min(float(_pos(bq)[posicion]), techo))
 
         acumulado_bu[clave] = acumulado_bu.get(clave, 0.0) + bu[posicion]
 
@@ -343,7 +354,7 @@ def calcular_componentes_re545(
 
     bz = pd.Series(
         [
-            (0.0 if bw.iloc[posicion] < 0 else 8.0)
+            (0.0 if _pos(bw)[posicion] < 0 else 8.0)
             * dic_bg.get(claves[posicion], 0.0)
             for posicion in range(n)
         ],
@@ -358,13 +369,13 @@ def calcular_componentes_re545(
 
         clave = claves[posicion]
 
-        if bw.iloc[posicion] < 0:
-            by[posicion] = float(bx.iloc[posicion])
+        if _pos(bw)[posicion] < 0:
+            by[posicion] = float(_pos(bx)[posicion])
         else:
             by[posicion] = acumulado_bz.get(clave, 0.0)
 
         acumulado_bz[clave] = acumulado_bz.get(clave, 0.0) + float(
-            bz.iloc[posicion]
+            _pos(bz)[posicion]
         )
 
     by = pd.Series(by, index=df.index)
@@ -380,15 +391,15 @@ def calcular_componentes_re545(
     suma_au = {}
 
     for posicion, clave in enumerate(claves):
-        valor_bo = bo.iloc[posicion]
-        valor_cc = cc.iloc[posicion]
+        valor_bo = _pos(bo)[posicion]
+        valor_cc = _pos(cc)[posicion]
         suma_bo[clave] = suma_bo.get(clave, 0.0) + (
             0.0 if pd.isna(valor_bo) else float(valor_bo)
         )
         suma_cc[clave] = suma_cc.get(clave, 0.0) + (
             0.0 if pd.isna(valor_cc) else float(valor_cc)
         )
-        suma_au[clave] = suma_au.get(clave, 0.0) + float(au.iloc[posicion])
+        suma_au[clave] = suma_au.get(clave, 0.0) + float(_pos(au)[posicion])
 
     ce = []
 
@@ -403,7 +414,7 @@ def calcular_componentes_re545(
 
         ce.append(
             max(suma_bo.get(clave, 0.0) - suma_cc.get(clave, 0.0), 0.0)
-            * float(au.iloc[posicion])
+            * float(_pos(au)[posicion])
             / total_au
         )
 

@@ -61,7 +61,8 @@ class TestRegistro(base.TestVentanaActualizar):
         texto = txt.get("1.0", "end")
         # cada linea con hora y tiempo transcurrido
         self.assertRegex(texto, r"\[\d\d:\d\d:\d\d \+00:\d\d\] Leyendo algo")
-        self.assertIn("tiempo total", texto)
+        # Cada boton como encabezado destacado y su cierre con el tiempo.
+        self.assertRegex(texto, r"■ .+: listo en ")
 
         def lineas_con(tag):
             rangos = txt.tag_ranges(tag)
@@ -73,6 +74,8 @@ class TestRegistro(base.TestVentanaActualizar):
         self.assertIn("Listo: 10 fila(s)", lineas_con("ok"))
         self.assertNotIn("Leyendo algo", lineas_con("ok") + lineas_con("aviso"))
         self.assertEqual(txt.tag_cget("ok", "foreground"), self.app.COLOR_REGISTRO["ok"])
+        self.assertIn("▶ ", lineas_con("encabezado"))
+        self.assertIn("listo en", lineas_con("encabezado_fin"))
 
         guardado = self.caso / self.app.ARCHIVO_REGISTRO
         self.assertTrue(guardado.is_file())

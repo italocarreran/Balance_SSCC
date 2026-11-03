@@ -138,23 +138,23 @@ def calcular_y_ab_ac_ad(df_ecostos):
 
         destino = list(grupo.index)
 
-        y, ab, ac, ad = [], [], [], []
+        # Por posicion sobre los arreglos de la columna, en vez de .at
+        # celda por celda (rendimiento): mismos valores y mismos tipos.
+        cuartos = grupo["Cuarto de Hora"].to_numpy()
+        cmg = grupo["CMg"].to_numpy()
+        posiciones_i = grupo.index.get_indexer(fuente_i)
+        posiciones_j = grupo.index.get_indexer(fuente_j)
 
-        for posicion, idx_origen in enumerate(fuente_i):
-            y.append(grupo.at[idx_origen, "Cuarto de Hora"])
-            ab.append(
-                grupo.at[idx_origen, "CMg"]
-                if posicion < cantidad_calif_i
-                else pd.NA
-            )
-
-        for posicion, idx_origen in enumerate(fuente_j):
-            ac.append(grupo.at[idx_origen, "Cuarto de Hora"])
-            ad.append(
-                grupo.at[idx_origen, "CMg"]
-                if posicion < cantidad_calif_j
-                else pd.NA
-            )
+        y = [cuartos[p] for p in posiciones_i]
+        ab = [
+            cmg[p] if orden < cantidad_calif_i else pd.NA
+            for orden, p in enumerate(posiciones_i)
+        ]
+        ac = [cuartos[p] for p in posiciones_j]
+        ad = [
+            cmg[p] if orden < cantidad_calif_j else pd.NA
+            for orden, p in enumerate(posiciones_j)
+        ]
 
         return pd.DataFrame(
             {"Y": y, "AB": ab, "AC": ac, "AD": ad}, index=destino

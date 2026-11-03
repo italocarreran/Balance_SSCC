@@ -319,7 +319,8 @@ def reponer_auxiliares_medidores(df_medidores):
 # ============================================================
 
 def construir_ofertas_sscc(
-    df_medidores, ruta_ofertas, diccionario, anio, mes, registrar=print
+    df_medidores, ruta_ofertas, diccionario, anio, mes, registrar=print,
+    resumen_ofertas=None,
 ):
     """
     Arma las dos tablas de la hoja "Ofertas SSCC" del consolidado:
@@ -340,9 +341,14 @@ def construir_ofertas_sscc(
     avisos = []
 
     registrar(f"  Leyendo {Path(ruta_ofertas).name}...")
-    df_resumen_ofertas = construir_resumen_ofertas_sscc(
-        ruta_ofertas, registrar=registrar
-    )
+    if resumen_ofertas is not None:
+        # Ya se esta leyendo en otro proceso (ver proceso._lectura_aparte):
+        # trae el resultado y repite su registro aca, en su lugar.
+        df_resumen_ofertas = resumen_ofertas()
+    else:
+        df_resumen_ofertas = construir_resumen_ofertas_sscc(
+            ruta_ofertas, registrar=registrar
+        )
 
     df_wxy, periodo_ofertas, avisos_wxy = cargar_resumen_en_medidores(
         df_resumen_ofertas,

@@ -96,6 +96,7 @@ en donde se guarda config.json.
 """
 
 import os
+import queue
 import re
 import socket
 import subprocess
@@ -1052,8 +1053,9 @@ def main():
         font=("Consolas", 10, "bold"), fg="#2d7a2d",
     ).pack(side="right")
 
-    barra = ttk.Progressbar(contenedor, mode="determinate", maximum=100)
-    barra.pack(fill="x", padx=20, pady=(0, 8))
+    # Sin barra de progreso (pedido del usuario: "saca la barra de
+    # progreso, deja solo el tiempo"): el tiempo va arriba a la derecha y
+    # cada paso dice el suyo en el registro.
 
     frame_log = tk.LabelFrame(contenedor, text="Registro", padx=6, pady=6)
     frame_log.pack(fill="both", expand=True, padx=20, pady=6)
@@ -1079,24 +1081,67 @@ def main():
     for nivel, color in COLOR_REGISTRO.items():
         txt_log.tag_configure(nivel, foreground=color)
     txt_log.tag_configure("hora", foreground=COLOR_NEUTRO)
+    # Cada paso (boton) como encabezado destacado, y su cierre con el
+    # tiempo (pedido del usuario).
+    txt_log.tag_configure(
+        "encabezado", background="#244062", foreground="white",
+        font=("Segoe UI", 9, "bold"), spacing1=6, spacing3=2,
+    )
+    txt_log.tag_configure(
+        "encabezado_fin", foreground="#375623",
+        font=("Segoe UI", 9, "bold"), spacing3=4,
+    )
 
     # Inicio del proceso en curso: cada linea lleva la hora y el tiempo
     # transcurrido desde ahi ("control de tiempo", pedido del usuario).
     inicio_log = {"t": None}
 
-    def log(mensaje):
+    def _insertar_log(mensaje, ahora=None):
         texto = str(mensaje)
         nivel = nivel_del_mensaje(texto)
-        ahora = time.time()
+        ahora = time.time() if ahora is None else ahora
         for linea in texto.split("\n"):
+            if linea.startswith(nucleo.ENCABEZADO_REGISTRO):
+                txt_log.insert("end", f" {linea} \n", ("encabezado",))
+                continue
+            if linea.startswith(nucleo.FIN_REGISTRO):
+                txt_log.insert("end", f"{linea}\n", ("encabezado_fin",))
+                continue
             if linea.strip():
                 marca = time.strftime("%H:%M:%S", time.localtime(ahora))
                 if inicio_log["t"] is not None:
                     marca += f" +{formatear_reloj(ahora - inicio_log['t'])}"
                 txt_log.insert("end", f"[{marca}] ", ("hora",))
             txt_log.insert("end", linea + "\n", (nivel,) if nivel else ())
+
+    def log(mensaje):
+        # Sin update_idletasks: forzar el redibujo en cada linea, durante
+        # una corrida con cientos de mensajes, es lo que hacia que el
+        # panel "Estructura del caso" se viera con filas repetidas al
+        # desplazarlo (pedido del usuario).
+        _insertar_log(mensaje)
         txt_log.see("end")
-        root.update_idletasks()
+
+    # Los mensajes del hilo de trabajo llegan a esta cola y se escriben de
+    # a tandas cada 100 ms (antes, un root.after por mensaje).
+    cola_log = queue.Queue()
+
+    def vaciar_cola_log():
+        hubo = False
+        while True:
+            try:
+                ahora, mensaje = cola_log.get_nowait()
+            except queue.Empty:
+                break
+            _insertar_log(mensaje, ahora)
+            hubo = True
+        if hubo:
+            txt_log.see("end")
+        if corriendo["activo"] or not cola_log.empty():
+            root.after(100, vaciar_cola_log)
+
+    def registrar_desde_hilo(mensaje):
+        cola_log.put((time.time(), mensaje))
 
     def guardar_registro():
         """Deja el registro en <caso>/Registro_ultima_corrida.txt."""
@@ -1512,6 +1557,29 @@ def main():
 
         return ruta
 
+    TITULO_DE_FUNCION = {
+        "traer_csv_cmg": "Traer cmg_15min",
+        "traer_fd": "Traer FD (SSCC_Desempeño)",
+        "generar_fma": "Generar FMA",
+        "traer_subastas": "Traer subastas",
+        "consolidar_subastas": "Consolidar subastas",
+        "generar_cmg": "Generar cmg.xlsx",
+        "generar_medidas_sae": "Actualizar Medidas_SAE",
+        "generar_consolidado": "Balance_BESS.xlsx (entradas)",
+        "generar_pagos_bess": "Balance_BESS.xlsx (calculo)",
+        "ejecutar_plan": "Ejecutar todo",
+        "correr": "Balance_BESS.xlsx (entradas y calculo)",
+    }
+
+    def titulo_de(funcion, kwargs):
+        titulo = TITULO_DE_FUNCION.get(
+            getattr(funcion, "__name__", ""), getattr(funcion, "__name__", "proceso")
+        )
+        secciones = kwargs.get("secciones_activas") or kwargs.get("tipos")
+        if secciones:
+            titulo += ": " + ", ".join(sorted(str(s) for s in secciones))
+        return titulo
+
     def lanzar(funcion, kwargs, etiqueta_salida):
         """
         Corre funcion(**kwargs, registrar=..., progreso=...) en un
@@ -1526,39 +1594,35 @@ def main():
 
         corriendo["activo"] = True
         habilitar_botones(False)
-        barra["value"] = 0
         txt_log.delete("1.0", "end")
 
+        titulo = titulo_de(funcion, kwargs)
         timer["corriendo"] = True
         timer["inicio"] = time.time()
         inicio_log["t"] = timer["inicio"]
-        log(
-            f"Inicio: {time.strftime('%d-%m-%Y %H:%M:%S')} - "
-            f"{getattr(funcion, '__name__', 'proceso')}"
-        )
+        log(f"{nucleo.ENCABEZADO_REGISTRO}{titulo}")
+        log(f"Inicio: {time.strftime('%d-%m-%Y %H:%M:%S')}")
+        var_estado.set("Procesando...")
         tick()
+        vaciar_cola_log()
 
         resultado = {"ok": False}
 
         def trabajo():
             try:
-                var_estado.set("Procesando...")
                 funcion(
                     **kwargs,
-                    registrar=lambda m: root.after(0, log, m),
-                    progreso=lambda v: root.after(
-                        0, barra.configure, {"value": v}
-                    ),
+                    registrar=registrar_desde_hilo,
+                    progreso=lambda _v: None,
                 )
                 resultado["ok"] = True
 
             except nucleo.ErrorEntrada as error:
-                root.after(0, log, f"\nERROR DE ENTRADA:\n{error}")
+                registrar_desde_hilo(f"\nERROR DE ENTRADA:\n{error}")
                 resultado["error"] = str(error)
 
             except Exception as error:
-                root.after(
-                    0, log,
+                registrar_desde_hilo(
                     f"\nERROR INESPERADO:\n{error}\n\n{traceback.format_exc()}",
                 )
                 resultado["error"] = str(error)
@@ -1569,12 +1633,14 @@ def main():
         def terminar(res):
             timer["corriendo"] = False
             corriendo["activo"] = False
+            vaciar_cola_log()
 
             duracion = time.time() - timer["inicio"]
             log("")
             log(
-                f"{'Terminado' if res['ok'] else 'ERROR: termino con problemas'}"
-                f" - tiempo total {nucleo.formatear_duracion(duracion)}"
+                f"{nucleo.FIN_REGISTRO}{titulo}: "
+                f"{'listo' if res['ok'] else 'termino con problemas'} en "
+                f"{nucleo.formatear_duracion(duracion)}"
             )
             guardado = guardar_registro()
             if guardado:
@@ -1587,7 +1653,6 @@ def main():
 
             if res["ok"]:
                 var_estado.set("Terminado correctamente.")
-                barra["value"] = 100
                 messagebox.showinfo(
                     "Listo", f"Se genero/actualizo:\n{etiqueta_salida}"
                 )

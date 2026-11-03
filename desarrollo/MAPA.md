@@ -54,6 +54,8 @@ Script/
         medidores.py           <- la hoja Medidores
         escritura.py           <- los dos libros de salida
         xlsx_rapido.py         <- pegar hojas en el .xlsx a nivel zip (sin abrir el libro)
+        relleno_rapido.py      <- filas de datos de las hojas grandes generadas directo en XML (mismo formato)
+        lector.py              <- leer Excel con calamine (si esta) donde se verifico que da lo mismo
         formato.py             <- ancho/negrita/panel fijo de las hojas
         proceso.py             <- los dos procesos completos
         orquestador.py         <- el grafo de "Ejecutar todo" (plan y corrida)

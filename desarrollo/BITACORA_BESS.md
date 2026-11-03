@@ -5738,3 +5738,32 @@ resultados". Tiempos del usuario (mes real, 37.388 filas): entradas 1 min
 
 **Verificación:** 328 pruebas (19 salteadas en el entorno sin tkinter; 0 en
 el de ventana, que además no tiene calamine y prueba el respaldo).
+
+## 2026-11-03 (16) — Rendimiento (2): cálculo, paralelo y ventana
+
+- E Costos: `calcular_fd_prorrateado` sin pd.Series por fila
+  (`ecostos_prorratas._numero_de`), `calcular_n_o` vectorizado (con cumsum
+  de numpy por grupo: el de groupby usa suma compensada y difería en el
+  último decimal) y `calcular_y_ab_ac_ad` por posición. RE545: bucles de
+  C1/C2 con listas. Todo idéntico (comparado contra el código anterior con
+  vacíos y empates).
+- Paralelo (`proceso.Bitacora`, `_lanzar_aparte`, `_resultado_aparte`):
+  RE545 corre en otro proceso mientras se calcula E Costos (desde
+  FILAS_PARA_PARALELO filas); en el consolidado, SSCC_Desempeño y Ofertas se
+  leen en otros procesos mientras se leen SoC y Medidas_SAE (desde
+  BYTES_PARA_LECTURA_APARTE). El registro (líneas y alertas) se repite en
+  el mismo orden que en serie. Si el otro proceso no arranca o se cae, se
+  hace en serie (probado con 'spawn', el modo de Windows); un error de los
+  datos se levanta igual. `CALCULO_EN_PARALELO = False` lo apaga.
+- Caso sintético del tamaño de un mes real (37.440 filas, 236 mil de
+  prorrata): cálculo completo 196 s (código antes de hoy) → 17-18 s;
+  comparado hoja por hoja con el código de antes: 0 celdas distintas.
+- Ventana: sin barra de progreso (queda el tiempo); cada paso abre con un
+  encabezado destacado (`ENCABEZADO_REGISTRO`) y cierra con su tiempo
+  (`FIN_REGISTRO`); los mensajes del hilo llegan por una cola y se escriben
+  de a tandas cada 100 ms, sin `update_idletasks` por línea (era lo que
+  hacía que "Estructura del caso" se viera con filas repetidas al
+  desplazarla durante una corrida).
+
+**Verificación:** `test_paralelo` (+4), `test_relleno_rapido`; pruebas de
+ventana con xvfb. 332 pruebas.
