@@ -5690,3 +5690,14 @@ tkinter (python3.12 + venv): 325 pruebas, 0 salteadas; en el entorno normal
 
 **Verificación:** +2 pruebas. 327 pruebas (19 salteadas en el entorno sin
 tkinter; 0 en el de ventana).
+
+## 2026-11-03 (14) — Alto fijo en la fila de nombres de columna
+
+Pedido del usuario: con el panel inmovilizado, al volver a subir por la hoja
+el encabezado aparecía con su color y su comentario pero sin las letras,
+hasta hacer clic o zoom. La fila de nombres tenía texto ajustado y alto
+automático: Excel lo recalcula al dibujar y, en el panel fijo, a veces pinta
+el fondo sin el texto. `formato._alto_fijo_encabezado` le pone un alto fijo
+(15 pt por línea, según el nombre más largo, el ancho de su columna y los
+saltos de línea; tope 5 líneas). No se pudo reproducir en este entorno (no
+hay Excel): queda por confirmar con el usuario.

@@ -294,6 +294,8 @@ def formatear_hoja(ws, fila_encabezado=1, fila_titulos_cuadro=None):
     for desde, hasta in titulos_cuadro:
         _ensanchar_para_titulo(ws, fila_titulos_cuadro, desde, hasta)
 
+    _alto_fijo_encabezado(ws, fila_encabezado)
+
     if not columnas_tabla:
         return
 
@@ -337,6 +339,43 @@ def formatear_hoja(ws, fila_encabezado=1, fila_titulos_cuadro=None):
                 )
         for columna in range(izquierda + 1, derecha):
             ws.cell(row=ultima, column=columna).border = Border(bottom=_LINEA)
+
+
+# Alto de una linea de encabezado (Calibri 11 en negrita) y tope de
+# lineas, para el alto fijo de la fila de nombres de columna.
+ALTO_LINEA_ENCABEZADO = 15
+MAXIMO_LINEAS_ENCABEZADO = 5
+
+
+def _alto_fijo_encabezado(ws, fila):
+    """
+    Deja la fila de nombres de columna con un alto FIJO, el que necesita
+    su nombre mas largo (lineas segun el ancho de la columna y los saltos
+    de linea que trae).
+
+    Pedido del usuario: con el panel inmovilizado, al volver a subir por
+    la hoja el encabezado aparecia con su color pero sin las letras,
+    hasta hacer clic o zoom. La fila tenia texto ajustado y alto
+    automatico: Excel lo recalcula al dibujar y, en el panel fijo, a
+    veces pinta el fondo sin el texto. Con el alto ya puesto no tiene
+    nada que recalcular.
+    """
+
+    import math
+
+    lineas = 1
+    for celda in ws[fila]:
+        if celda.value is None:
+            continue
+        ancho = ws.column_dimensions[celda.column_letter].width or ANCHO_MINIMO
+        # Negrita: un poco mas ancha que el texto normal. Cada salto de
+        # linea que trae el nombre (los de FD) suma sus propias lineas.
+        lineas = max(lineas, sum(
+            max(1, math.ceil(len(parte) * 1.15 / max(ancho - 1, 1)))
+            for parte in str(celda.value).split("\n")
+        ))
+    lineas = min(lineas, MAXIMO_LINEAS_ENCABEZADO)
+    ws.row_dimensions[fila].height = ALTO_LINEA_ENCABEZADO * lineas + 3
 
 
 def _ensanchar_para_titulo(ws, fila, desde, hasta):
