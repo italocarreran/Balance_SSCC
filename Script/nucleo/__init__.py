@@ -124,7 +124,7 @@ from .prorrata_retiros import (
 )
 from .compensacion import (
     construir_compensacion_central, construir_compensacion_total,
-    total_por_central,
+    total_por_central, detalle_combinado, por_central_combinado,
     construir_resumen,
 )
 from .lectura import (
@@ -309,6 +309,7 @@ __all__ = [
     "buscar_archivo_prorrata", "leer_prorrata_retiros",
     "construir_prorrata_retiros", "construir_compensacion_total",
     "construir_compensacion_central", "total_por_central",
+    "detalle_combinado", "por_central_combinado",
     "CambioHora", "cambios_de_hora", "cambios_del_periodo",
     "describir_periodo", "horas_del_dia", "construir_resumen",
     "_filas_de_hojas", "hojas_con_datos", "hojas_de",

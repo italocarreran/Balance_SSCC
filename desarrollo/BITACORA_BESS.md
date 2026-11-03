@@ -5375,3 +5375,36 @@ energía ajustada. Ejemplo: factor 0,9, descarga y carga ajustadas 5.400 kWh,
 C1 583.200, C2 494.000, monto 89.200.
 
 **Verificación:** las dos páginas renderizan sin errores ni placeholders.
+
+## 2026-11-03 — Formato de PRORRATA_RETIROS y COMPENSACION_CENTRAL
+
+Pedido del usuario (las dos hojas): fila 1 vacía (sin el título de la hoja),
+filas 1 y 2 de alto 14,5; el título de cada cuadro (fila 2) combinado sobre su
+cuadro, sin fondo, en negrita y en el azul del encabezado, en una sola línea;
+la columna del cuarto de hora al ancho de su nombre.
+
+- `formato.formatear_hoja(..., fila_titulos_cuadro=2)` (desde
+  `escritura._FILAS_TITULO_CUADRO`): combina cada título sobre las columnas de
+  su cuadro y, si no cabe, ensancha la **última** columna del cuadro. Un texto
+  combinado sobre varias columnas ya no decide el ancho de la primera (vale
+  para todas las hojas, también los grupos de Calculo E Costos/RE545).
+- PRORRATA_RETIROS: comentario con la fórmula en `I3` (`Pago(e,q) = M(q) ×
+  p(e,q) / Σ_k p(k,q)`) y `M3` (`Total(e) = Σ_q Pago(e,q)`).
+  `xlsx_rapido.pegar_hojas` ahora pasa los comentarios (comments + VML y las
+  relaciones de la hoja) al pegar; antes solo pasaba el XML de la hoja. Los
+  comentarios de la versión anterior de la hoja se sacan.
+- COMPENSACION_CENTRAL: fila 3 con el formato de encabezado (no estaba en
+  `_FILAS_ENCABEZADO`). Quedan tres cuadros: `B:F` detalle por central y
+  ciclo/ventana (sin Empresa; Ecostos, RE545 y Total), `H:L` por central
+  (con Empresa; Ecostos, RE545 y Total), `N:O` total por empresa (sin
+  cambios). `compensacion.detalle_combinado` / `por_central_combinado`.
+- Autofiltro en el detalle, ya aplicado (`Total ≠ 0`, filas ocultas). Un
+  filtro oculta filas enteras, así que las filas en cero van al final del
+  detalle: quedan debajo de los otros dos cuadros, que son más cortos. Si no
+  lo fueran, el filtro queda puesto sin aplicar (antes que tapar filas de otro
+  cuadro). Se agregó la columna Total para poder filtrar "cero en los dos".
+
+**Verificación:** `tests/test_compensacion_central.py` +4 pruebas (cuadros
+combinados; títulos, alto, comentarios, filtro y filas ocultas en el libro
+escrito dos veces); `test_pasos_sueltos` revisa los tres títulos. 305
+pruebas, 17 salteadas.

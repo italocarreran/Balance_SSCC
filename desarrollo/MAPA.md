@@ -159,7 +159,7 @@ importable como cualquier módulo.
   | `Balance_BESS.xlsx/Centrales` | **Actualizar** | copia `Resumen BESS` y `Diccionario` de `Centrales.xlsx` a la planilla: es lo único que abre ese archivo |
   | cada `hoja '...'` de entrada | **Actualizar** | `generar_consolidado` con esa sola sección |
   | cada `hoja '...'` de cálculo | **Calcular** | `generar_pagos_bess` con esa sola |
-  | `Balance_BESS.xlsx/COMPENSACION_CENTRAL` | **Resumir** | compensación por central y ciclo/ventana, total por central (E Costos y RE545) y total por empresa |
+  | `Balance_BESS.xlsx/COMPENSACION_CENTRAL` | **Resumir** | compensación por central y ciclo/ventana y total por central (E Costos y RE545 lado a lado, con total) y total por empresa |
   | `Balance_BESS.xlsx/PRORRATA_RETIROS` | **Traer** | reparte el monto de cada cuarto de hora segun `Prorrata 15min` |
   | `Balance_BESS.xlsx/Resumen` | **Asignar** | consolida `RECIBE`, `PAGA` y `NETO` por empresa |
   | `Control_corrida.xlsx` | (sin botón) | lo deja cada corrida: `Ejecucion`, `Alertas` y `Log` |

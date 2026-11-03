@@ -49,7 +49,8 @@ from .prorrata_retiros import (
     leer_prorrata_retiros,
 )
 from .compensacion import (
-    construir_compensacion_central, construir_resumen, total_por_central,
+    construir_compensacion_central, construir_resumen, detalle_combinado,
+    por_central_combinado,
 )
 from .re545 import (
     completar_calculo_re545, completar_checks_resumen_re545,
@@ -712,8 +713,8 @@ def generar_pagos_bess(
     df_pagos_suministrador = None
     df_compensacion_ecostos = None
     df_compensacion_re545 = None
-    df_compensacion_ecostos_central = None
-    df_compensacion_re545_central = None
+    df_compensacion_detalle = None
+    df_compensacion_central = None
     df_compensacion_empresa = None
     df_resumen = None
 
@@ -839,11 +840,13 @@ def generar_pagos_bess(
                 df_ecostos_asignacion, df_re545_asignacion, resumen,
                 registrar=registrar,
             )
-            df_compensacion_ecostos_central = total_por_central(
-                df_compensacion_ecostos
+            # En la hoja van lado a lado: una columna E Costos y otra
+            # RE545 (cuadros 1+3 y 2+4 de antes, juntos).
+            df_compensacion_detalle = detalle_combinado(
+                df_compensacion_ecostos, df_compensacion_re545
             )
-            df_compensacion_re545_central = total_por_central(
-                df_compensacion_re545
+            df_compensacion_central = por_central_combinado(
+                df_compensacion_ecostos, df_compensacion_re545
             )
             registrar(
                 f"  E Costos: {len(df_compensacion_ecostos):,} grupos; "
@@ -938,10 +941,8 @@ def generar_pagos_bess(
         df_ecostos=df_ecostos,
         df_re545=df_re545,
         df_resumen_re545=df_resumen_re545,
-        df_compensacion_ecostos=df_compensacion_ecostos,
-        df_compensacion_re545=df_compensacion_re545,
-        df_compensacion_ecostos_central=df_compensacion_ecostos_central,
-        df_compensacion_re545_central=df_compensacion_re545_central,
+        df_compensacion_detalle=df_compensacion_detalle,
+        df_compensacion_central=df_compensacion_central,
         df_compensacion_empresa=df_compensacion_empresa,
         df_prorrata_retiros=df_prorrata_retiros,
         df_compensacion_cuarto=df_compensacion_cuarto,

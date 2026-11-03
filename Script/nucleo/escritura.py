@@ -213,10 +213,98 @@ _FILAS_ENCABEZADO = {
     HOJA_CALCULO_ECOSTOS: 2,
     HOJA_CALCULO_RE545: 2,
     HOJA_PRORRATA_RETIROS: 3,
+    HOJA_COMPENSACION_CENTRAL: 3,
     HOJA_OFERTAS_SSCC: 2,
     HOJA_CENTRALES: 2,
     HOJA_FMA: 2,
 }
+
+# Hojas con varios cuadros lado a lado y el titulo de cada uno en esta
+# fila: va combinado sobre su cuadro, sin fondo y en el azul de los
+# encabezados (la fila 1 queda vacia). Ver formato.formatear_hoja.
+_FILAS_TITULO_CUADRO = {
+    HOJA_PRORRATA_RETIROS: 2,
+    HOJA_COMPENSACION_CENTRAL: 2,
+}
+
+# Comentario con la formula en el nombre de la columna de plata de los
+# cuadros 2 y 3 de PRORRATA_RETIROS (clave: la columna donde arranca el
+# cuadro, como en la lista de cuadros de escribir_pagos_bess).
+_NOTAS_PRORRATA = {
+    5: (
+        "Pago(e,q) = M(q) × p(e,q) / Σ_k p(k,q)\n\n"
+        "M(q): monto a compensar del cuarto de hora q (Cuadro N° 1)\n"
+        "p(e,q): prorrata de la empresa e en el cuarto q\n"
+        "Σ_k p(k,q): suma de las prorratas del cuarto q (= 1 si viene "
+        "normalizada)"
+    ),
+    11: (
+        "Total(e) = Σ_q Pago(e,q)\n\n"
+        "Suma de lo que paga la empresa e en todos los cuartos de hora "
+        "del mes (Cuadro N° 2)"
+    ),
+}
+
+
+def _comentario(texto):
+    from openpyxl.comments import Comment
+
+    comentario = Comment(texto, "Balance_SSCC")
+    comentario.width = 320
+    comentario.height = 120
+    return comentario
+
+
+def _filtrar_sin_compensacion(ws, df, columna_inicio, fila_encabezado, otros):
+    """
+    Autofiltro en el cuadro de detalle de COMPENSACION_CENTRAL, ya
+    aplicado: oculta las filas con Compensacion Total = 0 (el usuario
+    lo saca desde el boton del filtro).
+
+    Un filtro de Excel oculta FILAS enteras, asi que tambien taparia
+    las de los cuadros de al lado. Por eso el detalle trae los ceros al
+    final (compensacion.detalle_combinado): las filas ocultas quedan
+    debajo de los otros cuadros, que son mas cortos. Si alguna vez no
+    lo fueran, el filtro queda puesto pero sin aplicar, antes que
+    esconder filas de otro cuadro.
+    """
+
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.filters import (
+        CustomFilter, CustomFilters, FilterColumn,
+    )
+
+    from .compensacion import COL_COMPENSACION_TOTAL
+
+    if df.empty or COL_COMPENSACION_TOTAL not in df.columns:
+        return
+
+    ultima_fila = fila_encabezado + len(df)
+    ws.auto_filter.ref = (
+        f"{get_column_letter(columna_inicio)}{fila_encabezado}:"
+        f"{get_column_letter(columna_inicio + df.shape[1] - 1)}{ultima_fila}"
+    )
+
+    en_cero = df[COL_COMPENSACION_TOTAL].eq(0.0).to_numpy()
+    if not en_cero.any():
+        return
+    filas_ocultas = [
+        fila_encabezado + 1 + i for i, cero in enumerate(en_cero) if cero
+    ]
+    largo_otros = max(
+        [0] + [len(otro) for otro in otros if otro is not None]
+    )
+    if filas_ocultas[0] <= fila_encabezado + largo_otros:
+        return
+
+    ws.auto_filter.filterColumn.append(FilterColumn(
+        colId=list(df.columns).index(COL_COMPENSACION_TOTAL),
+        customFilters=CustomFilters(
+            customFilter=[CustomFilter(operator="notEqual", val="0")]
+        ),
+    ))
+    for fila in filas_ocultas:
+        ws.row_dimensions[fila].hidden = True
 
 
 def _escribir_encabezados_grupo(ws, columnas_internas, grupos, fila=1, columna_inicio=1):
@@ -347,10 +435,8 @@ def escribir_pagos_bess(
     df_ecostos=None,
     df_re545=None,
     df_resumen_re545=None,
-    df_compensacion_ecostos=None,
-    df_compensacion_re545=None,
-    df_compensacion_ecostos_central=None,
-    df_compensacion_re545_central=None,
+    df_compensacion_detalle=None,
+    df_compensacion_central=None,
     df_compensacion_empresa=None,
     df_prorrata_retiros=None,
     df_compensacion_cuarto=None,
@@ -493,26 +579,19 @@ def escribir_pagos_bess(
             _preservar_o_avisar(writer, HOJA_CALCULO_RE545)
 
         if HOJA_COMPENSACION_CENTRAL in regenerar:
-            # Cada hoja de calculo con su detalle y, al lado, el total
-            # por central (el cuadro intermedio); al final el total por
-            # empresa, que junta las dos.
+            # Tres cuadros: el detalle por central y ciclo/ventana (E
+            # Costos y RE545 lado a lado), el total por central (con su
+            # empresa) y el total por empresa, que junta las dos.
             cuadros_compensacion = [
-                (df_compensacion_ecostos, 1,
-                 "Cuadro N° 1 — Calculo E Costos: compensación por central "
-                 "y ciclo"),
-                (df_compensacion_ecostos_central, 6,
-                 "Cuadro N° 2 — Calculo E Costos: total por central"),
-                (df_compensacion_re545, 10,
-                 "Cuadro N° 3 — Calculo RE545: compensación por central "
-                 "y ventana"),
-                (df_compensacion_re545_central, 15,
-                 "Cuadro N° 4 — Calculo RE545: total por central"),
-                (df_compensacion_empresa, 19,
-                 "Cuadro N° 5 — total recibido por cada empresa"),
+                (df_compensacion_detalle, 1,
+                 "Cuadro N° 1 — compensación por central y ciclo/ventana"),
+                (df_compensacion_central, 7,
+                 "Cuadro N° 2 — total por central"),
+                (df_compensacion_empresa, 13,
+                 "Cuadro N° 3 — total recibido por cada empresa"),
             ]
             if any(df is not None for df, _, _ in cuadros_compensacion):
                 escritas.append(HOJA_COMPENSACION_CENTRAL)
-                primero = True
                 for df_cuadro, col, titulo in cuadros_compensacion:
                     if df_cuadro is None:
                         continue
@@ -521,13 +600,13 @@ def escribir_pagos_bess(
                         index=False, startrow=2, startcol=col,
                     )
                     ws = writer.sheets[HOJA_COMPENSACION_CENTRAL]
-                    if primero:
-                        ws.cell(
-                            1, 2,
-                            "Compensación por central, ciclo/ventana y empresa",
-                        )
-                        primero = False
                     ws.cell(2, col + 1, titulo)
+                if df_compensacion_detalle is not None:
+                    _filtrar_sin_compensacion(
+                        ws, df_compensacion_detalle, columna_inicio=2,
+                        fila_encabezado=3,
+                        otros=[df for df, _, _ in cuadros_compensacion[1:]],
+                    )
         else:
             _preservar_o_avisar(writer, HOJA_COMPENSACION_CENTRAL)
 
@@ -547,7 +626,6 @@ def escribir_pagos_bess(
                     (df_pagos_suministrador, 11,
                      "Cuadro N° 3 — total a pagar de cada empresa"),
                 ]
-                primero = True
                 for df_cuadro, col, titulo in cuadros:
                     if df_cuadro is None:
                         continue
@@ -556,13 +634,12 @@ def escribir_pagos_bess(
                         startrow=2, startcol=col,
                     )
                     ws = writer.sheets[HOJA_PRORRATA_RETIROS]
-                    if primero:
-                        ws.cell(
-                            1, 2,
-                            "Prorrata de retiro y cálculo de asignación de pagos",
-                        )
-                        primero = False
                     ws.cell(2, col + 1, titulo)
+                    if col in _NOTAS_PRORRATA:
+                        # La formula de la columna de plata, como
+                        # comentario en su nombre de columna (I3, M3).
+                        celda = ws.cell(3, col + df_cuadro.shape[1])
+                        celda.comment = _comentario(_NOTAS_PRORRATA[col])
         else:
             _preservar_o_avisar(writer, HOJA_PRORRATA_RETIROS)
 
@@ -570,7 +647,9 @@ def escribir_pagos_bess(
         _ordenar_hojas(writer.book, ORDEN_HOJAS_SALIDA)
 
         crono.tramo("armar las hojas")
-        formatear_libro(writer.book, _FILAS_ENCABEZADO)
+        formatear_libro(
+            writer.book, _FILAS_ENCABEZADO, _FILAS_TITULO_CUADRO
+        )
         crono.tramo("formato (encabezados, anchos, numeros, marco)")
         relleno = _asegurar_una_hoja(writer)
 
@@ -936,7 +1015,9 @@ def escribir_salida(
         _ordenar_hojas(writer.book, ORDEN_HOJAS_SALIDA)
 
         crono.tramo("armar las hojas")
-        formatear_libro(writer.book, _FILAS_ENCABEZADO)
+        formatear_libro(
+            writer.book, _FILAS_ENCABEZADO, _FILAS_TITULO_CUADRO
+        )
         crono.tramo("formato (encabezados, anchos, numeros, marco)")
         relleno = _asegurar_una_hoja(writer)
 

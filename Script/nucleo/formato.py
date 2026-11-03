@@ -47,6 +47,11 @@ RELLENO_ENCABEZADO = PatternFill(
     fill_type="solid", start_color=COLOR_ENCABEZADO, end_color=COLOR_ENCABEZADO
 )
 LETRA_ENCABEZADO = Font(bold=True, color="FFFFFF")
+# Titulo de cuadro (hojas con varios cuadros lado a lado): el mismo azul
+# del encabezado, pero en la letra y sin fondo -- el "invertido".
+LETRA_TITULO_CUADRO = Font(bold=True, color=COLOR_ENCABEZADO)
+SIN_RELLENO = PatternFill(fill_type=None)
+ALTO_FILA_TITULO = 14.5
 _LINEA = Side(style="thin", color="808080")
 BORDE = Border(left=_LINEA, right=_LINEA, top=_LINEA, bottom=_LINEA)
 
@@ -117,7 +122,40 @@ def _texto_de_celda(valor):
     return str(valor)
 
 
-def formatear_hoja(ws, fila_encabezado=1):
+def _combinar_titulos_cuadro(ws, fila_titulos, fila_encabezado):
+    """
+    Combina cada titulo de cuadro de 'fila_titulos' sobre las columnas
+    de su cuadro (las que siguen, con nombre en la fila de encabezado,
+    sin columna en blanco de por medio). Devuelve [(columna desde,
+    columna hasta)] de cada titulo. Si ya estaba combinado (una hoja
+    preservada que se vuelve a formatear) no se combina de nuevo.
+    """
+
+    ya_combinadas = {
+        (rango.min_row, rango.min_col): rango.max_col
+        for rango in ws.merged_cells.ranges
+    }
+    titulos = []
+    for celda in ws[fila_titulos]:
+        if celda.value is None or str(celda.value).strip() == "":
+            continue
+        desde = celda.column
+        if (fila_titulos, desde) in ya_combinadas:
+            titulos.append((desde, ya_combinadas[(fila_titulos, desde)]))
+            continue
+        hasta = desde
+        while ws.cell(fila_encabezado, hasta + 1).value not in (None, ""):
+            hasta += 1
+        if hasta > desde:
+            ws.merge_cells(
+                start_row=fila_titulos, start_column=desde,
+                end_row=fila_titulos, end_column=hasta,
+            )
+        titulos.append((desde, hasta))
+    return titulos
+
+
+def formatear_hoja(ws, fila_encabezado=1, fila_titulos_cuadro=None):
     """
     Deja una hoja lista para leer:
 
@@ -138,6 +176,15 @@ def formatear_hoja(ws, fila_encabezado=1):
     llevan una fila de encabezados de grupo arriba (Calculo E Costos,
     Calculo RE545, Ofertas SSCC) y 3 en PRORRATA_RETIROS (titulo de
     la hoja + titulo de cada cuadro).
+
+    fila_titulos_cuadro: en las hojas con varios cuadros lado a lado
+    (PRORRATA_RETIROS, COMPENSACION_CENTRAL), la fila con el titulo de
+    cada cuadro. Ese titulo se combina sobre su cuadro, va sin fondo,
+    en negrita y en el azul del encabezado, en una sola linea; esa fila
+    y las de arriba quedan de alto 14,5, y si el titulo no cabe en el
+    ancho del cuadro se ensancha su ultima columna (no la primera, que
+    suele ser el cuarto de hora o la central y queda al ancho de lo
+    suyo).
     """
 
     if ws.max_row <= fila_encabezado:
@@ -153,8 +200,21 @@ def formatear_hoja(ws, fila_encabezado=1):
         if celda.value is not None and str(celda.value).strip() != ""
     ]
 
+    titulos_cuadro = []
+    if fila_titulos_cuadro:
+        titulos_cuadro = _combinar_titulos_cuadro(
+            ws, fila_titulos_cuadro, fila_encabezado
+        )
+        for fila in range(1, fila_titulos_cuadro + 1):
+            ws.row_dimensions[fila].height = ALTO_FILA_TITULO
+
     combinadas = set()
+    # Un texto combinado sobre varias columnas no decide el ancho de la
+    # primera de ellas (si no, un titulo largo la ensancha entera).
+    sobre_varias = set()
     for rango in ws.merged_cells.ranges:
+        if rango.max_col > rango.min_col:
+            sobre_varias.add((rango.min_row, rango.min_col))
         for fila in range(rango.min_row, rango.max_row + 1):
             for columna in range(rango.min_col, rango.max_col + 1):
                 combinadas.add((fila, columna))
@@ -163,6 +223,18 @@ def formatear_hoja(ws, fila_encabezado=1):
         for celda in fila:
             en_combinada = (celda.row, celda.column) in combinadas
             if celda.value is None and not en_combinada:
+                continue
+            if celda.row == fila_titulos_cuadro:
+                celda.fill = SIN_RELLENO
+                celda.border = Border()
+                if celda.value is not None:
+                    celda.font = LETRA_TITULO_CUADRO
+                    celda.alignment = Alignment(
+                        horizontal="center", vertical="center",
+                        wrap_text=False,
+                    )
+                continue
+            if fila_titulos_cuadro and celda.row < fila_titulos_cuadro:
                 continue
             if celda.value is not None:
                 celda.font = LETRA_ENCABEZADO
@@ -199,10 +271,15 @@ def formatear_hoja(ws, fila_encabezado=1):
             ws.cell(row=fila, column=indice + 1).value
             for fila in range(1, fila_encabezado + 1)
         ]
+        titulos_ancho = [
+            ws.cell(row=fila, column=indice + 1).value
+            for fila in range(1, fila_encabezado + 1)
+            if (fila, indice + 1) not in sobre_varias
+        ]
 
         anchos = [
             len(_texto_de_celda(valor))
-            for valor in columna + titulos
+            for valor in columna + titulos_ancho
         ]
 
         letra = get_column_letter(indice + 1)
@@ -213,6 +290,9 @@ def formatear_hoja(ws, fila_encabezado=1):
         formato = _formato_de_columna(columna, titulos)
         if formato:
             formatos[indice + 1] = formato
+
+    for desde, hasta in titulos_cuadro:
+        _ensanchar_para_titulo(ws, fila_titulos_cuadro, desde, hasta)
 
     if not columnas_tabla:
         return
@@ -259,6 +339,19 @@ def formatear_hoja(ws, fila_encabezado=1):
             ws.cell(row=ultima, column=columna).border = Border(bottom=_LINEA)
 
 
+def _ensanchar_para_titulo(ws, fila, desde, hasta):
+    """Ensancha la ultima columna del cuadro si su titulo no cabe."""
+
+    texto = _texto_de_celda(ws.cell(fila, desde).value)
+    # Negrita: un poco mas ancha que el texto de las celdas.
+    necesario = len(texto) * 1.1 + 2
+    letras = [get_column_letter(c) for c in range(desde, hasta + 1)]
+    actual = sum(ws.column_dimensions[l].width or ANCHO_MINIMO for l in letras)
+    if actual < necesario:
+        ultima = ws.column_dimensions[letras[-1]]
+        ultima.width = (ultima.width or ANCHO_MINIMO) + necesario - actual
+
+
 def _tablas_contiguas(columnas):
     """{columna: numero de tabla}: columnas seguidas son una tabla."""
 
@@ -273,15 +366,21 @@ def _tablas_contiguas(columnas):
     return tabla_de
 
 
-def formatear_libro(wb, filas_encabezado=None):
+def formatear_libro(wb, filas_encabezado=None, filas_titulo_cuadro=None):
     """
     Aplica formatear_hoja() a todas las hojas del libro.
 
     filas_encabezado: {nombre de hoja: fila de los nombres de
     columna}. Las hojas que no esten en el diccionario usan 1.
+    filas_titulo_cuadro: {nombre de hoja: fila de los titulos de
+    cuadro} (ver formatear_hoja).
     """
 
     filas_encabezado = filas_encabezado or {}
+    filas_titulo_cuadro = filas_titulo_cuadro or {}
 
     for nombre in wb.sheetnames:
-        formatear_hoja(wb[nombre], filas_encabezado.get(nombre, 1))
+        formatear_hoja(
+            wb[nombre], filas_encabezado.get(nombre, 1),
+            filas_titulo_cuadro.get(nombre),
+        )
