@@ -38,6 +38,7 @@ from .fma import (
     calcular_fma_subastas, construir_dic_bloque_diccionario,
 )
 from .ecostos_prorratas import construir_dic_mapeo_diccionario
+from .lector import leer_excel
 from .parametros import FMA_CON_CTF, HOJA_FMA
 from .lectura import fila_de_titulos, leer_tabla_bajo_titulo
 from .hojas_entrada import NOMBRES_SUBASTAS
@@ -175,7 +176,7 @@ def leer_fma_consolidado(ruta_salida, registrar=print, libro=None):
     fuente = ruta_salida if libro is None else libro
 
     try:
-        crudo = pd.read_excel(fuente, sheet_name=HOJA_FMA, header=None)
+        crudo = leer_excel(fuente, sheet_name=HOJA_FMA, header=None)
     except ValueError as error:
         raise ErrorEntrada(
             f"{ruta_salida.name} no tiene la hoja '{HOJA_FMA}' todavia: "

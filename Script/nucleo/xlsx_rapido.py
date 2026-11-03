@@ -43,6 +43,7 @@ el libro que habia queda intacto.
 
 import os
 import re
+import shutil
 import zipfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -383,7 +384,7 @@ def _remapear_estilos(xml, mapa):
 # PEGAR
 # ============================================================
 
-def pegar_hojas(ruta_destino, ruta_nuevas, orden=(), ignorar=()):
+def pegar_hojas(ruta_destino, ruta_nuevas, orden=(), ignorar=(), rellenos=None):
     """
     Pone en ruta_destino TODAS las hojas de ruta_nuevas (reemplazando
     las del mismo nombre o agregandolas) y deja las demas hojas de
@@ -392,10 +393,21 @@ def pegar_hojas(ruta_destino, ruta_nuevas, orden=(), ignorar=()):
     tenian). Si ruta_destino no existe, el libro nuevo pasa a serlo.
 
     ignorar: hojas de ruta_nuevas que no se pegan (un relleno).
+
+    rellenos: {hoja: relleno_rapido.RellenoHoja} de las hojas que vienen
+    cortadas (solo sus primeras filas): de esas se pegan las filas de
+    encabezado del temporal y las filas de datos las genera el relleno,
+    directo en el libro final y por partes.
     """
 
     ruta_destino = Path(ruta_destino)
     ruta_nuevas = Path(ruta_nuevas)
+    rellenos = rellenos or {}
+
+    if not ruta_destino.is_file() and rellenos:
+        # Con rellenos el temporal no esta completo: se parte de una
+        # copia suya y se pega encima de si mismo.
+        shutil.copyfile(ruta_nuevas, ruta_destino)
 
     if not ruta_destino.is_file():
         # Ignorar solo puede ser el relleno de un libro sin hojas: si
@@ -423,6 +435,7 @@ def pegar_hojas(ruta_destino, ruta_nuevas, orden=(), ignorar=()):
         por_nombre = {hoja["name"]: hoja for hoja in hojas_viejas}
         partes_usadas = {hoja["parte"] for hoja in hojas_viejas}
         reemplazos = {}       # parte -> bytes
+        generados = {}        # parte -> (inicio, filas, fin) de un relleno
         agregadas = []        # hojas nuevas que no existian
         anexos = {}           # parte de la hoja -> [(rel, parte, bytes)]
 
@@ -438,10 +451,15 @@ def pegar_hojas(ruta_destino, ruta_nuevas, orden=(), ignorar=()):
 
             existente = por_nombre.get(hoja["name"])
             comentarios = _anexos_de_hoja(nuevas, hoja["parte"])
+            relleno = rellenos.get(hoja["name"])
+            if relleno is not None:
+                partido = _partir_para_relleno(xml, relleno, mapa_estilos)
 
             if existente is not None:
                 reemplazos[existente["parte"]] = xml
                 anexos[existente["parte"]] = comentarios
+                if relleno is not None:
+                    generados[existente["parte"]] = partido
                 continue
 
             numero = 1
@@ -456,6 +474,8 @@ def pegar_hojas(ruta_destino, ruta_nuevas, orden=(), ignorar=()):
                 "rid": rid, "parte": parte, "xml": xml,
             })
             anexos[parte] = comentarios
+            if relleno is not None:
+                generados[parte] = partido
             siguiente_id += 1
 
         workbook = viejo.read(_WORKBOOK).decode("utf-8")
@@ -504,6 +524,8 @@ def pegar_hojas(ruta_destino, ruta_nuevas, orden=(), ignorar=()):
                     continue
                 if nombre in especiales:
                     final.writestr(_info(nombre), especiales[nombre])
+                elif nombre in generados:
+                    _escribir_generado(final, nombre, generados[nombre])
                 elif nombre in reemplazos:
                     final.writestr(_info(nombre), reemplazos[nombre])
                 else:
@@ -511,13 +533,111 @@ def pegar_hojas(ruta_destino, ruta_nuevas, orden=(), ignorar=()):
                     _copiar_crudo(viejo, info, final)
 
             for hoja in agregadas:
-                final.writestr(_info(hoja["parte"]), hoja["xml"])
+                if hoja["parte"] in generados:
+                    _escribir_generado(
+                        final, hoja["parte"], generados[hoja["parte"]]
+                    )
+                else:
+                    final.writestr(_info(hoja["parte"]), hoja["xml"])
 
             for nombre, datos in extra.items():
                 if nombre not in viejo.NameToInfo:
                     final.writestr(_info(nombre), datos)
 
     os.replace(temporal, ruta_destino)
+
+
+_FILA = re.compile(rb'<row r="(\d+)"[^>]*?(?:/>|>.*?</row>)', re.S)
+
+
+def _partir_para_relleno(xml, relleno, mapa_estilos):
+    """
+    El XML de una hoja cortada, partido en (inicio, filas, fin): inicio
+    termina con las filas de encabezado del temporal (hasta
+    relleno.fila_encabezado), filas es el generador de las filas de
+    datos de relleno_rapido y fin empieza en </sheetData>. La dimension
+    de la hoja se agranda hasta la ultima fila real.
+    """
+
+    apertura = re.search(rb"<sheetData\s*>|<sheetData\s*/>", xml)
+    if apertura is None:
+        raise ValueError("hoja sin <sheetData>")
+    if apertura.group(0).endswith(b"/>"):
+        contenido, cierre = b"", apertura.end()
+        resto = b"</sheetData>" + xml[cierre:]
+    else:
+        cierre = xml.index(b"</sheetData>", apertura.end())
+        contenido = xml[apertura.end():cierre]
+        resto = xml[cierre:]
+
+    encabezado = b"".join(
+        m.group(0) for m in _FILA.finditer(contenido)
+        if int(m.group(1)) <= relleno.fila_encabezado
+    )
+    inicio = xml[:apertura.start()] + b"<sheetData>" + encabezado
+
+    dimension = re.search(rb'<dimension ref="([A-Z]+)(\d+):([A-Z]+)(\d+)"', inicio)
+    if dimension:
+        from openpyxl.utils import column_index_from_string, get_column_letter
+
+        ultima_col = max(
+            column_index_from_string(dimension.group(3).decode()),
+            relleno.ultima_columna,
+        )
+        ultima_fila = max(int(dimension.group(4)), relleno.ultima_fila)
+        nuevo = (
+            b'<dimension ref="' + dimension.group(1) + dimension.group(2)
+            + b":" + get_column_letter(ultima_col).encode()
+            + str(ultima_fila).encode() + b'"'
+        )
+        inicio = inicio.replace(dimension.group(0), nuevo, 1)
+
+    return inicio, relleno.filas_xml(mapa_estilos), resto
+
+
+def _escribir_generado(final, nombre, partido):
+    """
+    Escribe en el zip una hoja partida, por partes (sin juntarla).
+
+    Las filas se generan en otro hilo mientras este comprime: zlib suelta
+    el GIL al comprimir, asi que las dos cosas avanzan a la vez.
+    """
+
+    import queue
+    import threading
+
+    inicio, filas, fin = partido
+    tandas = queue.Queue(maxsize=8)
+    error = []
+
+    def generar():
+        try:
+            tanda, largo = [], 0
+            for fila in filas:
+                tanda.append(fila)
+                largo += len(fila)
+                if largo > 2_000_000:
+                    tandas.put(b"".join(tanda))
+                    tanda, largo = [], 0
+            tandas.put(b"".join(tanda))
+        except BaseException as problema:  # se relanza en este hilo
+            error.append(problema)
+        finally:
+            tandas.put(None)
+
+    hilo = threading.Thread(target=generar, daemon=True)
+    hilo.start()
+    with final.open(_info(nombre), "w") as destino:
+        destino.write(inicio)
+        while True:
+            tanda = tandas.get()
+            if tanda is None:
+                break
+            destino.write(tanda)
+        destino.write(fin)
+    hilo.join()
+    if error:
+        raise error[0]
 
 
 def _calcular_al_abrir(workbook):

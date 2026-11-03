@@ -10,6 +10,7 @@ from .cambio_hora import hora_mes_correlativa
 from .parametros import (
     COLUMNA_CENTRAL, HOJA_CMG_ORIGEN, HOJA_CPF_HORARIO, HOJA_CSF_HORARIO,
 )
+from .lector import leer_excel
 from .lectura import fila_de_encabezado, leer_hoja_con_fila_vacia
 from .utiles import ErrorEntrada, _entero_a_texto, _texto_seguro
 
@@ -637,7 +638,7 @@ def leer_fd_consolidado(ruta_consolidado, registrar=print, libro=None):
     fuente = ruta_consolidado if libro is None else libro
 
     try:
-        crudo = pd.read_excel(
+        crudo = leer_excel(
             fuente, sheet_name=HOJA_FD_CONSOLIDADO, header=None
         )
     except ValueError as error:

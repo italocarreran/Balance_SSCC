@@ -37,7 +37,7 @@ from .ecostos import (
     SIN_PUESTO_E_COSTOS, TOTALES_E_COSTOS,
 )
 from .factores_subastas import TITULOS_FMA
-from .formato import formatear_libro
+from .formato import FILAS_MUESTRA, formatear_libro
 from .sellos import sellar
 from .unidades import con_unidades
 from .utiles import normalizar
@@ -152,7 +152,9 @@ def _segundos(segundos):
     return f"{segundos:.1f} s".replace(".", ",")
 
 
-def _pegar_en_salida(writer_ruta, ruta_salida, wb_existente, escritas_vacio):
+def _pegar_en_salida(
+    writer_ruta, ruta_salida, wb_existente, escritas_vacio, rellenos=None,
+):
     """
     Pasa las hojas del libro temporal al de salida (xlsx_rapido) y borra
     el temporal. Si el libro existente es otro archivo que el de salida,
@@ -170,7 +172,7 @@ def _pegar_en_salida(writer_ruta, ruta_salida, wb_existente, escritas_vacio):
 
         pegar_hojas(
             ruta_salida, writer_ruta, ORDEN_HOJAS_SALIDA,
-            ignorar=escritas_vacio,
+            ignorar=escritas_vacio, rellenos=rellenos,
         )
     finally:
         Path(writer_ruta).unlink(missing_ok=True)
@@ -514,10 +516,7 @@ def escribir_pagos_bess(
                 escritas.append(HOJA_RESUMEN)
                 # Fila 1 vacia, titulo de cuadro en la 2, encabezado en
                 # la 3 (como PRORRATA_RETIROS).
-                df_resumen.to_excel(
-                    writer, sheet_name=HOJA_RESUMEN, index=False,
-                    startrow=2, startcol=COLUMNA_MARGEN,
-                )
+                _volcar(writer, HOJA_RESUMEN, df_resumen, 2, COLUMNA_MARGEN)
                 writer.sheets[HOJA_RESUMEN].cell(
                     2, COLUMNA_MARGEN + 1,
                     titulo_de_cuadro(1, "recibe, paga y neto por empresa"),
@@ -560,9 +559,8 @@ def escribir_pagos_bess(
                 for df_cuadro, col, titulo in cuadros_compensacion:
                     if df_cuadro is None:
                         continue
-                    df_cuadro.to_excel(
-                        writer, sheet_name=HOJA_COMPENSACION_CENTRAL,
-                        index=False, startrow=2, startcol=col,
+                    _volcar(
+                        writer, HOJA_COMPENSACION_CENTRAL, df_cuadro, 2, col
                     )
                     ws = writer.sheets[HOJA_COMPENSACION_CENTRAL]
                     ws.cell(2, col + 1, titulo)
@@ -588,10 +586,7 @@ def escribir_pagos_bess(
                 for df_cuadro, col, titulo in cuadros:
                     if df_cuadro is None:
                         continue
-                    df_cuadro.to_excel(
-                        writer, sheet_name=HOJA_PRORRATA_RETIROS, index=False,
-                        startrow=2, startcol=col,
-                    )
+                    _volcar(writer, HOJA_PRORRATA_RETIROS, df_cuadro, 2, col)
                     ws = writer.sheets[HOJA_PRORRATA_RETIROS]
                     ws.cell(2, col + 1, titulo)
                     if col in _NOTAS_PRORRATA:
@@ -627,10 +622,13 @@ def escribir_pagos_bess(
             )
             writer.book.calculation.fullCalcOnLoad = True
         crono.tramo("formato (encabezados, anchos, numeros, marco)")
+        filas_rapidas = _rellenos_de(writer.book)
         relleno = _asegurar_una_hoja(writer)
 
     crono.tramo("guardar el archivo temporal")
-    _pegar_en_salida(ruta_temporal, ruta_salida, wb_existente, relleno)
+    _pegar_en_salida(
+        ruta_temporal, ruta_salida, wb_existente, relleno, filas_rapidas
+    )
     crono.tramo("pegar las hojas en el libro")
     # Cuando se escribio cada hoja (ver sellos.py / vigencia.py).
     sellar(ruta_salida, escritas)
@@ -758,13 +756,23 @@ def _terminar_cuadros(
 
     from openpyxl.styles import Alignment, Font, PatternFill
 
+    from .relleno_rapido import plantilla_por_fila
+
     primera, ultima = 4, 3 + filas
+    # En una hoja cortada (ver _volcar) openpyxl solo tiene las primeras
+    # filas: se terminan esas, y lo mismo por fila queda anotado para
+    # relleno_rapido, que escribe todas. Los totales van con el alto real.
+    ultima_esqueleto = 3 + _filas_del_esqueleto(ws, filas)
+    extras = _extras(ws)
     marcador = re.compile(r"\{(\w+)\}")
 
     for clave, plantilla in formulas.items():
         if clave not in letras:
             continue
-        for fila in range(primera, ultima + 1):
+        extras["formulas"][letras[clave]] = plantilla_por_fila(
+            plantilla, letras
+        )
+        for fila in range(primera, ultima_esqueleto + 1):
             ws[f"{letras[clave]}{fila}"].value = marcador.sub(
                 lambda m: f"{letras[m.group(1)]}{fila}", plantilla
             )
@@ -773,7 +781,8 @@ def _terminar_cuadros(
     for clave in sin_puesto:
         if clave not in letras:
             continue
-        for fila in range(primera, ultima + 1):
+        extras["guion"][letras[clave]] = GUION_SIN_PUESTO
+        for fila in range(primera, ultima_esqueleto + 1):
             celda = ws[f"{letras[clave]}{fila}"]
             # pandas deja el vacio como texto vacio, no como None.
             if celda.value is None or celda.value == "":
@@ -801,7 +810,8 @@ def _terminar_cuadros(
             fill_type="solid", start_color=RELLENO_MONTO_DATOS,
             end_color=RELLENO_MONTO_DATOS,
         )
-        for fila in range(primera, ultima + 1):
+        extras["relleno"][letra_monto] = (claro, ultima)
+        for fila in range(primera, ultima_esqueleto + 1):
             ws[f"{letra_monto}{fila}"].fill = claro
 
 
@@ -1023,6 +1033,9 @@ def _respuestas_fd_a_la_izquierda(ws, fila_encabezado=3):
         if str(celda.value or "").startswith(_PREFIJO_RESPUESTA_FD)
     ]
     izquierda = Alignment(horizontal="left")
+    _extras(ws)["izquierda_000"].update(
+        get_column_letter(columna) for columna in columnas
+    )
     for columna in columnas:
         for (celda,) in ws.iter_rows(
             min_row=fila_encabezado + 1, min_col=columna, max_col=columna
@@ -1037,6 +1050,77 @@ def _respuestas_fd_a_la_izquierda(ws, fila_encabezado=3):
 # del usuario): el primer cuadro empieza en la B y entre un cuadro y el
 # siguiente hay UNA columna vacia.
 COLUMNA_MARGEN = 1
+
+
+# Escritura rapida (ver relleno_rapido.py): una tabla de mas de
+# FILAS_MUESTRA filas se escribe con openpyxl solo hasta ahi (el
+# esqueleto, que es la muestra con la que se deciden anchos y formatos)
+# y el resto de sus filas las genera relleno_rapido directo en XML. Con
+# False se escribe todo con openpyxl como antes (lo usa la prueba que
+# compara las dos escrituras celda por celda).
+ESCRITURA_RAPIDA = True
+
+
+def _volcar(writer, hoja, df, startrow, startcol=0):
+    """
+    df.to_excel(writer, hoja, index=False, startrow, startcol), cortado a
+    FILAS_MUESTRA filas si es mas largo (ver ESCRITURA_RAPIDA). Cada
+    tabla queda anotada en la hoja para que relleno_rapido pueda escribir
+    todas las filas de datos de la hoja.
+    """
+
+    cortar = ESCRITURA_RAPIDA and len(df) > FILAS_MUESTRA
+    (df.head(FILAS_MUESTRA) if cortar else df).to_excel(
+        writer, sheet_name=hoja, index=False, startrow=startrow,
+        startcol=startcol,
+    )
+    ws = writer.sheets[hoja]
+    if not hasattr(ws, "_balance_bloques"):
+        ws._balance_bloques = []
+        ws._balance_cortada = False
+        ws._balance_filas_reales = 0
+    ws._balance_bloques.append((startrow + 2, startcol + 1, df))
+    ws._balance_cortada = ws._balance_cortada or cortar
+    ws._balance_filas_reales = max(
+        ws._balance_filas_reales, startrow + 1 + len(df)
+    )
+
+
+def _filas_del_esqueleto(ws, filas):
+    """Cuantas filas de datos tiene la hoja en openpyxl (ver _volcar)."""
+
+    if getattr(ws, "_balance_cortada", False):
+        return min(filas, FILAS_MUESTRA)
+    return filas
+
+
+def _extras(ws):
+    """Lo que los _terminar_* agregan por fila, para relleno_rapido."""
+
+    if not hasattr(ws, "_balance_extras"):
+        ws._balance_extras = {
+            "formulas": {}, "guion": {}, "relleno": {},
+            "izquierda_000": set(),
+        }
+    return ws._balance_extras
+
+
+def _rellenos_de(book):
+    """
+    {hoja: RellenoHoja} de las hojas que se escribieron cortadas, con sus
+    estilos ya registrados en el libro (hay que llamarla antes de que se
+    guarde el libro temporal).
+    """
+
+    from .relleno_rapido import RellenoHoja
+
+    rellenos = {}
+    for ws in book.worksheets:
+        if getattr(ws, "_balance_cortada", False):
+            relleno = RellenoHoja(ws, ws._balance_bloques)
+            relleno.preparar_estilos()
+            rellenos[ws.title] = relleno
+    return rellenos
 
 
 def _escribir_tabla_con_titulo(
@@ -1061,13 +1145,7 @@ def _escribir_tabla_con_titulo(
         startcol=columna_inicio,
     )
 
-    df.to_excel(
-        writer,
-        sheet_name=hoja,
-        index=False,
-        startrow=fila_inicio + 1,
-        startcol=columna_inicio,
-    )
+    _volcar(writer, hoja, df, fila_inicio + 1, columna_inicio)
 
     celda_titulo = writer.sheets[hoja].cell(
         row=fila_inicio + 1, column=columna_inicio + 1
@@ -1356,12 +1434,9 @@ def escribir_salida(
             if df_subastas is not None:
                 # Fila 1 vacia, titulo de cuadro en la 2, encabezado en
                 # la 3 (como PRORRATA_RETIROS).
-                subastas_para_hoja(df_subastas).to_excel(
-                    writer,
-                    sheet_name=HOJA_SUBASTAS,
-                    index=False,
-                    startrow=2,
-                    startcol=COLUMNA_MARGEN,
+                _volcar(
+                    writer, HOJA_SUBASTAS, subastas_para_hoja(df_subastas), 2,
+                    COLUMNA_MARGEN,
                 )
                 writer.sheets[HOJA_SUBASTAS].cell(
                     2, COLUMNA_MARGEN + 1,
@@ -1407,10 +1482,13 @@ def escribir_salida(
         if HOJA_FD in regenerar and HOJA_FD in writer.sheets:
             _respuestas_fd_a_la_izquierda(writer.sheets[HOJA_FD])
         crono.tramo("formato (encabezados, anchos, numeros, marco)")
+        filas_rapidas = _rellenos_de(writer.book)
         relleno = _asegurar_una_hoja(writer)
 
     crono.tramo("guardar el archivo temporal")
-    _pegar_en_salida(ruta_temporal, ruta_salida, wb_existente, relleno)
+    _pegar_en_salida(
+        ruta_temporal, ruta_salida, wb_existente, relleno, filas_rapidas
+    )
     crono.tramo("pegar las hojas en el libro")
     crono.total()
     # Cuando se escribio cada hoja (ver sellos.py / vigencia.py).

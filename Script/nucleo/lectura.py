@@ -11,6 +11,7 @@ from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_MEDIDAS_SAE, ARCHIVO_SALIDA, COLUMNAS_AI,
     HOJA_CENTRALES, HOJA_DICCIONARIO, HOJA_MEDIDAS_SAE, HOJA_RESUMEN_BESS,
 )
+from .lector import leer_excel
 from .unidades import sin_unidad, sin_unidades
 from .utiles import ErrorEntrada, _texto_seguro, _tiene_valor, normalizar
 
@@ -260,8 +261,8 @@ def leer_hoja_con_fila_vacia(fuente, hoja, **opciones):
     columna A de margen (sin_margen_izquierdo).
     """
 
-    arriba = pd.read_excel(fuente, sheet_name=hoja, header=None, nrows=4)
-    return sin_unidades(sin_margen_izquierdo(pd.read_excel(
+    arriba = leer_excel(fuente, sheet_name=hoja, header=None, nrows=4)
+    return sin_unidades(sin_margen_izquierdo(leer_excel(
         fuente, sheet_name=hoja, header=fila_de_encabezado(arriba),
         **opciones,
     )), hoja)
@@ -288,7 +289,7 @@ def leer_tabla_bajo_titulo(fuente, hoja, crudo, columna, ancho, fila_titulo=0):
         for i in range(ancho)
     ]
 
-    datos = pd.read_excel(
+    datos = leer_excel(
         fuente, sheet_name=hoja, header=None, skiprows=fila_titulo + 2,
         usecols=list(range(columna, columna + ancho)),
     )
@@ -325,7 +326,7 @@ def leer_centrales_planilla(ruta_salida, libro=None):
         fuente = ruta_salida
 
     try:
-        crudo = pd.read_excel(fuente, sheet_name=HOJA_CENTRALES, header=None)
+        crudo = leer_excel(fuente, sheet_name=HOJA_CENTRALES, header=None)
     except ValueError:
         return None
 

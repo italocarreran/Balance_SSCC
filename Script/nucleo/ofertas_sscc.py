@@ -12,6 +12,7 @@ from .lectura import (
     ROL_BALANCE_BESS, ROL_OFERTAS, ROL_SUBASTAS, filas_diccionario,
     fila_de_titulos,
 )
+from .lector import leer_excel
 from .parametros import COLUMNA_CENTRAL, HOJA_OFERTAS_SSCC, INICIO_VENTANA
 from .utiles import (
     ErrorEntrada, _es_numero, _texto_seguro, _tiene_valor, _valor_clave,
@@ -151,7 +152,7 @@ def construir_resumen_ofertas_sscc(ruta_ofertas, registrar=print):
     Devuelve un DataFrame ordenado por Nombre, Año, Mes, Día.
     """
 
-    hojas = pd.read_excel(ruta_ofertas, sheet_name=None, header=None)
+    hojas = leer_excel(ruta_ofertas, sheet_name=None, header=None)
 
     grupos = {}
     datos_grupo = {}
@@ -162,7 +163,29 @@ def construir_resumen_ofertas_sscc(ruta_ofertas, registrar=print):
         if df_hoja.shape[0] < 2 or df_hoja.shape[1] < 9:
             continue
 
-        for _, fila in df_hoja.iloc[1:, 0:9].iterrows():
+        # El archivo trae todas las centrales del sistema: se filtra de
+        # una vez (mismas funciones que abajo, una vez por valor
+        # distinto) y se recorre fila por fila solo lo que queda. Antes
+        # se recorrian todas con iterrows.
+        datos = df_hoja.iloc[1:, 0:9]
+        memoria = {}
+
+        def pasa(valor, prueba):
+            clave = (prueba, type(valor), valor)
+            try:
+                return memoria[clave]
+            except KeyError:
+                resultado = memoria[clave] = prueba(_texto_seguro(valor))
+                return resultado
+            except TypeError:
+                return prueba(_texto_seguro(valor))
+
+        candidatas = (
+            datos.iloc[:, 0].map(lambda v: pasa(v, _contiene_bess_o_sae))
+            & datos.iloc[:, 7].map(lambda v: pasa(v, _servicio_termina_en_rs))
+        ).astype(bool)
+
+        for _, fila in datos[candidatas].iterrows():
 
             nombre = _texto_seguro(fila.iloc[0])
             anio, mes, dia = fila.iloc[1], fila.iloc[2], fila.iloc[3]
@@ -845,7 +868,7 @@ def leer_ofertas_sscc_consolidado(ruta_consolidado, registrar=print, libro=None)
     fuente = ruta_consolidado if libro is None else libro
 
     try:
-        crudo = pd.read_excel(
+        crudo = leer_excel(
             fuente, sheet_name=HOJA_OFERTAS_SSCC, header=None
         )
     except ValueError as error:

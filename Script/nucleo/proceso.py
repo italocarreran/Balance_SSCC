@@ -34,6 +34,7 @@ from .lectura import (
     leer_hoja_con_fila_vacia, leer_medidas_sae, obtener_centrales,
     fila_de_encabezado, sin_margen_izquierdo,
 )
+from .lector import abrir_excel, leer_excel
 from .unidades import sin_unidades
 from .medidores import (
     completar_ofertas_en_medidores, construir_medidores,
@@ -464,7 +465,7 @@ def _leer_entradas_del_consolidado(
 
     ruta_salida = Path(ruta_salida)
 
-    with pd.ExcelFile(ruta_salida) as libro:
+    with abrir_excel(ruta_salida) as libro:
 
         registrar(f"Leyendo hoja 'Medidores' de {ruta_salida.name}...")
 
@@ -838,11 +839,11 @@ def generar_pagos_bess(
                 # Calculo E Costos: fila 1 vacia, "Cuadro N°" en la 2 y
                 # nombres en la 3. Calculo RE545 (y un E Costos de
                 # antes): grupos en la 1 y nombres en la 2.
-                arriba = pd.read_excel(
+                arriba = leer_excel(
                     rutas["salida"], sheet_name=nombre, header=None, nrows=4
                 )
                 fila = fila_de_encabezado(arriba) or 1
-                return sin_unidades(sin_margen_izquierdo(pd.read_excel(
+                return sin_unidades(sin_margen_izquierdo(leer_excel(
                     rutas["salida"], sheet_name=nombre, header=fila
                 )), nombre)
             except (FileNotFoundError, ValueError) as error:

@@ -296,12 +296,25 @@ def formatear_hoja(ws, fila_encabezado=1, fila_titulos_cuadro=None):
 
     _alto_fijo_encabezado(ws, fila_encabezado)
 
+    # Lo que se decidio, para relleno_rapido (que escribe las filas de
+    # datos de las hojas grandes con estas mismas reglas). La hoja puede
+    # ser un esqueleto con las primeras filas: el tope de celdas se mide
+    # con el alto real (_balance_filas_reales).
+    ws._balance_formato = {
+        "fila_encabezado": fila_encabezado,
+        "formatos": formatos,
+        "tabla_de": _tablas_contiguas(columnas_tabla),
+        "con_formato": False,
+    }
+
     if not columnas_tabla:
         return
 
-    celdas = (ws.max_row - fila_encabezado) * len(columnas_tabla)
+    alto = getattr(ws, "_balance_filas_reales", None) or ws.max_row
+    celdas = (max(alto, ws.max_row) - fila_encabezado) * len(columnas_tabla)
     if celdas > MAXIMO_CELDAS_FORMATO:
         return
+    ws._balance_formato["con_formato"] = True
 
     # Una pasada por los datos: formato de numero y, para el marco, la
     # ultima fila con dato de cada tabla (las tablas de una hoja tienen

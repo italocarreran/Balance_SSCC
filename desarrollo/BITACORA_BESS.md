@@ -5701,3 +5701,40 @@ el fondo sin el texto. `formato._alto_fijo_encabezado` le pone un alto fijo
 (15 pt por línea, según el nombre más largo, el ancho de su columna y los
 saltos de línea; tope 5 líneas). No se pudo reproducir en este entorno (no
 hay Excel): queda por confirmar con el usuario.
+
+## 2026-11-03 (15) — Rendimiento: escritura rápida, lector calamine, RE545 y Ofertas
+
+Pedido del usuario: "mucho más rápido [...] que no cague la planilla, mismos
+resultados". Tiempos del usuario (mes real, 37.388 filas): entradas 1 min
+27 s, cálculo 4 min 29 s (escritura 195 s, de ella formato 63 s y guardar
+89 s; Ofertas 36 s; RE545 27 + 12 s).
+
+- **Escritura** (`relleno_rapido.py` + `escritura._volcar` +
+  `xlsx_rapido._partir_para_relleno`): toda tabla de más de FILAS_MUESTRA
+  filas se escribe con openpyxl solo hasta ahí (el esqueleto: encabezados,
+  formato, comentarios, anchos, totales, con el código de siempre y la misma
+  muestra) y sus filas de datos las genera `RellenoHoja` directo en XML con
+  las mismas reglas (pandas + openpyxl + formatear_hoja + `_terminar_*`),
+  ya con los estilos del libro final, en el momento de pegar. Medido con
+  datos de tamaño real: escribir el libro de cálculo 387 s → 11 s (mismo
+  tamaño de archivo, compresión de siempre). `test_relleno_rapido`: el libro
+  sale igual celda por celda (valor, formato, fuente, relleno, borde,
+  alineación, comentario, combinadas, panel, anchos, altos) que con
+  `ESCRITURA_RAPIDA = False`; se comprobó que la prueba falla si se rompe el
+  relleno.
+- **Lectura** (`lector.py`): motor calamine de pandas (python-calamine,
+  agregado a requirements.txt) para Balance_BESS.xlsx, Ofertas y Prorrata;
+  verificado idéntico (valores y tipos) hoja por hoja; 4-6× más rápido. SOC,
+  Medidas_SAE y SSCC_Desempeño (fechas de otros sistemas) siguen con
+  openpyxl. Sin python-calamine instalado, todo con openpyxl como antes.
+- **Ofertas**: se filtra BESS/SAE/BAT y _RS de una vez antes de recorrer
+  fila por fila (antes `iterrows` sobre todas las centrales del sistema).
+  194 mil filas: 18 s → 2,6 s, resultado idéntico (valores y tipos).
+- **RE545**: `calcular_s_re545` vectorizado (14 s → 0,14 s) y
+  `calcular_bk_bl_bm_bs_re545` con listas y memoria de `_normaliza_valor_vba`
+  (Componentes 34 s → 1,8 s); idénticos fila por fila (incl. vacíos y
+  empates).
+- Comentarios con la fórmula de prueba: en español y con ";".
+
+**Verificación:** 328 pruebas (19 salteadas en el entorno sin tkinter; 0 en
+el de ventana, que además no tiene calamine y prueba el respaldo).
