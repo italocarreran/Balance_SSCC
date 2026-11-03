@@ -30,6 +30,31 @@ Referencia: hoja actual (margen en A; grupos en la fila 1, nombres en la 2).
    | AT / AU Asignación Descarga / Carga | Pmax (MW) (Centrales, Cuadro 1) | ídem, con la energía ajustada FD-prorrata |
    | AD:AI Prorratas | Subastas, Cuadro 1 | no se copian: por central y Hora mes, filas de Subastas de cada servicio / total (la fila suma 1) |
 
+## Propuesta de orden (en revisión con el usuario)
+
+Orden del cálculo nuevo: info traída → energía ajustada FD-prorrata →
+Componente 1; Componente 2 aparte (energía medida, sin FD); monto = C1 − C2.
+
+- **Cuadro 1 — Información y energía con FD-prorrata:** Mes, Dia, Hora, Hora
+  mes, Minuto, Bloque horario, Configuracion, Barra, Descarga, Carga, SoC,
+  Ciclo de Carga del mes, CMg, Adj SSCC · Prorratas CPF(-), CSF(-), CPF(+),
+  CSF(+) · FD CPF(-), CSF(-), CPF(+), CSF(+) · Descarga / Carga ajustada
+  FD-prorrata.
+- **Cuadro 2 — Componente 1:** ranking cmg, Bloque ordenado, Bloque Mes
+  Descarga, Curva monótona CMg Descarga, Bloque Mes Carga, Curva monótona
+  CMg Carga · Energía SSCC (descargada/cargada con FD) por remunerar ·
+  Asignación Descarga / Carga · Valorización Descarga / Carga · Total C1.
+- **Cuadro 3 — Componente 2 y monto:** Valorizacion Descarga / Carga ·
+  Total C2 · Monto a compensar.
+
+Columnas que se calculan pero NO llegan al monto (método anterior):
+SoC sobre el minimo (M), Energía SSCC (-)/(+) por remunerar (N/O, sin FD),
+Energía descargada / cargada (AE/AF, reparto en Pmax de N/O). Opciones:
+quitarlas o dejarlas en un cuadro 4 "Método anterior (sin FD)". Pendiente.
+
+Opcional: inmovilizar las primeras columnas (Configuracion, Bloque horario)
+para no perder la fila al ir a los cuadros 2 y 3.
+
 ## En evaluación
 
 - Separar la hoja en ~3 cuadros (el primero con la información traída de
