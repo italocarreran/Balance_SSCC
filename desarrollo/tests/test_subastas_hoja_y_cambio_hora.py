@@ -51,9 +51,11 @@ class TestHojaSubastas(unittest.TestCase):
             # Fila 1 vacia, titulo de cuadro en la 2, encabezado en la 3.
             hoja = openpyxl.load_workbook(ruta)["Subastas"]
             self.assertTrue(all(c.value is None for c in hoja[1]))
-            self.assertTrue(str(hoja["A2"].value).startswith("Cuadro N° 1"))
-            self.assertEqual(hoja["A2"].alignment.horizontal, "left")
-            encabezado = [c.value for c in hoja[3]]
+            # Columna A de margen: el cuadro empieza en la B.
+            self.assertTrue(str(hoja["B2"].value).startswith("Cuadro N° 1"))
+            self.assertEqual(hoja["B2"].alignment.horizontal, "left")
+            self.assertTrue(all(c.value is None for c in hoja["A"]))
+            encabezado = [c.value for c in hoja[3]][1:]
             leida = nucleo.leer_hoja_con_fila_vacia(ruta, "Subastas")
 
         for auxiliar in ("Control", "Sub_Baj", "Clave horaria", "Ciclo"):

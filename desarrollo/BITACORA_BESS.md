@@ -5453,3 +5453,38 @@ Pedido del usuario:
 **Verificación:** pruebas ajustadas (`test_compensacion_central`,
 `test_subastas_hoja_y_cambio_hora`, lecturas del Resumen). 307 pruebas, 17
 salteadas.
+
+## 2026-11-03 (4) — Mismo formato en todas las hojas de la planilla
+
+Pedido del usuario: en todas las hojas, fila 1 vacía y `Cuadro N° …` en la
+fila 2 (sin fondo, letra azul, a la izquierda), columna A de margen (el primer
+cuadro empieza en la B) y **una** columna vacía entre cuadros.
+
+- Nuevas con título de cuadro: `Medidores`, `CMg`, `FD` (CSF y CPF),
+  `Ofertas SSCC` (títulos sin el paréntesis "equivalente a …"), `Centrales`
+  (`Cuadro N° 1 — Resumen BESS`, `Cuadro N° 2 — Diccionario`).
+- Margen en A en todas: también `Calculo E Costos` / `Calculo RE545` (sin
+  título de cuadro, siguen con encabezados de grupo en la fila 1),
+  `Subastas`, `Resumen`, `FMA`. `escritura.COLUMNA_MARGEN`;
+  `_escribir_tabla_con_titulo` separa con una columna (antes dos).
+  PRORRATA_RETIROS queda `B:C`, `E:H`, `J:K` (comentarios ahora en `H3` y
+  `K3`). `Control_corrida.xlsx` no cambia.
+- Centrales: el Diccionario se escribe sin sus filas vacías de arriba, así
+  sus encabezados caen en la fila de encabezados (antes la primera fila de
+  la tabla salía vacía y los encabezados como dato). No cambia ninguna
+  lectura: la fila de encabezados del Diccionario se busca.
+- FD: `Central` es la primera columna de cada bloque (la lectura la vuelve a
+  dejar al final, como espera el resto); las columnas `Respuesta …` (antes F,
+  S y T) van a la izquierda con formato `0.00`; las unidades sin central en
+  el Diccionario de la hoja Centrales **no se traen** (antes se avisaba y
+  quedaban con `Central` vacía).
+- Lecturas: `lectura.fila_de_encabezado` (salta la fila vacía y la de
+  "Cuadro N°"), `leer_hoja_con_fila_vacia` y `sin_margen_izquierdo` (quita la
+  columna A vacía). Ofertas, Centrales y FMA buscan los títulos en la fila 2
+  o, en un libro de antes, en la 1, y aceptan también los títulos de antes.
+
+**Verificación:** pruebas de formato ajustadas (FD, Subastas, FMA,
+PRORRATA_RETIROS, Calculo E Costos). Corrida de punta a punta con todas las
+hojas de entrada reescritas en el formato nuevo: Calculo E Costos, Calculo
+RE545, COMPENSACION_CENTRAL, PRORRATA_RETIROS y Resumen dan idénticos al
+libro de antes. 307 pruebas, 17 salteadas.

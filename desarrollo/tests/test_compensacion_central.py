@@ -289,13 +289,14 @@ class TestFormatoDeLasHojas(unittest.TestCase):
             self.assertEqual(prorrata.row_dimensions[1].height, 14.5)
             self.assertEqual(prorrata.row_dimensions[2].height, 14.5)
             combinadas = {str(r) for r in prorrata.merged_cells.ranges}
-            self.assertEqual(combinadas, {"B2:C2", "F2:I2", "L2:M2"})
+            # Una columna de separacion entre cuadros.
+            self.assertEqual(combinadas, {"B2:C2", "E2:H2", "J2:K2"})
             titulo = prorrata["B2"]
             self.assertEqual(titulo.font.color.rgb[-6:], "244062")
             self.assertIsNone(titulo.fill.fill_type)
             self.assertEqual(prorrata["B3"].fill.fill_type, "solid")
-            self.assertIn("Pago(e,q)", prorrata["I3"].comment.text)
-            self.assertIn("Total(e)", prorrata["M3"].comment.text)
+            self.assertIn("Pago(e,q)", prorrata["H3"].comment.text)
+            self.assertIn("Total(e)", prorrata["K3"].comment.text)
             # La columna del cuarto de hora queda al ancho de su nombre.
             self.assertLess(prorrata.column_dimensions["B"].width, 20)
 

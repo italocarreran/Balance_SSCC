@@ -211,15 +211,18 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
 
             # nombres de columna en fila 2, en negrita y con el panel
             # inmovilizado justo debajo
-            self.assertTrue(ws.cell(2, 1).font.bold)
+            # (columna A de margen: la tabla empieza en la B)
+            self.assertIsNone(ws.cell(2, 1).value)
+            self.assertTrue(ws.cell(2, 2).font.bold)
             self.assertEqual(ws.freeze_panes, "A3")
 
             # ancho de columna puesto (pandas no pone ninguno)
             self.assertIsNotNone(ws.column_dimensions["A"].width)
 
             # y los datos son los mismos
-            df = pd.read_excel(ruta, sheet_name=nucleo.HOJA_CALCULO_ECOSTOS,
-                               header=1)
+            df = nucleo.sin_margen_izquierdo(pd.read_excel(
+                ruta, sheet_name=nucleo.HOJA_CALCULO_ECOSTOS, header=1
+            ))
             self.assertEqual(list(df["Descarga kWh"]), [1.5, 2.5, 3.5])
             self.assertEqual(list(df["Configuracion"]), ["SAE UNO"] * 3)
 
@@ -290,7 +293,9 @@ class TestUnaSolaPlanilla(unittest.TestCase):
 
             # El calculo no se llevo puestas las entradas...
             self.assertEqual(
-                len(pd.read_excel(ruta, sheet_name=nucleo.HOJA_MEDIDORES)), 2
+                len(nucleo.leer_hoja_con_fila_vacia(
+                    ruta, nucleo.HOJA_MEDIDORES
+                )), 2
             )
 
             # ...ni las entradas se llevan puesto el calculo.

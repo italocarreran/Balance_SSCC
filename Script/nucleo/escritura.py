@@ -34,13 +34,15 @@ from .factores_subastas import TITULOS_FMA
 from .formato import formatear_libro
 from .sellos import sellar
 from .hojas_entrada import fd_para_hoja, subastas_para_hoja
-from .lectura import TITULO_CENTRALES_DICCIONARIO, TITULO_CENTRALES_RESUMEN
+from .lectura import (
+    TITULO_CENTRALES_DICCIONARIO, TITULO_CENTRALES_RESUMEN, titulo_de_cuadro,
+)
 from .ofertas_sscc import (
     HOJA_OFERTAS_SSCC, TITULO_OFERTAS_POR_DIA, TITULO_RESUMEN_VENTANA,
 )
 from .parametros import (
     HOJA_ALERTAS, HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545, HOJA_CENTRALES,
-    HOJA_CMG, HOJA_FMA,
+    COLUMNA_CENTRAL, HOJA_CMG, HOJA_FMA,
     HOJA_COMPENSACION_CENTRAL, HOJA_EJECUCION, HOJA_FD, HOJA_LOG,
     HOJA_MEDIDORES, HOJA_PRORRATA_RETIROS, HOJA_RESUMEN, HOJA_SUBASTAS,
     ORDEN_HOJAS_CONTROL, ORDEN_HOJAS_SALIDA,
@@ -214,11 +216,14 @@ _FILAS_ENCABEZADO = {
     HOJA_CALCULO_RE545: 2,
     HOJA_PRORRATA_RETIROS: 3,
     HOJA_COMPENSACION_CENTRAL: 3,
-    HOJA_OFERTAS_SSCC: 2,
-    HOJA_CENTRALES: 2,
+    HOJA_OFERTAS_SSCC: 3,
+    HOJA_CENTRALES: 3,
     HOJA_FMA: 3,
     HOJA_SUBASTAS: 3,
     HOJA_RESUMEN: 3,
+    HOJA_MEDIDORES: 3,
+    HOJA_CMG: 3,
+    HOJA_FD: 3,
 }
 
 # Hojas con varios cuadros lado a lado y el titulo de cada uno en esta
@@ -230,20 +235,25 @@ _FILAS_TITULO_CUADRO = {
     HOJA_FMA: 2,
     HOJA_SUBASTAS: 2,
     HOJA_RESUMEN: 2,
+    HOJA_MEDIDORES: 2,
+    HOJA_CMG: 2,
+    HOJA_FD: 2,
+    HOJA_OFERTAS_SSCC: 2,
+    HOJA_CENTRALES: 2,
 }
 
 # Comentario con la formula en el nombre de la columna de plata de los
 # cuadros 2 y 3 de PRORRATA_RETIROS (clave: la columna donde arranca el
 # cuadro, como en la lista de cuadros de escribir_pagos_bess).
 _NOTAS_PRORRATA = {
-    5: (
+    4: (
         "Pago(e,q) = M(q) × p(e,q) / Σ_k p(k,q)\n\n"
         "M(q): monto a compensar del cuarto de hora q (Cuadro N° 1)\n"
         "p(e,q): prorrata de la empresa e en el cuarto q\n"
         "Σ_k p(k,q): suma de las prorratas del cuarto q (= 1 si viene "
         "normalizada)"
     ),
-    11: (
+    9: (
         "Total(e) = Σ_q Pago(e,q)\n\n"
         "Suma de lo que paga la empresa e en todos los cuartos de hora "
         "del mes (Cuadro N° 2)"
@@ -365,7 +375,7 @@ def escribir_control(
                 _escribir_tabla_con_titulo(
                     writer, HOJA_EJECUCION, manifiesto,
                     "Entradas de esta corrida (sha256 del contenido)",
-                    fila_inicio=len(filas) + 3,
+                    fila_inicio=len(filas) + 3, columna_inicio=0,
                 )
 
             registro.tabla().to_excel(
@@ -476,10 +486,11 @@ def escribir_pagos_bess(
                 # la 3 (como PRORRATA_RETIROS).
                 df_resumen.to_excel(
                     writer, sheet_name=HOJA_RESUMEN, index=False,
-                    startrow=2,
+                    startrow=2, startcol=COLUMNA_MARGEN,
                 )
                 writer.sheets[HOJA_RESUMEN].cell(
-                    2, 1, "Cuadro N° 1 — recibe, paga y neto por empresa"
+                    2, COLUMNA_MARGEN + 1,
+                    titulo_de_cuadro(1, "recibe, paga y neto por empresa"),
                 )
         else:
             _preservar_o_avisar(writer, HOJA_RESUMEN)
@@ -497,11 +508,13 @@ def escribir_pagos_bess(
                     sheet_name=HOJA_CALCULO_ECOSTOS,
                     index=False,
                     startrow=1,
+                    startcol=COLUMNA_MARGEN,
                 )
                 _escribir_encabezados_grupo(
                     writer.sheets[HOJA_CALCULO_ECOSTOS],
                     COLUMNAS_SALIDA_E_COSTOS,
                     GRUPOS_CALCULO_E_COSTOS,
+                    columna_inicio=COLUMNA_MARGEN + 1,
                 )
         else:
             _preservar_o_avisar(writer, HOJA_CALCULO_ECOSTOS)
@@ -514,11 +527,13 @@ def escribir_pagos_bess(
                     sheet_name=HOJA_CALCULO_RE545,
                     index=False,
                     startrow=1,
+                    startcol=COLUMNA_MARGEN,
                 )
                 _escribir_encabezados_grupo(
                     writer.sheets[HOJA_CALCULO_RE545],
                     COLUMNAS_SALIDA_RE545,
                     GRUPOS_CALCULO_RE545,
+                    columna_inicio=COLUMNA_MARGEN + 1,
                 )
 
                 if df_resumen_re545 is not None:
@@ -535,7 +550,7 @@ def escribir_pagos_bess(
                         sheet_name=HOJA_CALCULO_RE545,
                         index=False,
                         startrow=1,
-                        startcol=len(df_re545.columns) + 1,
+                        startcol=COLUMNA_MARGEN + len(df_re545.columns) + 1,
                     )
         else:
             _preservar_o_avisar(writer, HOJA_CALCULO_RE545)
@@ -577,9 +592,9 @@ def escribir_pagos_bess(
                 cuadros = [
                     (df_compensacion_cuarto, 1,
                      "Cuadro N° 1 — monto a compensar por cuarto de hora"),
-                    (df_prorrata_retiros, 5,
+                    (df_prorrata_retiros, 4,
                      "Cuadro N° 2 — reparto del monto del cuarto según la prorrata"),
-                    (df_pagos_suministrador, 11,
+                    (df_pagos_suministrador, 9,
                      "Cuadro N° 3 — total a pagar de cada empresa"),
                 ]
                 for df_cuadro, col, titulo in cuadros:
@@ -636,8 +651,50 @@ def escribir_pagos_bess(
 
 
 
+def _central_primero(df):
+    """El bloque FD con la columna 'Central' al inicio (si la trae)."""
+
+    if df is None or COLUMNA_CENTRAL not in df.columns:
+        return df
+    orden = [COLUMNA_CENTRAL] + [c for c in df.columns if c != COLUMNA_CENTRAL]
+    # Por posicion: el bloque puede traer nombres repetidos.
+    posiciones = [list(df.columns).index(COLUMNA_CENTRAL)] + [
+        i for i, c in enumerate(df.columns) if c != COLUMNA_CENTRAL
+    ]
+    return df.iloc[:, posiciones].set_axis(orden, axis=1)
+
+
+# Columnas de la hoja FD que van alineadas a la izquierda y con dos
+# decimales (texto y numeros, pedido del usuario): las de respuesta.
+_PREFIJO_RESPUESTA_FD = "Respuesta"
+
+
+def _respuestas_fd_a_la_izquierda(ws, fila_encabezado=3):
+    from openpyxl.styles import Alignment
+
+    columnas = [
+        celda.column for celda in ws[fila_encabezado]
+        if str(celda.value or "").startswith(_PREFIJO_RESPUESTA_FD)
+    ]
+    izquierda = Alignment(horizontal="left")
+    for columna in columnas:
+        for (celda,) in ws.iter_rows(
+            min_row=fila_encabezado + 1, min_col=columna, max_col=columna
+        ):
+            if celda.value is None:
+                continue
+            celda.alignment = izquierda
+            celda.number_format = "0.00"
+
+
+# Toda hoja de la planilla deja la columna A vacia, de margen (pedido
+# del usuario): el primer cuadro empieza en la B y entre un cuadro y el
+# siguiente hay UNA columna vacia.
+COLUMNA_MARGEN = 1
+
+
 def _escribir_tabla_con_titulo(
-    writer, hoja, df, titulo, fila_inicio=0, columna_inicio=0
+    writer, hoja, df, titulo, fila_inicio=0, columna_inicio=COLUMNA_MARGEN
 ):
     """
     Escribe 'titulo' en una fila y 'df' (con su propio encabezado)
@@ -674,8 +731,8 @@ def _escribir_tabla_con_titulo(
     # Debajo: +1 titulo, +1 encabezado de df, +len(df) filas, +2 de separacion.
     fila_siguiente = fila_inicio + len(df) + 4
 
-    # Al lado: +len(df.columns) del bloque, +2 columnas de separacion.
-    columna_siguiente = columna_inicio + len(df.columns) + 2
+    # Al lado: +len(df.columns) del bloque, +1 columna de separacion.
+    columna_siguiente = columna_inicio + len(df.columns) + 1
 
     return fila_siguiente, columna_siguiente
 
@@ -744,21 +801,27 @@ def _escribir_hoja_centrales(writer, resumen, diccionario):
     vuelve a leer: las dos puntas se mueven juntas.
     """
 
+    # Fila 1 vacia, "Cuadro N° ..." en la 2 y encabezados en la 3.
     _, columna = _escribir_tabla_con_titulo(
         writer, HOJA_CENTRALES, resumen, TITULO_CENTRALES_RESUMEN,
+        fila_inicio=1,
     )
 
     pd.DataFrame([[TITULO_CENTRALES_DICCIONARIO]]).to_excel(
         writer, sheet_name=HOJA_CENTRALES, index=False, header=False,
-        startrow=0, startcol=columna,
-    )
-    writer.sheets[HOJA_CENTRALES].cell(
-        row=1, column=columna + 1
-    ).font = Font(bold=True)
-
-    diccionario.to_excel(
-        writer, sheet_name=HOJA_CENTRALES, index=False, header=False,
         startrow=1, startcol=columna,
+    )
+
+    # El Diccionario real empieza con una fila vacia (sus encabezados
+    # van en la 2): sin ella, los encabezados quedan en la fila de
+    # encabezados de la hoja y no como primera fila de datos. Quitar
+    # filas vacias de arriba no cambia ninguna lectura (la fila de
+    # encabezados del Diccionario se busca, ver encabezado_diccionario).
+    con_algo = diccionario.notna().any(axis=1).to_numpy()
+    primera = int(con_algo.argmax()) if con_algo.any() else 0
+    diccionario.iloc[primera:].to_excel(
+        writer, sheet_name=HOJA_CENTRALES, index=False, header=False,
+        startrow=2, startcol=columna,
     )
 
 
@@ -863,17 +926,16 @@ def escribir_salida(
     with pd.ExcelWriter(ruta_temporal, engine="openpyxl") as writer:
 
         if HOJA_MEDIDORES in regenerar:
-            df.to_excel(
-                writer,
-                sheet_name=HOJA_MEDIDORES,
-                index=False,
+            _escribir_tabla_con_titulo(
+                writer, HOJA_MEDIDORES, df,
+                titulo_de_cuadro(1, "Medidores"), fila_inicio=1,
             )
         else:
             _preservar_o_avisar(writer, HOJA_MEDIDORES)
 
         if HOJA_OFERTAS_SSCC in regenerar:
 
-            columna = 0
+            columna = COLUMNA_MARGEN
 
             if df_wxy is not None:
                 _, columna = _escribir_tabla_con_titulo(
@@ -881,6 +943,7 @@ def escribir_salida(
                     HOJA_OFERTAS_SSCC,
                     df_wxy,
                     TITULO_OFERTAS_POR_DIA,
+                    fila_inicio=1,
                     columna_inicio=columna,
                 )
 
@@ -890,6 +953,7 @@ def escribir_salida(
                     HOJA_OFERTAS_SSCC,
                     df_resumen_ventana,
                     TITULO_RESUMEN_VENTANA,
+                    fila_inicio=1,
                     columna_inicio=columna,
                 )
         else:
@@ -897,10 +961,10 @@ def escribir_salida(
 
         if HOJA_CMG in regenerar:
             if df_cmg is not None:
-                df_cmg.to_excel(
-                    writer,
-                    sheet_name=HOJA_CMG,
-                    index=False,
+                _escribir_tabla_con_titulo(
+                    writer, HOJA_CMG, df_cmg,
+                    titulo_de_cuadro(1, "Costo marginal por barra"),
+                    fila_inicio=1,
                 )
         else:
             _preservar_o_avisar(writer, HOJA_CMG)
@@ -909,23 +973,24 @@ def escribir_salida(
 
             # Sin las auxiliares (id y la copia de Hora Mes, ver
             # fd_para_hoja) y con una sola columna vacia entre CSF y CPF.
-            hoja_csf = fd_para_hoja(df_fd_csf)
-            hoja_cpf = fd_para_hoja(df_fd_cpf)
+            # 'Central' va primera en cada bloque (la lectura la vuelve
+            # a dejar al final). Fila 1 vacia, "Cuadro N° ..." en la 2.
+            hoja_csf = _central_primero(fd_para_hoja(df_fd_csf))
+            hoja_cpf = _central_primero(fd_para_hoja(df_fd_cpf))
 
             if hoja_csf is not None:
-                hoja_csf.to_excel(
-                    writer,
-                    sheet_name=HOJA_FD,
-                    index=False,
-                    startcol=0,
+                _escribir_tabla_con_titulo(
+                    writer, HOJA_FD, hoja_csf,
+                    titulo_de_cuadro(1, "FD CSF"), fila_inicio=1,
                 )
 
             if hoja_cpf is not None:
-                hoja_cpf.to_excel(
-                    writer,
-                    sheet_name=HOJA_FD,
-                    index=False,
-                    startcol=(
+                _escribir_tabla_con_titulo(
+                    writer, HOJA_FD, hoja_cpf,
+                    titulo_de_cuadro(2 if hoja_csf is not None else 1,
+                                     "FD CPF"),
+                    fila_inicio=1,
+                    columna_inicio=COLUMNA_MARGEN + (
                         len(hoja_csf.columns) + 1 if hoja_csf is not None
                         else 0
                     ),
@@ -942,16 +1007,18 @@ def escribir_salida(
                     sheet_name=HOJA_SUBASTAS,
                     index=False,
                     startrow=2,
+                    startcol=COLUMNA_MARGEN,
                 )
                 writer.sheets[HOJA_SUBASTAS].cell(
-                    2, 1, "Cuadro N° 1 — subastas adjudicadas del periodo"
+                    2, COLUMNA_MARGEN + 1,
+                    titulo_de_cuadro(1, "subastas adjudicadas del periodo"),
                 )
         else:
             _preservar_o_avisar(writer, HOJA_SUBASTAS)
 
         if HOJA_FMA in regenerar:
             if tablas_fma is not None:
-                columna = 0
+                columna = COLUMNA_MARGEN
                 for clave, titulo in TITULOS_FMA.items():
                     tabla = tablas_fma.get(clave)
                     # Fila 1 vacia, "Cuadro N° ..." en la 2 (como
@@ -982,6 +1049,8 @@ def escribir_salida(
         formatear_libro(
             writer.book, _FILAS_ENCABEZADO, _FILAS_TITULO_CUADRO
         )
+        if HOJA_FD in regenerar and HOJA_FD in writer.sheets:
+            _respuestas_fd_a_la_izquierda(writer.sheets[HOJA_FD])
         crono.tramo("formato (encabezados, anchos, numeros, marco)")
         relleno = _asegurar_una_hoja(writer)
 

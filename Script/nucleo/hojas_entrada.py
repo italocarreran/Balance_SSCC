@@ -10,6 +10,7 @@ from .cambio_hora import hora_mes_correlativa
 from .parametros import (
     COLUMNA_CENTRAL, HOJA_CMG_ORIGEN, HOJA_CPF_HORARIO, HOJA_CSF_HORARIO,
 )
+from .lectura import fila_de_encabezado, leer_hoja_con_fila_vacia
 from .utiles import ErrorEntrada, _entero_a_texto, _texto_seguro
 
 
@@ -456,7 +457,7 @@ def leer_cmg_consolidado(ruta_consolidado, registrar=print, libro=None):
     fuente = ruta_consolidado if libro is None else libro
 
     try:
-        df = pd.read_excel(fuente, sheet_name=HOJA_CMG_CONSOLIDADO)
+        df = leer_hoja_con_fila_vacia(fuente, HOJA_CMG_CONSOLIDADO)
     except ValueError as error:
         raise ErrorEntrada(
             f"{ruta_consolidado.name} no tiene la hoja "
@@ -646,6 +647,11 @@ def leer_fd_consolidado(ruta_consolidado, registrar=print, libro=None):
             f"esa hoja primero (tildando 'FD')."
         ) from error
 
+    # Fila 1 vacia y "Cuadro N° ..." en la 2 (encabezados en la 3); un
+    # libro de antes los tiene en la 1. Se deja 'crudo' empezando en el
+    # encabezado, como antes.
+    crudo = crudo.iloc[fila_de_encabezado(crudo):].reset_index(drop=True)
+
     bloques = [
         columnas for columnas in _bloques_de_columnas(crudo)
         if len(columnas) > 1
@@ -665,6 +671,12 @@ def leer_fd_consolidado(ruta_consolidado, registrar=print, libro=None):
     encontrados = {}
 
     for columnas in bloques:
+
+        # La hoja trae 'Central' como PRIMERA columna de cada bloque;
+        # el resto del programa la espera al final (como venia antes):
+        # se la pasa al final y sigue todo igual.
+        if _texto_seguro(crudo.iloc[0, columnas[0]]) == COLUMNA_CENTRAL:
+            columnas = columnas[1:] + columnas[:1]
 
         # Desde que se importa con la columna 'Central' (el nombre
         # Balance_BESS de la unidad, ver agregar_central_fd), cada

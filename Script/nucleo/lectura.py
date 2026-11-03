@@ -144,12 +144,15 @@ def leer_centrales(ruta):
 # hojas que se usan ('Resumen BESS' y 'Diccionario') a la hoja
 # "Centrales" de la planilla, y todo lo demas la lee de ahi.
 #
-# Las dos tablas van una al lado de la otra, cada una con su titulo en
-# la fila 1 (mismo criterio que la hoja 'Ofertas SSCC'):
+# Las dos tablas van una al lado de la otra (mismo criterio que la hoja
+# 'Ofertas SSCC'): fila 1 vacia, columna A de margen, el titulo de cada
+# cuadro en la fila 2 y una columna vacia entre los dos cuadros:
 #
-#   A1: TITULO_CENTRALES_RESUMEN    <2 columnas vacias>   X1: TITULO_CENTRALES_DICCIONARIO
-#   A2: encabezados de Resumen BESS                       X2: la hoja Diccionario TAL CUAL
-#   A3: datos                                                 (sin encabezado propio)
+#   B2: TITULO_CENTRALES_RESUMEN    <1 columna vacia>   X2: TITULO_CENTRALES_DICCIONARIO
+#   B3: encabezados de Resumen BESS                     X3: la hoja Diccionario TAL CUAL
+#   B4: datos                                               (sin sus filas vacias de arriba)
+#
+# Un libro de antes (titulos en la fila 1, sin margen) se sigue leyendo.
 #
 # El Diccionario se copia crudo, celda por celda, porque se lee de dos
 # formas (la tabla unica con encabezados y los bloques lado a lado del
@@ -158,12 +161,16 @@ def leer_centrales(ruta):
 # lee desde su columna hasta el final, sin adivinar un ancho (sus
 # columnas vacias del medio son las que separan los bloques viejos).
 
-TITULO_CENTRALES_RESUMEN = (
-    f"{HOJA_RESUMEN_BESS} (copia de {ARCHIVO_CENTRALES})"
-)
-TITULO_CENTRALES_DICCIONARIO = (
-    f"{HOJA_DICCIONARIO} (copia de {ARCHIVO_CENTRALES})"
-)
+TITULO_CENTRALES_RESUMEN = f"Cuadro N° 1 — {HOJA_RESUMEN_BESS}"
+TITULO_CENTRALES_DICCIONARIO = f"Cuadro N° 2 — {HOJA_DICCIONARIO}"
+# Los de antes (titulo en la fila 1, sin fila vacia arriba): un libro
+# viejo se sigue leyendo.
+TITULOS_CENTRALES_ANTERIORES = {
+    TITULO_CENTRALES_RESUMEN:
+        f"{HOJA_RESUMEN_BESS} (copia de {ARCHIVO_CENTRALES})",
+    TITULO_CENTRALES_DICCIONARIO:
+        f"{HOJA_DICCIONARIO} (copia de {ARCHIVO_CENTRALES})",
+}
 
 
 def _sin_filas_vacias_al_final(df):
@@ -191,21 +198,64 @@ def fila_de_titulos(crudo):
     return 0
 
 
-def leer_hoja_con_fila_vacia(fuente, hoja):
+# Como empieza el titulo de cada cuadro de las hojas de la planilla
+# (fila 2, sobre su tabla; la fila 1 queda vacia).
+PREFIJO_CUADRO = "Cuadro N°"
+
+
+def titulo_de_cuadro(numero, nombre):
+    return f"{PREFIJO_CUADRO} {numero} — {nombre}"
+
+
+def fila_de_encabezado(crudo):
+    """
+    Fila (0-indexada) de los NOMBRES de columna de una hoja leida con
+    header=None: se saltan las filas vacias de arriba y, si la que
+    sigue es la de los "Cuadro N° ...", tambien esa. 0 en un libro de
+    antes (encabezado en la fila 1).
+    """
+
+    fila = 0
+    while fila < len(crudo) and not crudo.iloc[fila].notna().any():
+        fila += 1
+    if fila < len(crudo):
+        textos = [
+            _texto_seguro(v) for v in crudo.iloc[fila] if _tiene_valor(v)
+        ]
+        if textos and all(t.startswith(PREFIJO_CUADRO) for t in textos):
+            fila += 1
+    return fila if fila < len(crudo) else 0
+
+
+def sin_margen_izquierdo(df):
+    """
+    Quita las columnas vacias de la izquierda de una hoja leida con
+    encabezado: la columna A de margen (las hojas empiezan en la B) sale
+    de pandas como "Unnamed: 0" sin datos. Un libro de antes no la tiene
+    y queda igual.
+    """
+
+    quitar = 0
+    for nombre in df.columns:
+        if not str(nombre).startswith("Unnamed:") or df[nombre].notna().any():
+            break
+        quitar += 1
+    return df.iloc[:, quitar:] if quitar else df
+
+
+def leer_hoja_con_fila_vacia(fuente, hoja, **opciones):
     """
     pd.read_excel de una hoja de una sola tabla con encabezado en la
-    fila 1 (libros de antes) o con fila 1 vacia y "Cuadro N° 1 — ..."
-    en la 2 y encabezado en la 3 (Subastas, Resumen ahora). El
-    encabezado es la primera fila con mas de una celda con algo.
+    fila 1 (libros de antes) o con fila 1 vacia, "Cuadro N° 1 — ..."
+    en la 2 y encabezado en la 3 (ver fila_de_encabezado). Sin la
+    columna A de margen (sin_margen_izquierdo).
     """
 
     arriba = pd.read_excel(fuente, sheet_name=hoja, header=None, nrows=4)
-    fila = 0
-    for indice in range(len(arriba)):
-        if arriba.iloc[indice].notna().sum() > 1:
-            fila = indice
-            break
-    return pd.read_excel(fuente, sheet_name=hoja, header=fila)
+    return sin_margen_izquierdo(pd.read_excel(
+        fuente, sheet_name=hoja, header=fila_de_encabezado(arriba),
+        **opciones,
+    ))
 
 
 def leer_tabla_bajo_titulo(fuente, hoja, crudo, columna, ancho, fila_titulo=0):
@@ -273,14 +323,21 @@ def leer_centrales_planilla(ruta_salida, libro=None):
     if crudo.empty:
         return None
 
+    # Titulos en la fila 2 (la 1 vacia); en un libro de antes, en la 1.
+    fila = fila_de_titulos(crudo)
     columnas_titulo = {
-        _texto_seguro(crudo.iloc[0, col]): col
+        _texto_seguro(crudo.iloc[fila, col]): col
         for col in range(crudo.shape[1])
-        if _tiene_valor(crudo.iloc[0, col])
+        if _tiene_valor(crudo.iloc[fila, col])
     }
 
-    col_resumen = columnas_titulo.get(TITULO_CENTRALES_RESUMEN)
-    col_diccionario = columnas_titulo.get(TITULO_CENTRALES_DICCIONARIO)
+    def columna_de(titulo):
+        return columnas_titulo.get(
+            titulo, columnas_titulo.get(TITULOS_CENTRALES_ANTERIORES[titulo])
+        )
+
+    col_resumen = columna_de(TITULO_CENTRALES_RESUMEN)
+    col_diccionario = columna_de(TITULO_CENTRALES_DICCIONARIO)
 
     if col_resumen is None or col_diccionario is None:
         return None
@@ -288,7 +345,8 @@ def leer_centrales_planilla(ruta_salida, libro=None):
     ancho = 0
     while (
         col_resumen + ancho < crudo.shape[1]
-        and _tiene_valor(crudo.iloc[1, col_resumen + ancho])
+        and fila + 1 < crudo.shape[0]
+        and _tiene_valor(crudo.iloc[fila + 1, col_resumen + ancho])
     ):
         ancho += 1
 
@@ -296,11 +354,11 @@ def leer_centrales_planilla(ruta_salida, libro=None):
         return None
 
     resumen = leer_tabla_bajo_titulo(
-        fuente, HOJA_CENTRALES, crudo, col_resumen, ancho
+        fuente, HOJA_CENTRALES, crudo, col_resumen, ancho, fila_titulo=fila
     )
     resumen = _sin_filas_vacias_al_final(resumen).reset_index(drop=True)
 
-    diccionario = crudo.iloc[1:, col_diccionario:]
+    diccionario = crudo.iloc[fila + 1:, col_diccionario:]
     diccionario = _sin_filas_vacias_al_final(diccionario)
     diccionario = diccionario.reset_index(drop=True)
     diccionario.columns = range(diccionario.shape[1])

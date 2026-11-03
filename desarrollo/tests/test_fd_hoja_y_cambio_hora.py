@@ -106,26 +106,43 @@ class TestHojaFd(unittest.TestCase):
                 df_fd_csf=csf, df_fd_cpf=cpf,
             )
             ws = openpyxl.load_workbook(ruta)["FD"]
-            encabezado = [c.value for c in ws[1]]
+            # Fila 1 vacia, "Cuadro N° ..." en la 2, encabezados en la 3;
+            # columna A de margen.
+            self.assertTrue(all(c.value is None for c in ws[1]))
+            self.assertEqual(ws["B2"].value, "Cuadro N° 1 — FD CSF")
+            encabezado = [c.value for c in ws[3]][1:]
             leido_csf, leido_cpf = nucleo.leer_fd_consolidado(
                 ruta, registrar=lambda _: None
             )
 
         n_csf = len(nucleo.NOMBRES_FD_CSF) - 2 + 1
-        self.assertEqual(encabezado[0], "Hora Mes")
+        # 'Central' primera en cada bloque.
+        self.assertEqual(encabezado[0], "Central")
+        self.assertEqual(encabezado[1], "Hora Mes")
         self.assertNotIn("id", encabezado)
-        self.assertEqual(encabezado[n_csf - 1], "Central")
         self.assertIsNone(encabezado[n_csf])       # una columna de separacion
-        self.assertEqual(encabezado[n_csf + 1], "Hora Mes")
-        self.assertEqual(encabezado[-1], "Central")
+        self.assertEqual(encabezado[n_csf + 1], "Central")
+        self.assertEqual(encabezado[n_csf + 2], "Hora Mes")
         self.assertEqual(encabezado.count("Hora Mes"), 2)  # una por tabla
 
-        celda = ws.cell(1, 1)
+        celda = ws.cell(3, 2)
         self.assertEqual(celda.fill.start_color.rgb[-6:], COLOR_ENCABEZADO)
         self.assertTrue(celda.font.bold)
         self.assertEqual(celda.font.color.rgb[-6:], "FFFFFF")
-        self.assertEqual(ws.cell(2, 1).border.left.style, "thin")
-        self.assertIsNone(ws.cell(1, n_csf + 1).fill.fill_type)
+        self.assertEqual(ws.cell(4, 2).border.left.style, "thin")
+        self.assertIsNone(ws.cell(3, n_csf + 2).fill.fill_type)
+
+        # Respuesta CSF / CPF+ / CPF-: a la izquierda y con 2 decimales.
+        respuestas = [
+            ws.cell(3, c) for c in range(1, ws.max_column + 1)
+            if str(ws.cell(3, c).value or "").startswith("Respuesta")
+        ]
+        self.assertEqual(len(respuestas), 3)
+        for titulo in respuestas:
+            dato = ws.cell(4, titulo.column)
+            if dato.value is not None:
+                self.assertEqual(dato.alignment.horizontal, "left")
+                self.assertEqual(dato.number_format, "0.00")
 
         # Al leerla vuelve todo, con 'id' rearmado
         self.assertEqual(

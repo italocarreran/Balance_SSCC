@@ -10,6 +10,7 @@ from pathlib import Path
 from .cambio_hora import cambios_de_hora, horas_del_dia
 from .lectura import (
     ROL_BALANCE_BESS, ROL_OFERTAS, ROL_SUBASTAS, filas_diccionario,
+    fila_de_titulos,
 )
 from .parametros import COLUMNA_CENTRAL, HOJA_OFERTAS_SSCC, INICIO_VENTANA
 from .utiles import (
@@ -792,12 +793,16 @@ def calcular_t(clave, ventana, resumen_ventana_oferta):
 # si alguien cambia uno, las dos puntas se mueven juntas. El nombre
 # de la hoja sale de parametros.py (ORDEN_HOJAS_SALIDA), y se
 # reexporta aca porque medio modulo la busca por este nombre.
-TITULO_OFERTAS_POR_DIA = (
-    "Ofertas SSCC por dia (equivalente a Medidores!W:Y)"
-)
-TITULO_RESUMEN_VENTANA = (
-    "Resumen ventana oferta (equivalente a Medidores!AB:AE)"
-)
+TITULO_OFERTAS_POR_DIA = "Cuadro N° 1 — Ofertas SSCC por dia"
+TITULO_RESUMEN_VENTANA = "Cuadro N° 2 — Resumen ventana oferta"
+# Los de antes (en la fila 1, con el parentesis): un libro viejo se
+# sigue leyendo.
+_TITULOS_ANTERIORES = {
+    TITULO_OFERTAS_POR_DIA:
+        "Ofertas SSCC por dia (equivalente a Medidores!W:Y)",
+    TITULO_RESUMEN_VENTANA:
+        "Resumen ventana oferta (equivalente a Medidores!AB:AE)",
+}
 
 
 def leer_ofertas_sscc_consolidado(ruta_consolidado, registrar=print, libro=None):
@@ -838,12 +843,16 @@ def leer_ofertas_sscc_consolidado(ruta_consolidado, registrar=print, libro=None)
             f"esta vacia. Actualizala con su boton en la ventana."
         )
 
+    # Titulos en la fila 2 (la 1 vacia); en un libro de antes, en la 1.
+    fila = fila_de_titulos(crudo)
+
     def _tabla(titulo):
 
         columna = None
+        buscados = (titulo, _TITULOS_ANTERIORES[titulo])
 
         for col in range(crudo.shape[1]):
-            if _texto_seguro(crudo.iloc[0, col]) == titulo:
+            if _texto_seguro(crudo.iloc[fila, col]) in buscados:
                 columna = col
                 break
 
@@ -859,15 +868,18 @@ def leer_ofertas_sscc_consolidado(ruta_consolidado, registrar=print, libro=None)
         ancho = 0
         while (
             columna + ancho < crudo.shape[1]
-            and _texto_seguro(crudo.iloc[1, columna + ancho])
+            and _texto_seguro(crudo.iloc[fila + 1, columna + ancho])
         ):
             ancho += 1
 
         encabezados = [
-            _texto_seguro(crudo.iloc[1, columna + i]) for i in range(ancho)
+            _texto_seguro(crudo.iloc[fila + 1, columna + i])
+            for i in range(ancho)
         ]
 
-        datos = crudo.iloc[2:, columna:columna + ancho].reset_index(drop=True)
+        datos = crudo.iloc[fila + 2:, columna:columna + ancho].reset_index(
+            drop=True
+        )
         datos = datos.set_axis(encabezados, axis=1)
 
         # La tabla mas corta viene con filas de relleno vacias abajo

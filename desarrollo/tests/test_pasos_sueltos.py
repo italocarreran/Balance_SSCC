@@ -627,11 +627,12 @@ class TestFdYFmaSeAplicanEnRe545(unittest.TestCase):
             "Cuadro N° 1 — FMA CPF (fma_cpf)",
             "Cuadro N° 2 — FMA CSF (fma_csf)",
         ])
-        self.assertEqual(hoja["A3"].value, "Central")
-        self.assertEqual(hoja["A2"].font.color.rgb[-6:], "244062")
-        self.assertIsNone(hoja["A2"].fill.fill_type)
+        self.assertEqual(hoja["B3"].value, "Central")
+        self.assertEqual(hoja["B2"].font.color.rgb[-6:], "244062")
+        self.assertIsNone(hoja["B2"].fill.fill_type)
+        # Margen en A y una columna de separacion entre cuadros.
         self.assertEqual(
-            {str(r) for r in hoja.merged_cells.ranges}, {"A2:B2", "E2:F2"}
+            {str(r) for r in hoja.merged_cells.ranges}, {"B2:C2", "E2:F2"}
         )
         self.assertIsNone(leidas["ctf_unidad"])
         self.assertEqual(leidas["cpf"]["FMA_CPF_mas"].tolist(), [0.5])

@@ -32,6 +32,7 @@ from .hojas_entrada import (
 from .lectura import (
     construir_homologacion, leer_centrales, leer_centrales_planilla,
     leer_hoja_con_fila_vacia, leer_medidas_sae, obtener_centrales,
+    sin_margen_izquierdo,
 )
 from .medidores import (
     completar_ofertas_en_medidores, construir_medidores,
@@ -290,12 +291,16 @@ def generar_consolidado(
                 )
                 if not central and _texto_seguro(unidad)
             })
+            # Solo las unidades de las centrales de la hoja 'Centrales'
+            # (pedido del usuario): las demas no se traen a la hoja.
             if sin_central:
+                df_fd_csf = df_fd_csf[df_fd_csf[COLUMNA_CENTRAL].ne("")]
+                df_fd_cpf = df_fd_cpf[df_fd_cpf[COLUMNA_CENTRAL].ne("")]
                 registrar(
-                    f"  [AVISO] {len(sin_central)} unidad(es) de la hoja "
-                    f"FD sin central en el Diccionario (columna "
-                    f"'{COLUMNA_CENTRAL}' vacia): "
-                    f"{', '.join(sin_central)}"
+                    f"  FD: {len(sin_central)} unidad(es) sin central en "
+                    f"el Diccionario quedan fuera de la hoja: "
+                    f"{', '.join(sin_central[:10])}"
+                    + (" ..." if len(sin_central) > 10 else "")
                 )
 
     avanzar(80)
@@ -397,7 +402,7 @@ def _leer_medidores_del_libro(ruta_salida, registrar):
     registrar(f"Leyendo hoja 'Medidores' de {ruta_salida.name}...")
 
     try:
-        df_medidores = pd.read_excel(ruta_salida, sheet_name=HOJA_MEDIDORES)
+        df_medidores = leer_hoja_con_fila_vacia(ruta_salida, HOJA_MEDIDORES)
     except ValueError as error:
         raise ErrorEntrada(
             f"{ruta_salida.name} no tiene la hoja 'Medidores' todavia: "
@@ -445,7 +450,7 @@ def _leer_entradas_del_consolidado(
         registrar(f"Leyendo hoja 'Medidores' de {ruta_salida.name}...")
 
         try:
-            df_medidores = pd.read_excel(libro, sheet_name="Medidores")
+            df_medidores = leer_hoja_con_fila_vacia(libro, "Medidores")
         except ValueError as error:
             raise ErrorEntrada(
                 f"{ruta_salida.name} no tiene la hoja 'Medidores' "
@@ -811,9 +816,9 @@ def generar_pagos_bess(
         # ya guardadas en la planilla.
         def calculo_existente(nombre):
             try:
-                return pd.read_excel(
+                return sin_margen_izquierdo(pd.read_excel(
                     rutas["salida"], sheet_name=nombre, header=1
-                )
+                ))
             except (FileNotFoundError, ValueError) as error:
                 raise ErrorEntrada(
                     f"Primero calcula la hoja '{nombre}' de "
