@@ -192,7 +192,7 @@ class TestCuadrosCombinados(unittest.TestCase):
             nucleo.construir_compensacion_central(ecostos, re545, RESUMEN_BESS)
         )
 
-    def test_detalle_sin_empresa_y_con_los_ceros_al_final(self):
+    def test_detalle_sin_empresa_y_ordenado_por_central(self):
         detalle = nucleo.detalle_combinado(self.por_ecostos, self.por_re545)
         self.assertEqual(list(detalle.columns), [
             "Central", "Ciclo / Ventana", "Compensación Ecostos [$]",
@@ -203,9 +203,13 @@ class TestCuadrosCombinados(unittest.TestCase):
         }
         self.assertEqual(filas[("BESS UNO", 1)], (100.0, 20.0))
         self.assertEqual(filas[("BESS UNO", 3)], (0.0, 5.0))
-        # La unica fila en cero queda al final (la que el filtro oculta).
-        self.assertEqual(detalle["Compensación Total [$]"].iloc[-1], 0.0)
-        self.assertTrue(detalle["Compensación Total [$]"].iloc[:-1].ne(0).all())
+        # Las ventanas de cada central juntas, con o sin compensacion.
+        self.assertEqual(
+            list(zip(detalle["Central"], detalle["Ciclo / Ventana"])),
+            [("BESS DOS", 1), ("BESS UNO", 1), ("BESS UNO", 2),
+             ("BESS UNO", 3)],
+        )
+        self.assertEqual(filas[("BESS UNO", 2)], (0.0, 0.0))
 
     def test_por_central_con_empresa_y_total_que_cierra(self):
         central = nucleo.por_central_combinado(self.por_ecostos, self.por_re545)
@@ -250,7 +254,7 @@ class TestFormatoDeLasHojas(unittest.TestCase):
             registrar=lambda _m: None,
         )
 
-    def test_titulos_filtro_y_comentarios(self):
+    def test_titulos_y_comentarios_sin_filtro(self):
         import tempfile
         import zipfile
         from pathlib import Path
@@ -302,11 +306,9 @@ class TestFormatoDeLasHojas(unittest.TestCase):
             self.assertEqual(compensacion["H3"].value, "Central")
             self.assertEqual(compensacion["I3"].value, "Empresa")
             self.assertEqual(compensacion["N3"].value, "Empresa")
-            self.assertEqual(compensacion.auto_filter.ref, "B3:F9")
-            # 6 filas de detalle, 3 en cero al final (filas 7 a 9); los
-            # otros cuadros llegan hasta la fila 5.
-            ocultas = sorted(
-                fila for fila, d in compensacion.row_dimensions.items()
-                if d.hidden
-            )
-            self.assertEqual(ocultas, [7, 8, 9])
+            self.assertEqual(compensacion["F3"].value, "Compensación Total [$]")
+            self.assertIsNone(compensacion.auto_filter.ref)
+            self.assertFalse(any(
+                d.hidden for d in compensacion.row_dimensions.values()
+            ))
+            self.assertEqual(compensacion["B2"].alignment.horizontal, "left")

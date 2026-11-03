@@ -472,8 +472,8 @@ class PagosBessEndToEndTest(unittest.TestCase):
             self.assertIn(nucleo.HOJA_MEDIDORES, hojas)
             self.assertIn(nucleo.HOJA_SUBASTAS, hojas)
 
-            resumen = pd.read_excel(
-                base / nucleo.ARCHIVO_SALIDA, sheet_name=nucleo.HOJA_RESUMEN
+            resumen = nucleo.leer_hoja_con_fila_vacia(
+                base / nucleo.ARCHIVO_SALIDA, nucleo.HOJA_RESUMEN
             )
             self.assertIn("NETO", resumen.columns)
 

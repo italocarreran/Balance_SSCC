@@ -150,19 +150,12 @@ def _lado_a_lado(por_ecostos, por_re545, claves):
 def detalle_combinado(por_ecostos, por_re545):
     """Cuadros 1 y 3 juntos: central + ciclo/ventana, E Costos y RE545.
 
-    Sin la empresa (esta en el cuadro por central). Las filas sin
-    compensacion en ninguno de los dos van al final: la hoja las deja
-    filtradas (ocultas) y asi no tapan filas de los otros cuadros, que
-    estan al lado y son mas cortos.
+    Sin la empresa (esta en el cuadro por central). Ordenado por
+    central y ciclo/ventana: las ventanas de cada central quedan
+    juntas, con o sin compensacion.
     """
 
-    junto = _lado_a_lado(por_ecostos, por_re545, [COL_CENTRAL, COL_CICLO])
-    if junto.empty:
-        return junto
-    con_monto = junto[COL_COMPENSACION_TOTAL].ne(0.0)
-    return pd.concat(
-        [junto[con_monto], junto[~con_monto]], ignore_index=True
-    )
+    return _lado_a_lado(por_ecostos, por_re545, [COL_CENTRAL, COL_CICLO])
 
 
 def por_central_combinado(por_ecostos, por_re545):

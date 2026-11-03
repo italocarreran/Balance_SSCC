@@ -295,7 +295,7 @@ class TestUnaSolaPlanilla(unittest.TestCase):
 
             # ...ni las entradas se llevan puesto el calculo.
             self.entradas(ruta)
-            resumen = pd.read_excel(ruta, sheet_name=nucleo.HOJA_RESUMEN)
+            resumen = nucleo.leer_hoja_con_fila_vacia(ruta, nucleo.HOJA_RESUMEN)
             self.assertEqual(list(resumen["NOMBRE"]), ["EMPRESA UNO"])
 
     def test_el_control_va_en_su_propio_archivo(self):

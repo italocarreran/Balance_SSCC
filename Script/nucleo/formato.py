@@ -230,7 +230,7 @@ def formatear_hoja(ws, fila_encabezado=1, fila_titulos_cuadro=None):
                 if celda.value is not None:
                     celda.font = LETRA_TITULO_CUADRO
                     celda.alignment = Alignment(
-                        horizontal="center", vertical="center",
+                        horizontal="left", vertical="center",
                         wrap_text=False,
                     )
                 continue

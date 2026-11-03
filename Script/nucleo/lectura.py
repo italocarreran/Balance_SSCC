@@ -193,16 +193,19 @@ def fila_de_titulos(crudo):
 
 def leer_hoja_con_fila_vacia(fuente, hoja):
     """
-    pd.read_excel de una hoja con encabezado en la fila 1 o, si la
-    fila 1 esta vacia (Subastas ahora), en la 2.
+    pd.read_excel de una hoja de una sola tabla con encabezado en la
+    fila 1 (libros de antes) o con fila 1 vacia y "Cuadro N° 1 — ..."
+    en la 2 y encabezado en la 3 (Subastas, Resumen ahora). El
+    encabezado es la primera fila con mas de una celda con algo.
     """
 
-    df = pd.read_excel(fuente, sheet_name=hoja)
-    if len(df.columns) and all(
-        str(nombre).startswith("Unnamed:") for nombre in df.columns
-    ):
-        df = pd.read_excel(fuente, sheet_name=hoja, header=1)
-    return df
+    arriba = pd.read_excel(fuente, sheet_name=hoja, header=None, nrows=4)
+    fila = 0
+    for indice in range(len(arriba)):
+        if arriba.iloc[indice].notna().sum() > 1:
+            fila = indice
+            break
+    return pd.read_excel(fuente, sheet_name=hoja, header=fila)
 
 
 def leer_tabla_bajo_titulo(fuente, hoja, crudo, columna, ancho, fila_titulo=0):

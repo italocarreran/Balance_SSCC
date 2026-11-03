@@ -217,7 +217,8 @@ _FILAS_ENCABEZADO = {
     HOJA_OFERTAS_SSCC: 2,
     HOJA_CENTRALES: 2,
     HOJA_FMA: 3,
-    HOJA_SUBASTAS: 2,
+    HOJA_SUBASTAS: 3,
+    HOJA_RESUMEN: 3,
 }
 
 # Hojas con varios cuadros lado a lado y el titulo de cada uno en esta
@@ -227,6 +228,8 @@ _FILAS_TITULO_CUADRO = {
     HOJA_PRORRATA_RETIROS: 2,
     HOJA_COMPENSACION_CENTRAL: 2,
     HOJA_FMA: 2,
+    HOJA_SUBASTAS: 2,
+    HOJA_RESUMEN: 2,
 }
 
 # Comentario con la formula en el nombre de la columna de plata de los
@@ -256,57 +259,6 @@ def _comentario(texto):
     comentario.height = 120
     return comentario
 
-
-def _filtrar_sin_compensacion(ws, df, columna_inicio, fila_encabezado, otros):
-    """
-    Autofiltro en el cuadro de detalle de COMPENSACION_CENTRAL, ya
-    aplicado: oculta las filas con Compensacion Total = 0 (el usuario
-    lo saca desde el boton del filtro).
-
-    Un filtro de Excel oculta FILAS enteras, asi que tambien taparia
-    las de los cuadros de al lado. Por eso el detalle trae los ceros al
-    final (compensacion.detalle_combinado): las filas ocultas quedan
-    debajo de los otros cuadros, que son mas cortos. Si alguna vez no
-    lo fueran, el filtro queda puesto pero sin aplicar, antes que
-    esconder filas de otro cuadro.
-    """
-
-    from openpyxl.utils import get_column_letter
-    from openpyxl.worksheet.filters import (
-        CustomFilter, CustomFilters, FilterColumn,
-    )
-
-    from .compensacion import COL_COMPENSACION_TOTAL
-
-    if df.empty or COL_COMPENSACION_TOTAL not in df.columns:
-        return
-
-    ultima_fila = fila_encabezado + len(df)
-    ws.auto_filter.ref = (
-        f"{get_column_letter(columna_inicio)}{fila_encabezado}:"
-        f"{get_column_letter(columna_inicio + df.shape[1] - 1)}{ultima_fila}"
-    )
-
-    en_cero = df[COL_COMPENSACION_TOTAL].eq(0.0).to_numpy()
-    if not en_cero.any():
-        return
-    filas_ocultas = [
-        fila_encabezado + 1 + i for i, cero in enumerate(en_cero) if cero
-    ]
-    largo_otros = max(
-        [0] + [len(otro) for otro in otros if otro is not None]
-    )
-    if filas_ocultas[0] <= fila_encabezado + largo_otros:
-        return
-
-    ws.auto_filter.filterColumn.append(FilterColumn(
-        colId=list(df.columns).index(COL_COMPENSACION_TOTAL),
-        customFilters=CustomFilters(
-            customFilter=[CustomFilter(operator="notEqual", val="0")]
-        ),
-    ))
-    for fila in filas_ocultas:
-        ws.row_dimensions[fila].hidden = True
 
 
 def _escribir_encabezados_grupo(ws, columnas_internas, grupos, fila=1, columna_inicio=1):
@@ -520,7 +472,15 @@ def escribir_pagos_bess(
         if HOJA_RESUMEN in regenerar:
             if df_resumen is not None:
                 escritas.append(HOJA_RESUMEN)
-                df_resumen.to_excel(writer, sheet_name=HOJA_RESUMEN, index=False)
+                # Fila 1 vacia, titulo de cuadro en la 2, encabezado en
+                # la 3 (como PRORRATA_RETIROS).
+                df_resumen.to_excel(
+                    writer, sheet_name=HOJA_RESUMEN, index=False,
+                    startrow=2,
+                )
+                writer.sheets[HOJA_RESUMEN].cell(
+                    2, 1, "Cuadro N° 1 — recibe, paga y neto por empresa"
+                )
         else:
             _preservar_o_avisar(writer, HOJA_RESUMEN)
 
@@ -603,12 +563,6 @@ def escribir_pagos_bess(
                     )
                     ws = writer.sheets[HOJA_COMPENSACION_CENTRAL]
                     ws.cell(2, col + 1, titulo)
-                if df_compensacion_detalle is not None:
-                    _filtrar_sin_compensacion(
-                        ws, df_compensacion_detalle, columna_inicio=2,
-                        fila_encabezado=3,
-                        otros=[df for df, _, _ in cuadros_compensacion[1:]],
-                    )
         else:
             _preservar_o_avisar(writer, HOJA_COMPENSACION_CENTRAL)
 
@@ -981,14 +935,17 @@ def escribir_salida(
 
         if HOJA_SUBASTAS in regenerar:
             if df_subastas is not None:
-                # Fila 1 vacia (pedido del usuario), encabezado en la 2.
+                # Fila 1 vacia, titulo de cuadro en la 2, encabezado en
+                # la 3 (como PRORRATA_RETIROS).
                 subastas_para_hoja(df_subastas).to_excel(
                     writer,
                     sheet_name=HOJA_SUBASTAS,
                     index=False,
-                    startrow=1,
+                    startrow=2,
                 )
-                writer.sheets[HOJA_SUBASTAS].row_dimensions[1].height = 14.5
+                writer.sheets[HOJA_SUBASTAS].cell(
+                    2, 1, "Cuadro N° 1 — subastas adjudicadas del periodo"
+                )
         else:
             _preservar_o_avisar(writer, HOJA_SUBASTAS)
 

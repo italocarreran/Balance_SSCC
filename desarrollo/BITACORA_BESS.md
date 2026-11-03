@@ -5436,3 +5436,20 @@ formato de PRORRATA_RETIROS (letra azul, sin fondo).
 **Verificación:** `test_pasos_sueltos` +2 (FMA con cuadros y sin CTF; FMA de
 antes se sigue leyendo); `test_subastas_hoja_y_cambio_hora` y
 `test_origenes_fd` ajustadas. 307 pruebas, 17 salteadas.
+
+## 2026-11-03 (3) — Títulos de cuadro a la izquierda; Resumen y Subastas con cuadro; sin filtro
+
+Pedido del usuario:
+- Títulos de cuadro (fila 2) alineados a la izquierda (`formato.formatear_hoja`).
+- Hojas `Resumen` y `Subastas`: fila 1 vacía, `Cuadro N° 1 — …` en la fila 2,
+  encabezado en la 3 (las dos en `_FILAS_TITULO_CUADRO`). Se leen con
+  `lectura.leer_hoja_con_fila_vacia`, que toma como encabezado la primera
+  fila con más de una celda con algo (libros de antes: la fila 1).
+- COMPENSACION_CENTRAL: **sin autofiltro** (se quitó
+  `_filtrar_sin_compensacion`); el detalle vuelve a ir ordenado por central
+  y ciclo/ventana, con las ventanas de cada central juntas. Se mantiene la
+  columna `Compensación Total [$]`.
+
+**Verificación:** pruebas ajustadas (`test_compensacion_central`,
+`test_subastas_hoja_y_cambio_hora`, lecturas del Resumen). 307 pruebas, 17
+salteadas.
