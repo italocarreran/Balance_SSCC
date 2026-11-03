@@ -335,6 +335,61 @@ ORIGEN_COLUMNAS_RE545 = {
     ),
 }
 
+# Formula de Excel EQUIVALENTE para el comentario (mismo criterio que
+# FORMULAS_PRUEBA_E_COSTOS). Las columnas de la tabla resumen (cuadro 5)
+# van con prefijo R_ (R_Central, R_Ventana, R_Edisp_T, R_Margen, R_flag);
+# en las plantillas del cuadro 5 la fila de ejemplo es la de la tabla
+# resumen. Las que necesitan otra hoja (Pmax, Capacidad, Eficiencia) no
+# van.
+_GRUPO_RE = "{clave:r},{clave},{T:r},{T}"
+_VENTANA_RE = "{R_Central:r},{clave},{R_Ventana:r},{T}"
+_DESDE_RESUMEN = "{T:r},{R_Ventana},{clave:r},{R_Central}"
+FORMULAS_PRUEBA_RE545 = {
+    "S": (
+        "=(COUNTIFS({T:r},{T},{R:r},\">\"&{R},{clave:r},{clave})"
+        "+COUNTIFS({T:r},{T},{R:r},{R},{Hora:r},\">\"&{Hora},"
+        "{clave:r},{clave}))/4+1"
+    ),
+    "BI": "=IF({T}={T@-4},{BI@-4}+1,1)",
+    "BJ": "={BJ@-4}",
+    "BT": "=SUMIFS({BU:b},{clave:b},{clave},{T:b},{T})",
+    "BU": (
+        "=IF(OR({BS}=\"\",{BS}=0),0,MAX(0,MIN({BQ},"
+        f"SUMIFS({{R_Edisp_T:r}},{_VENTANA_RE})-{{BT}}"
+        f"-SUMIFS({{BV:r}},{_GRUPO_RE}))))"
+    ),
+    "BX": f"=SUMIFS({{R_Margen:r}},{_VENTANA_RE})",
+    "BZ": f"=IF({{BW}}<0,0,8)*SUMIFS({{R_flag:r}},{_VENTANA_RE})",
+    "CE": (
+        f"=IF(SUMIFS({{AU:r}},{_GRUPO_RE})=0,0,MAX(SUMIFS({{BO:r}},"
+        f"{_GRUPO_RE})-SUMIFS({{CC:r}},{_GRUPO_RE}),0)*{{AU}}"
+        f"/SUMIFS({{AU:r}},{_GRUPO_RE}))"
+    ),
+}
+FORMULAS_PRUEBA_RESUMEN_RE545 = {
+    "EiniT": (
+        "=INDEX({U:r},MATCH(1,({clave:r}={R_Central})*({T:r}={R_Ventana}),0))"
+    ),
+    "EalmT": (
+        "=INDEX({V:r},MATCH(1,({clave:r}={R_Central})*({T:r}={R_Ventana}),0))"
+    ),
+    "Total Reservas* FD *FMA": f"=SUMIFS({{AU:r}},{_DESDE_RESUMEN})",
+    "Margen ultima hora": f"=SUMIFS({{BV:r}},{_DESDE_RESUMEN})",
+    "check 1": f"=SUMIFS({{BN:r}},{_DESDE_RESUMEN})-{{R_Edisp_T}}",
+    "check 2": (
+        f"=SUMIFS({{BU:r}},{_DESDE_RESUMEN})-{{R_Edisp_T}}+{{R_Margen}}"
+    ),
+}
+MATRICIALES_RE545 = ("EiniT", "EalmT")
+# Nombre de columna de la tabla resumen -> clave R_ de las plantillas.
+CLAVES_RESUMEN_RE545 = {
+    "Central": "R_Central",
+    "Ventana": "R_Ventana",
+    "Edisp_T": "R_Edisp_T",
+    "Margen ultima hora": "R_Margen",
+    "flag ultima hora": "R_flag",
+}
+
 # Comentarios de la tabla resumen (cuadro 5), por nombre de columna.
 ORIGEN_RESUMEN_RE545 = {
     "Oferta Completa": (

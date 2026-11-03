@@ -5669,3 +5669,24 @@ rueda del mouse sobre el diálogo mueve la ventana principal.
 de estilos. Pruebas de ventana corridas con `xvfb-run` en un entorno con
 tkinter (python3.12 + venv): 325 pruebas, 0 salteadas; en el entorno normal
 325, 19 salteadas (tkinter).
+
+## 2026-11-03 (13) — Totales del Resumen; fórmula de prueba en los comentarios
+
+- Resumen: total del mes en la fila 1 sobre RECIBE, PAGA (azul) y NETO
+  (`=ROUND(SUM(...),0)`: verde si da 0, rojo si no — el rojo por el formato
+  de número, el verde por la letra; `[Color10]` LibreOffice lo muestra casi
+  blanco). `escritura._totales_resumen`.
+- Comentarios de E Costos y RE545: en las columnas que se calculan mirando
+  otras filas, la fórmula de Excel equivalente para la fila de ejemplo, con
+  las letras reales ("para que los coordinados puedan probar"). Plantillas
+  `FORMULAS_PRUEBA_E_COSTOS`, `FORMULAS_PRUEBA_RE545`,
+  `FORMULAS_PRUEBA_RESUMEN_RE545` (cuadro 5); `escritura._formula_de_prueba`.
+  No se escriben en las celdas. Las que necesitan otra hoja (Pmax,
+  Capacidad, Eficiencia, Subastas) quedan solo con la explicación.
+  Verificado en LibreOffice pegando cada fórmula en todas las filas de un
+  caso calculado con las funciones reales: E Costos 9/9, RE545 15/15
+  iguales al programa (un ajuste: el rango "filas siguientes" termina una
+  fila después de la tabla, si no en la última fila se daba vuelta).
+
+**Verificación:** +2 pruebas. 327 pruebas (19 salteadas en el entorno sin
+tkinter; 0 en el de ventana).

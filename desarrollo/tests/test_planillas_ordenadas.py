@@ -267,6 +267,10 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
         self.assertTrue(all(ws.cell(3, c).comment is None for c in range(2, 9)))
         self.assertIn("Hoja origen: CMg", ws[f'{nombres["CMg Promedio [CLP/kWh]"]}3'].comment.text)
         self.assertIn("Edisp_T", ws[f'{nombres["Energía asignada [kWh]"]}3'].comment.text)
+        self.assertIn(
+            "Fórmula equivalente",
+            ws[f'{nombres["Monto a compensar [CLP]"]}3'].comment.text,
+        )
 
     def test_re545_con_aporte_ctf_deja_la_reserva_como_valor(self):
         with tempfile.TemporaryDirectory() as carpeta:
@@ -274,6 +278,35 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
         nombres = {c.value: c.column_letter for c in ws[3] if c.value}
         reserva = nombres["Reserva con FD y FMA [kWh]"]
         self.assertEqual(ws[f"{reserva}4"].value, 1)
+
+    def test_el_resumen_lleva_sus_totales(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = self.escribir(carpeta)
+            ws = openpyxl.load_workbook(ruta)[nucleo.HOJA_RESUMEN]
+            resumen = nucleo.leer_hoja_con_fila_vacia(ruta, nucleo.HOJA_RESUMEN)
+        # B NOMBRE, C RECIBE, D PAGA, E NETO; una empresa (fila 4).
+        self.assertEqual(ws["C1"].value, "=SUM(C4:C4)")
+        self.assertEqual(ws["D1"].value, "=SUM(D4:D4)")
+        self.assertEqual(ws["C1"].font.color.rgb[-6:], "244062")
+        self.assertEqual(ws["E1"].value, "=ROUND(SUM(E4:E4),0)")
+        # Verde si da 0, rojo si no (en el formato de numero).
+        self.assertEqual(ws["E1"].font.color.rgb[-6:], "375623")
+        self.assertIn("[Red]", ws["E1"].number_format)
+        # La lectura sigue encontrando los nombres.
+        self.assertEqual(list(resumen["NOMBRE"]), ["EMPRESA UNO"])
+
+    def test_los_comentarios_traen_la_formula_para_probar(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = self.escribir(carpeta)
+            ws = openpyxl.load_workbook(ruta)[nucleo.HOJA_CALCULO_ECOSTOS]
+        nombres = {c.value: c for c in ws[3] if c.value}
+        monto = nombres["Monto a compensar [CLP]"].comment.text
+        self.assertIn("Fórmula equivalente para probar (fila 4", monto)
+        self.assertIn("=MAX(0,(SUMIFS(", monto)
+        bloque = nombres["Bloque ordenado"].comment.text
+        self.assertIn("(fila 5", bloque)  # mira la fila de arriba
+        curva = nombres["Curva monotona CMg Descarga [CLP/kWh]"].comment.text
+        self.assertIn("matricial", curva)
 
     def test_el_resumen_queda_primero_y_el_calculo_detras(self):
         with tempfile.TemporaryDirectory() as carpeta:

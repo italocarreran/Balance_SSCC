@@ -33,7 +33,8 @@ from .alertas import ALTA, Alerta
 
 from .ecostos import (
     CUADROS_CALCULO_E_COSTOS, FORMULAS_E_COSTOS, ORIGEN_COLUMNAS_E_COSTOS,
-    GUION_SIN_PUESTO, SIN_PUESTO_E_COSTOS, TOTALES_E_COSTOS,
+    FORMULAS_PRUEBA_E_COSTOS, GUION_SIN_PUESTO, MATRICIALES_E_COSTOS,
+    SIN_PUESTO_E_COSTOS, TOTALES_E_COSTOS,
 )
 from .factores_subastas import TITULOS_FMA
 from .formato import formatear_libro
@@ -55,7 +56,9 @@ from .parametros import (
     ORDEN_HOJAS_CONTROL, ORDEN_HOJAS_SALIDA,
 )
 from .re545 import (
-    CUADROS_CALCULO_RE545, FORMULAS_RE545, ORIGEN_COLUMNAS_RE545,
+    CLAVES_RESUMEN_RE545, CUADROS_CALCULO_RE545, FORMULAS_PRUEBA_RE545,
+    FORMULAS_PRUEBA_RESUMEN_RE545, FORMULAS_RE545, MATRICIALES_RE545,
+    ORIGEN_COLUMNAS_RE545,
     ORIGEN_RESUMEN_RE545, TITULO_RESUMEN_RE545, TOTALES_RE545,
 )
 from .xlsx_rapido import nombres_de_hojas, pegar_hojas
@@ -534,7 +537,7 @@ def escribir_pagos_bess(
         if HOJA_CALCULO_RE545 in regenerar:
             if df_re545 is not None:
                 escritas.append(HOJA_CALCULO_RE545)
-                letras_re545 = _escribir_cuadros_re545(
+                letras_re545, resumen_re545 = _escribir_cuadros_re545(
                     writer, df_re545, df_resumen_re545
                 )
         else:
@@ -613,10 +616,15 @@ def escribir_pagos_bess(
             _terminar_e_costos(ws_e_costos, letras_e_costos, len(df_ecostos))
             # Formulas sin valor guardado: que Excel las calcule al abrir.
             writer.book.calculation.fullCalcOnLoad = True
+        if HOJA_RESUMEN in escritas:
+            _totales_resumen(writer.sheets[HOJA_RESUMEN], len(df_resumen))
         if HOJA_CALCULO_RE545 in escritas:
             ws_re545 = writer.sheets[HOJA_CALCULO_RE545]
             ws_re545.freeze_panes = PANEL_RE545
-            _terminar_re545(ws_re545, letras_re545, df_re545)
+            _terminar_re545(
+                ws_re545, letras_re545, df_re545, resumen_re545,
+                0 if df_resumen_re545 is None else len(df_resumen_re545),
+            )
             writer.book.calculation.fullCalcOnLoad = True
         crono.tramo("formato (encabezados, anchos, numeros, marco)")
         relleno = _asegurar_una_hoja(writer)
@@ -707,6 +715,7 @@ def _escribir_cuadros_re545(writer, df_re545, df_resumen):
         writer, HOJA_CALCULO_RE545, df_re545, CUADROS_CALCULO_RE545,
         ORIGEN_COLUMNAS_RE545,
     )
+    resumen = {}   # nombre de columna -> letra
     if df_resumen is not None:
         numero = len(CUADROS_CALCULO_RE545) + 1
         _escribir_tabla_con_titulo(
@@ -719,7 +728,11 @@ def _escribir_cuadros_re545(writer, df_re545, df_resumen):
             nota = ORIGEN_RESUMEN_RE545.get(nombre)
             if nota:
                 ws.cell(3, columna + posicion + 1).comment = _comentario(nota)
-    return letras
+            resumen.setdefault(nombre, get_column_letter(columna + posicion + 1))
+        for nombre, clave in CLAVES_RESUMEN_RE545.items():
+            if nombre in resumen:
+                letras[clave] = resumen[nombre]
+    return letras, resumen
 
 
 # El cuadro del Monto a compensar va en verde (es el pago), distinto del
@@ -792,14 +805,83 @@ def _terminar_cuadros(
             ws[f"{letra_monto}{fila}"].fill = claro
 
 
+_MARCADOR_PRUEBA = re.compile(r"\{([^{}:@]+)(?::([rab]))?(?:@(-?\d+))?\}")
+
+
+def _formula_de_prueba(plantilla, letras, rangos, fila):
+    """
+    Una plantilla de FORMULAS_PRUEBA_* con las letras reales de la hoja,
+    para la fila 'fila'. rangos: clave -> (primera, ultima) fila de su
+    tabla (la principal o la resumen de RE545).
+    """
+
+    def cambiar(m):
+        clave, rango, salto = m.group(1), m.group(2), m.group(3)
+        letra = letras[clave]
+        primera, ultima = rangos[clave]
+        if rango == "r":
+            return f"${letra}${primera}:${letra}${ultima}"
+        if rango == "a":
+            return f"${letra}${primera}:{letra}{fila}"
+        if rango == "b":
+            # Hasta una fila DESPUES de la tabla (vacia): en la ultima
+            # fila el rango no queda al reves (Excel lo daria vuelta e
+            # incluiria la propia fila).
+            return f"{letra}{fila + 1}:${letra}${ultima + 1}"
+        return f"{letra}{fila + int(salto or 0)}"
+
+    return _MARCADOR_PRUEBA.sub(cambiar, plantilla)
+
+
+def _comentar_formulas_de_prueba(ws, celdas, plantillas, letras, rangos,
+                                 matriciales=()):
+    """
+    Agrega al comentario del nombre de cada columna la formula de Excel
+    equivalente (pedido del usuario: "para que los coordinados puedan
+    probar, aunque no se actualice"). celdas: clave -> letra de la
+    columna donde va el comentario; la fila de ejemplo es la primera de
+    datos (o la que haga falta si la formula mira filas de arriba).
+    """
+
+    for clave, plantilla in plantillas.items():
+        letra = celdas.get(clave)
+        if letra is None:
+            continue
+        saltos = [int(s) for s in re.findall(r"@(-?\d+)", plantilla)]
+        fila = 4 - min([0] + saltos)
+        try:
+            formula = _formula_de_prueba(plantilla, letras, rangos, fila)
+        except KeyError:
+            continue  # la plantilla nombra una columna que no esta
+        texto = (
+            f"Fórmula equivalente para probar (fila {fila}; el programa no "
+            f"la escribe, el valor lo calcula él):\n{formula}"
+        )
+        if clave in matriciales:
+            texto += (
+                "\n(matricial: Ctrl+Shift+Enter en Excel 2019 o anterior)"
+            )
+        celda = ws[f"{letra}3"]
+        previo = celda.comment.text + "\n\n" if celda.comment else ""
+        comentario = _comentario(previo + texto)
+        comentario.width = 420
+        comentario.height = 220
+        celda.comment = comentario
+
+
 def _terminar_e_costos(ws, letras, filas):
     _terminar_cuadros(
         ws, letras, filas, FORMULAS_E_COSTOS, TOTALES_E_COSTOS, "BC",
         SIN_PUESTO_E_COSTOS,
     )
+    rangos = {clave: (4, 3 + filas) for clave in letras}
+    _comentar_formulas_de_prueba(
+        ws, letras, FORMULAS_PRUEBA_E_COSTOS, letras, rangos,
+        MATRICIALES_E_COSTOS,
+    )
 
 
-def _terminar_re545(ws, letras, df_re545):
+def _terminar_re545(ws, letras, df_re545, resumen=None, filas_resumen=0):
     formulas = dict(FORMULAS_RE545)
     if not df_re545.attrs.get("ctf_en_cero", True):
         # Hay aporte de CTF a la reserva y la formula no lo veria.
@@ -807,6 +889,61 @@ def _terminar_re545(ws, letras, df_re545):
     _terminar_cuadros(
         ws, letras, len(df_re545), formulas, TOTALES_RE545, "CE",
     )
+    rangos = {clave: (4, 3 + len(df_re545)) for clave in letras}
+    for clave in CLAVES_RESUMEN_RE545.values():
+        rangos[clave] = (4, 3 + filas_resumen)
+    principal = {
+        clave: letra for clave, letra in letras.items()
+        if not clave.startswith("R_")
+    }
+    _comentar_formulas_de_prueba(
+        ws, principal, FORMULAS_PRUEBA_RE545, letras, rangos,
+        MATRICIALES_RE545,
+    )
+    if resumen:
+        _comentar_formulas_de_prueba(
+            ws, resumen, FORMULAS_PRUEBA_RESUMEN_RE545, letras, rangos,
+            MATRICIALES_RE545,
+        )
+
+
+def _totales_resumen(ws, filas):
+    """
+    Hoja Resumen: el total del mes en la fila 1 sobre RECIBE, PAGA y NETO
+    (C, D y E). RECIBE y PAGA en azul; NETO en verde si da 0 (lo que se
+    recibe y lo que se paga cierran) y en rojo si no. El color del NETO
+    va en el formato de numero, asi cambia solo si el total cambia.
+    """
+
+    from openpyxl.styles import Font
+
+    if not filas:
+        return
+    ultima = 3 + filas
+    nombres = {
+        str(c.value).split(" [")[0]: c.column_letter
+        for c in ws[3] if c.value
+    }
+    for nombre in ("RECIBE", "PAGA", "NETO"):
+        letra = nombres.get(nombre)
+        if letra is None:
+            continue
+        celda = ws[f"{letra}1"]
+        if nombre == "NETO":
+            # Redondeado a peso: un 0,0000001 de punto flotante es 0.
+            celda.value = f"=ROUND(SUM({letra}4:{letra}{ultima}),0)"
+            # Distinto de 0 -> rojo, por el formato de numero (cambia solo
+            # si el total cambia); 0 -> el color de la letra, verde. Un
+            # verde dentro del formato ([Color10]) LibreOffice lo muestra
+            # casi blanco.
+            celda.number_format = (
+                '[Red]"Total: "#,##0;[Red]"Total: "-#,##0;"Total: "0'
+            )
+            celda.font = Font(bold=True, color=COLOR_MONTO)
+        else:
+            celda.value = f"=SUM({letra}4:{letra}{ultima})"
+            celda.number_format = '"Total: "#,##0'
+            celda.font = Font(bold=True, color="244062")
 
 
 # Columnas que quedan fijas al moverse a la derecha en las hojas de

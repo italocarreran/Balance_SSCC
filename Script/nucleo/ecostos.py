@@ -274,6 +274,60 @@ TOTALES_E_COSTOS = ("BA", "U", "BC")
 # (pedido del usuario). Solo en la hoja: el calculo usa el valor vacio y
 # ninguna formula mira estas columnas.
 SIN_PUESTO_E_COSTOS = ("AB", "AD")
+
+# Formula de Excel EQUIVALENTE para el comentario de las columnas que se
+# calculan mirando otras filas (pedido del usuario: "como para que los
+# coordinados puedan probar"). No se escribe en las celdas: el valor lo
+# calcula el programa. Plantillas: {clave} = la celda de la fila de
+# ejemplo, {clave:r} = el rango entero de la columna ($X$4:$X$n),
+# {clave:a} = desde la primera fila hasta la de ejemplo, {clave@-1} = la
+# fila de arriba. Las que necesitan otra hoja (Pmax, Subastas) no van.
+_GRUPO_EC = "{clave:r},{clave},{Copia_Ventana:r},{Copia_Ventana}"
+FORMULAS_PRUEBA_E_COSTOS = {
+    "R": (
+        f"=COUNTIFS({_GRUPO_EC},{{CMg:r}},\">\"&{{CMg}})"
+        f"+COUNTIFS({_GRUPO_EC},{{CMg:r}},{{CMg}},"
+        "{Cuarto de Hora:r},\">\"&{Cuarto de Hora})+1"
+    ),
+    "W": "=IF({Copia_Ventana}={Copia_Ventana@-1},{W@-1}+1,1)",
+    "AB": (
+        "=IFERROR(LARGE(IF(({clave:r}={clave})*({Copia_Ventana:r}="
+        "{Copia_Ventana})*({L:r}=1)*({Energia_Positiva:r}<>0),{CMg:r}),"
+        "COUNTIFS({clave:a},{clave},{Copia_Ventana:a},{Copia_Ventana})),"
+        "\"–\")"
+    ),
+    "AD": (
+        "=IFERROR(SMALL(IF(({clave:r}={clave})*({Copia_Ventana:r}="
+        "{Copia_Ventana})*({L:r}=1)*({Energia_Negativa:r}<>0),{CMg:r}),"
+        "COUNTIFS({clave:a},{clave},{Copia_Ventana:a},{Copia_Ventana})),"
+        "\"–\")"
+    ),
+    "AU": (
+        f"=SUMIFS({{AS:r}},{_GRUPO_EC},{{L:r}},1,"
+        "{Cuarto de Hora:r},\">=\"&{Cuarto de Hora})"
+    ),
+    "AV": (
+        f"=-SUMIFS({{AT:r}},{_GRUPO_EC},{{L:r}},1,"
+        "{Cuarto de Hora:r},\">=\"&{Cuarto de Hora})"
+    ),
+    "AY": (
+        "=IF(SUMIFS({Energia_Positiva:r},{Copia_Ventana:r},{Copia_Ventana})"
+        f">10,IFERROR({{AW}}*AVERAGEIFS({{AB:r}},{_GRUPO_EC},{{AW:r}},"
+        "\"<>0\"),0),0)"
+    ),
+    "AZ": (
+        "=IF(SUMIFS({Energia_Negativa:r},{Copia_Ventana:r},{Copia_Ventana})"
+        f"<-10,IFERROR({{AX}}*AVERAGEIFS({{AD:r}},{_GRUPO_EC},{{AX:r}},"
+        "\"<>0\"),0),0)"
+    ),
+    "BC": (
+        f"=MAX(0,(SUMIFS({{BA:r}},{_GRUPO_EC})-SUMIFS({{U:r}},{_GRUPO_EC}))"
+        f"/COUNTIFS({_GRUPO_EC}))"
+    ),
+}
+# Las de esta lista son matriciales (Ctrl+Shift+Enter en Excel 2019 o
+# anterior; en Excel 365 se escriben normal).
+MATRICIALES_E_COSTOS = ("AB", "AD")
 GUION_SIN_PUESTO = "–"
 
 # Orden final de columnas internas de la hoja: los tres cuadros
