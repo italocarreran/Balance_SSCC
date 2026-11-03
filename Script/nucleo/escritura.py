@@ -34,6 +34,7 @@ from .factores_subastas import TITULOS_FMA
 from .formato import formatear_libro
 from .sellos import sellar
 from .unidades import con_unidades
+from .utiles import normalizar
 from .hojas_entrada import fd_para_hoja, subastas_para_hoja
 from .lectura import (
     TITULO_CENTRALES_DICCIONARIO, TITULO_CENTRALES_RESUMEN, titulo_de_cuadro,
@@ -824,6 +825,14 @@ def _escribir_hoja_centrales(writer, resumen, diccionario):
     lectura.py, junto a leer_centrales_planilla(), que es la que la
     vuelve a leer: las dos puntas se mueven juntas.
     """
+
+    # 'Energía mínima' no se usa en ningun calculo (pedido del usuario:
+    # "quitémosla"). Todo lo de Resumen BESS se busca por nombre de
+    # columna, asi que sacarla no corre nada.
+    resumen = resumen.loc[:, [
+        columna for columna in resumen.columns
+        if normalizar(columna) != "energia minima"
+    ]]
 
     # Fila 1 vacia, "Cuadro N° ..." en la 2 y encabezados en la 3.
     _, columna = _escribir_tabla_con_titulo(

@@ -5545,10 +5545,12 @@ kWh del cuarto con /4·1000); SoC p.u. (RE545: SoC × Capacidad × 1000);
 valorizaciones, C1/C2, RECIBE/PAGA/NETO CLP. Factores (FD, FMA, prorratas,
 Eficiencia) sin corchetes.
 
-Pendiente de confirmar con el usuario: `Energía mínima` (Resumen BESS, sin
-uso confirmado), `intervalo` de Medidores, `Margen ultima hora` de RE545 y la
-columna `Total` de E Costos (valorización; no se le puso `[CLP]` para no
-duplicar el nombre `Total [CLP]` de BA).
+Cerrado con el usuario (2026-11-03 (7)): `Energía mínima` sale de la hoja
+Centrales (no la usa ningún cálculo; todo se busca por nombre de columna);
+`intervalo` de Medidores es la fecha con hora:minuto → `intervalo [fecha
+hh:mm]`; `Margen ultima hora` queda sin unidad; en E Costos `U` "Total" (grupo
+Componente 2) se muestra `Total C2 [CLP]` y `BA` "Total [CLP]" (AY + AZ, el
+Componente 1) `Total C1 [CLP]`.
 
 **Verificación:** `tests/test_unidades.py` (+2); punta a punta con unidades
 en todas las hojas: cálculos idénticos. 318 pruebas, 17 salteadas.

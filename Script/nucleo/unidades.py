@@ -51,6 +51,8 @@ _COMUNES_CALCULO = {
 NOMBRES_CON_UNIDAD = {
     HOJA_MEDIDORES: {
         "Gen_Unidad": f"Gen_Unidad {KWH}",
+        # La fecha y hora (inicio) del intervalo de 15 minutos.
+        "intervalo": "intervalo [fecha hh:mm]",
         "SoC": f"SoC {PU}",
     },
     HOJA_SUBASTAS: {
@@ -84,6 +86,10 @@ NOMBRES_CON_UNIDAD = {
         "Asignación Carga kWh": f"Asignación Carga {KWH}",
         "Valorización Descarga [$]": f"Valorización Descarga {CLP}",
         "Valorización Carga [$]": f"Valorización Carga {CLP}",
+        # U (grupo "Componente 2": lo ganado bloque a bloque a su CMg)
+        # y BA (AY + AZ: el Componente 1).
+        "Total": f"Total C2 {CLP}",
+        "Total [CLP]": f"Total C1 {CLP}",
     },
     HOJA_CALCULO_RE545: {
         **_COMUNES_CALCULO,

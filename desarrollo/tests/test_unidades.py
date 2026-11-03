@@ -66,5 +66,31 @@ class TestUnidades(unittest.TestCase):
             )  # pesos como CLP
 
 
+class TestCentralesSinEnergiaMinima(unittest.TestCase):
+    def test_la_hoja_centrales_no_trae_energia_minima(self):
+        resumen = pd.DataFrame({
+            "Nombre activo": ["SAE UNO"], "Pmax (MW)": [10],
+            "Capacidad (MWh)": [40], "Energía mínima": [5],
+        })
+        diccionario = pd.DataFrame([["Balance_BESS", "FD"], ["SAE UNO", "U"]])
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            nucleo.escribir_salida(
+                None, ruta, [], [], hojas_regenerar={nucleo.HOJA_CENTRALES},
+                centrales=(resumen, diccionario), registrar=lambda *a: None,
+            )
+            encabezado = [
+                c.value for c in openpyxl.load_workbook(ruta)[
+                    nucleo.HOJA_CENTRALES][3]
+            ]
+            leido, _ = nucleo.leer_centrales_planilla(ruta)
+
+        self.assertNotIn("Energía mínima", encabezado)
+        self.assertIn("Capacidad [MWh]", encabezado)
+        self.assertEqual(
+            list(leido.columns), ["Nombre activo", "Pmax (MW)", "Capacidad (MWh)"]
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
