@@ -29,7 +29,9 @@ from openpyxl.styles import Font
 
 from .alertas import ALTA, Alerta
 
-from .ecostos import COLUMNAS_SALIDA_E_COSTOS, GRUPOS_CALCULO_E_COSTOS
+from .ecostos import (
+    CUADROS_CALCULO_E_COSTOS, ORIGEN_COLUMNAS_E_COSTOS,
+)
 from .factores_subastas import TITULOS_FMA
 from .formato import formatear_libro
 from .sellos import sellar
@@ -214,7 +216,7 @@ def _ordenar_hojas(wb, orden):
 # juntas: cualquiera de las dos escrituras formatea tambien las hojas
 # preservadas de la otra).
 _FILAS_ENCABEZADO = {
-    HOJA_CALCULO_ECOSTOS: 2,
+    HOJA_CALCULO_ECOSTOS: 3,
     HOJA_CALCULO_RE545: 2,
     HOJA_PRORRATA_RETIROS: 3,
     HOJA_COMPENSACION_CENTRAL: 3,
@@ -232,6 +234,7 @@ _FILAS_ENCABEZADO = {
 # fila: va combinado sobre su cuadro, sin fondo y en el azul de los
 # encabezados (la fila 1 queda vacia). Ver formato.formatear_hoja.
 _FILAS_TITULO_CUADRO = {
+    HOJA_CALCULO_ECOSTOS: 2,
     HOJA_PRORRATA_RETIROS: 2,
     HOJA_COMPENSACION_CENTRAL: 2,
     HOJA_FMA: 2,
@@ -515,24 +518,7 @@ def escribir_pagos_bess(
         if HOJA_CALCULO_ECOSTOS in regenerar:
             if df_ecostos is not None:
                 escritas.append(HOJA_CALCULO_ECOSTOS)
-                # startrow=1: deja la fila 1 libre para los
-                # encabezados de grupo (celdas combinadas), que se
-                # escriben aparte con _escribir_encabezados_grupo();
-                # los nombres de columna quedan en la fila 2 y los
-                # datos desde la fila 3.
-                df_ecostos.to_excel(
-                    writer,
-                    sheet_name=HOJA_CALCULO_ECOSTOS,
-                    index=False,
-                    startrow=1,
-                    startcol=COLUMNA_MARGEN,
-                )
-                _escribir_encabezados_grupo(
-                    writer.sheets[HOJA_CALCULO_ECOSTOS],
-                    COLUMNAS_SALIDA_E_COSTOS,
-                    GRUPOS_CALCULO_E_COSTOS,
-                    columna_inicio=COLUMNA_MARGEN + 1,
-                )
+                _escribir_cuadros_e_costos(writer, df_ecostos)
         else:
             _preservar_o_avisar(writer, HOJA_CALCULO_ECOSTOS)
 
@@ -639,6 +625,8 @@ def escribir_pagos_bess(
         formatear_libro(
             writer.book, _FILAS_ENCABEZADO, _FILAS_TITULO_CUADRO
         )
+        if HOJA_CALCULO_ECOSTOS in escritas:
+            writer.sheets[HOJA_CALCULO_ECOSTOS].freeze_panes = PANEL_E_COSTOS
         crono.tramo("formato (encabezados, anchos, numeros, marco)")
         relleno = _asegurar_una_hoja(writer)
 
@@ -674,6 +662,40 @@ def _poner_unidades(wb):
 
     for nombre in wb.sheetnames:
         con_unidades(wb[nombre], nombre, _FILAS_ENCABEZADO.get(nombre, 1))
+
+
+def _escribir_cuadros_e_costos(writer, df_ecostos):
+    """
+    "Calculo E Costos" en sus tres cuadros (CUADROS_CALCULO_E_COSTOS),
+    lado a lado con una columna de separacion: fila 1 vacia, "Cuadro
+    N° ..." en la 2, nombres en la 3. df_ecostos llega ya renombrado y
+    en el orden de COLUMNAS_SALIDA_E_COSTOS (los cuadros seguidos): se
+    parte por posicion. Las columnas que vienen de otra hoja llevan el
+    origen como comentario en su nombre (ORIGEN_COLUMNAS_E_COSTOS).
+    """
+
+    ws_nombre = HOJA_CALCULO_ECOSTOS
+    columna = COLUMNA_MARGEN
+    desde = 0
+    for numero, (titulo, claves) in enumerate(CUADROS_CALCULO_E_COSTOS, 1):
+        cuadro = df_ecostos.iloc[:, desde:desde + len(claves)]
+        _, siguiente = _escribir_tabla_con_titulo(
+            writer, ws_nombre, cuadro, titulo_de_cuadro(numero, titulo),
+            fila_inicio=1, columna_inicio=columna,
+        )
+        ws = writer.sheets[ws_nombre]
+        for posicion, clave in enumerate(claves):
+            nota = ORIGEN_COLUMNAS_E_COSTOS.get(clave)
+            if nota:
+                ws.cell(3, columna + posicion + 1).comment = _comentario(nota)
+        desde += len(claves)
+        columna = siguiente
+
+
+# Columnas que quedan fijas al moverse a la derecha en Calculo E Costos
+# (pedido del usuario: "que se inmovilicen C:H", Dia..Configuracion):
+# el panel se corta en la I, debajo de los nombres de columna.
+PANEL_E_COSTOS = "I4"
 
 
 def _central_primero(df):

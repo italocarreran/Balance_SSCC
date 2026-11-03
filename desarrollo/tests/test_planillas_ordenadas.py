@@ -134,8 +134,13 @@ class TestColumnasDeSalidaDeLosCalculos(unittest.TestCase):
         y las energias con FD siguen en la hoja.
         """
 
-        for clave in ("W", "Y", "AB", "AC", "AD", "R", "AE", "AF", "AS", "AT"):
+        for clave in ("W", "Y", "AB", "AC", "AD", "R", "AS", "AT"):
             self.assertIn(clave, nucleo.COLUMNAS_SALIDA_E_COSTOS)
+
+        # Salen (pedido 2026-11-03): las CTF (siempre 0) y las del metodo
+        # anterior que no llegan al monto.
+        for clave in ("AI", "AL", "AO", "AR", "M", "N", "O", "AE", "AF"):
+            self.assertNotIn(clave, nucleo.COLUMNAS_SALIDA_E_COSTOS)
 
         for clave in ("S", "U", "V", "BK", "BM", "BN", "BS", "BT"):
             self.assertIn(clave, nucleo.COLUMNAS_SALIDA_RE545)
@@ -209,23 +214,31 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
             wb = openpyxl.load_workbook(ruta)
             ws = wb[nucleo.HOJA_CALCULO_ECOSTOS]
 
-            # nombres de columna en fila 2, en negrita y con el panel
-            # inmovilizado justo debajo
-            # (columna A de margen: la tabla empieza en la B)
-            self.assertIsNone(ws.cell(2, 1).value)
-            self.assertTrue(ws.cell(2, 2).font.bold)
-            self.assertEqual(ws.freeze_panes, "A3")
+            # Tres cuadros: fila 1 vacia, "Cuadro N°" en la 2, nombres
+            # en la 3 (en negrita), margen en A; panel fijo en C:H.
+            self.assertTrue(all(c.value is None for c in ws[1]))
+            titulos = [c.value for c in ws[2] if c.value]
+            self.assertEqual(len(titulos), 3, titulos)
+            self.assertTrue(titulos[0].startswith("Cuadro N° 1"))
+            self.assertEqual(ws["B3"].value, "Mes")
+            self.assertTrue(ws["B3"].font.bold)
+            self.assertEqual(ws["H3"].value, "Configuracion")
+            self.assertEqual(ws.freeze_panes, "I4")
+            # El origen va como comentario en el encabezado.
+            self.assertIn("Hoja origen: CMg", next(
+                c for c in ws[3] if str(c.value).startswith("CMg")
+            ).comment.text)
 
             # ancho de columna puesto (pandas no pone ninguno)
             self.assertIsNotNone(ws.column_dimensions["A"].width)
 
             # y los datos son los mismos
             # La hoja muestra la unidad entre corchetes...
-            self.assertIn("Descarga [kWh]", [c.value for c in ws[2]])
+            self.assertIn("Descarga [kWh]", [c.value for c in ws[3]])
             # ...y al leerla vuelve el nombre de siempre.
             from Script.nucleo.unidades import sin_unidades
             df = sin_unidades(nucleo.sin_margen_izquierdo(pd.read_excel(
-                ruta, sheet_name=nucleo.HOJA_CALCULO_ECOSTOS, header=1
+                ruta, sheet_name=nucleo.HOJA_CALCULO_ECOSTOS, header=2
             )), nucleo.HOJA_CALCULO_ECOSTOS)
             self.assertEqual(list(df["Descarga kWh"]), [1.5, 2.5, 3.5])
             self.assertEqual(list(df["Configuracion"]), ["SAE UNO"] * 3)

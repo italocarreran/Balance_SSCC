@@ -32,7 +32,7 @@ from .hojas_entrada import (
 from .lectura import (
     construir_homologacion, leer_centrales, leer_centrales_planilla,
     leer_hoja_con_fila_vacia, leer_medidas_sae, obtener_centrales,
-    sin_margen_izquierdo,
+    fila_de_encabezado, sin_margen_izquierdo,
 )
 from .unidades import sin_unidades
 from .medidores import (
@@ -835,8 +835,15 @@ def generar_pagos_bess(
         # ya guardadas en la planilla.
         def calculo_existente(nombre):
             try:
+                # Calculo E Costos: fila 1 vacia, "Cuadro N°" en la 2 y
+                # nombres en la 3. Calculo RE545 (y un E Costos de
+                # antes): grupos en la 1 y nombres en la 2.
+                arriba = pd.read_excel(
+                    rutas["salida"], sheet_name=nombre, header=None, nrows=4
+                )
+                fila = fila_de_encabezado(arriba) or 1
                 return sin_unidades(sin_margen_izquierdo(pd.read_excel(
-                    rutas["salida"], sheet_name=nombre, header=1
+                    rutas["salida"], sheet_name=nombre, header=fila
                 )), nombre)
             except (FileNotFoundError, ValueError) as error:
                 raise ErrorEntrada(

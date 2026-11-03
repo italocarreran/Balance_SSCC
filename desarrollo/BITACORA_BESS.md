@@ -5554,3 +5554,26 @@ Componente 1) `Total C1 [CLP]`.
 
 **Verificación:** `tests/test_unidades.py` (+2); punta a punta con unidades
 en todas las hojas: cálculos idénticos. 318 pruebas, 17 salteadas.
+
+## 2026-11-03 (8) — Calculo E Costos en tres cuadros
+
+Pedido del usuario, armado en conjunto en `desarrollo/notas_orden_ecostos.md`.
+
+- `ecostos.CUADROS_CALCULO_E_COSTOS`: (1) Información y energía con
+  FD-prorrata, (2) Componente 1, (3) Componente 2 y monto a compensar.
+  `COLUMNAS_SALIDA_E_COSTOS` es su concatenación; `escritura.
+  _escribir_cuadros_e_costos` los escribe lado a lado (margen en A, una
+  columna entre cuadros, fila 1 vacía, título en la 2, nombres en la 3).
+- Fuera de la hoja (siguen calculándose): CTF AI/AL/AO/AR y M, N, O, AE, AF
+  (método anterior, no llegan al monto). `GRUPOS_CALCULO_E_COSTOS = ()`;
+  prorratas y FD con prefijo ("Prorrata CPF(-)", "FD CPF(-)"), así los 41
+  nombres de la hoja son únicos.
+- `ecostos.ORIGEN_COLUMNAS_E_COSTOS`: comentario de origen en el encabezado.
+- Panel fijo en `I4` (C:H, pedido del usuario).
+- `calculo_existente` (proceso) detecta la fila de nombres: 3 en el formato
+  nuevo de E Costos, 2 en RE545 y en un E Costos de antes.
+
+**Verificación:** pruebas de la hoja ajustadas (tres cuadros, panel,
+comentario de origen, columnas que salen). Caso completo antes/después:
+COMPENSACION_CENTRAL, PRORRATA_RETIROS, Resumen y el monto de E Costos
+idénticos. 319 pruebas, 17 salteadas.

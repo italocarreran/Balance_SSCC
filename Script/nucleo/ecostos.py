@@ -179,17 +179,19 @@ NOMBRES_CALCULO_E_COSTOS = {
     "AD": "Curva monotona CMg Carga",
     "AE": "Energía descargada",
     "AF": "Energía cargada",
-    "AG": "CPF(-)",
-    "AH": "CSF(-)",
+    # Prorratas y FD llevan el prefijo en el nombre (antes se
+    # distinguian por un encabezado de grupo).
+    "AG": "Prorrata CPF(-)",
+    "AH": "Prorrata CSF(-)",
     "AI": "CTF(-)",
-    "AJ": "CPF(+)",
-    "AK": "CSF(+)",
+    "AJ": "Prorrata CPF(+)",
+    "AK": "Prorrata CSF(+)",
     "AL": "CTF(+)",
-    "AM": "CPF(-)",
-    "AN": "CSF(-)",
+    "AM": "FD CPF(-)",
+    "AN": "FD CSF(-)",
     "AO": "CTF(-)",
-    "AP": "CPF(+)",
-    "AQ": "CSF(+)",
+    "AP": "FD CPF(+)",
+    "AQ": "FD CSF(+)",
     "AR": "CTF(+)",
     "AS": "Descarga ajustada FD-prorrata kWh",
     "AT": "Carga ajustada FD-prorrata kWh",
@@ -216,16 +218,112 @@ NOMBRES_CALCULO_E_COSTOS = {
 # paso a paso con el que un coordinado sigue de donde sale cada peso.
 # Tampoco las CTF en 0 (AI, AL, AO, AR): que el CTF sea 0 es un dato,
 # no una columna de relleno.
-COLUMNAS_AUXILIARES_E_COSTOS = ("X",)
+#
+# Pedido del usuario (2026-11-03, "ordenar la hoja de Ecostos") salen
+# tambien, sin dejar de calcularse:
+#   - las CTF (AI, AL, AO, AR): siempre 0, no se usan;
+#   - las del metodo anterior que no llegan al monto: M "SoC sobre el
+#     minimo", N / O "Energía SSCC (-)/(+) por remunerar" (sin FD) y
+#     AE / AF "Energía descargada / cargada" (su reparto en Pmax).
+COLUMNAS_AUXILIARES_E_COSTOS = (
+    "X", "AI", "AL", "AO", "AR", "M", "N", "O", "AE", "AF",
+)
 
-# Orden final de columnas internas de la hoja (el de
-# NOMBRES_CALCULO_E_COSTOS sin los auxiliares). Lo usan
-# renombrar_calculo_e_costos() y, para ubicar los encabezados de
-# grupo, escribir_pagos_bess().
+# La hoja en tres cuadros, en el orden del calculo: lo que se trae de
+# otras hojas y la energia ajustada por FD-prorrata; el Componente 1
+# (curva de CMg, energia ajustada acumulada, asignacion y su
+# valorizacion); el Componente 2 (energia medida a su CMg) y el monto
+# = C1 - C2. (titulo, [claves internas]).
+CUADROS_CALCULO_E_COSTOS = (
+    ("Información y energía con FD-prorrata", [
+        "Mes", "Dia", "Hora", "Hora Mes", "Minutos", "Cuarto de Hora",
+        "clave", "Barra", "Energia_Positiva", "Energia_Negativa", "SoC",
+        "Copia_Ventana", "CMg", "L",
+        "AG", "AH", "AJ", "AK", "AM", "AN", "AP", "AQ", "AS", "AT",
+    ]),
+    ("Componente 1", [
+        "R", "W", "Y", "AB", "AC", "AD", "AU", "AV", "AW", "AX",
+        "AY", "AZ", "BA",
+    ]),
+    ("Componente 2 y monto a compensar", ["S", "T", "U", "BC"]),
+)
+
+# Orden final de columnas internas de la hoja: los tres cuadros
+# seguidos. Lo usan renombrar_calculo_e_costos() y escribir_pagos_bess()
+# (que la parte en sus cuadros).
 COLUMNAS_SALIDA_E_COSTOS = [
-    clave for clave in NOMBRES_CALCULO_E_COSTOS
-    if clave not in COLUMNAS_AUXILIARES_E_COSTOS
+    clave for _, claves in CUADROS_CALCULO_E_COSTOS for clave in claves
 ]
+
+# Comentario del encabezado de las columnas que vienen de otra hoja (o
+# que usan un dato de otra hoja que no esta como columna): de donde sale
+# y con que condicion.
+_MEDIDORES = "Hoja origen: Medidores, Cuadro 1"
+ORIGEN_COLUMNAS_E_COSTOS = {
+    "Mes": f"{_MEDIDORES} (Mes). Copia directa.",
+    "Dia": f"{_MEDIDORES} (Dia). Copia directa.",
+    "Hora": f"{_MEDIDORES} (Hora). Copia directa.",
+    "Hora Mes": f"{_MEDIDORES} (Hora Mes). Copia directa.",
+    "Minutos": f"{_MEDIDORES} (Minutos). Copia directa.",
+    "Cuarto de Hora": f"{_MEDIDORES} (Cuarto de Hora). Copia directa.",
+    "clave": f"{_MEDIDORES} (clave). Copia directa.",
+    "Barra": (
+        "Hoja origen: Centrales, Cuadro 1 Resumen BESS (Barra inyección). "
+        "Se busca por Configuracion."
+    ),
+    "Energia_Positiva": (
+        f"{_MEDIDORES} (Gen_Unidad). Solo la parte positiva y solo en las "
+        "filas que van a E Costos (Ventana_No_Completa = 1); en las demás, 0."
+    ),
+    "Energia_Negativa": (
+        f"{_MEDIDORES} (Gen_Unidad). Solo la parte negativa y solo en las "
+        "filas que van a E Costos (Ventana_No_Completa = 1); en las demás, 0."
+    ),
+    "SoC": f"{_MEDIDORES} (SoC). Copia directa.",
+    "Copia_Ventana": f"{_MEDIDORES} (Copia_Ventana). Copia directa.",
+    "CMg": (
+        "Hoja origen: CMg, Cuadro 1 (F_CMg). Se busca por Barra + Bloque "
+        "horario."
+    ),
+    "L": (
+        "Hoja origen: Subastas, Cuadro 1. 1 si la central tiene subasta "
+        "adjudicada (BAJADA o SUBIDA) en ese mes, día y hora; si no, 0."
+    ),
+    **{
+        clave: (
+            "Se calcula desde Subastas, Cuadro 1: por central y Hora mes, "
+            f"filas de {servicio} / total de filas de esa central y hora "
+            "(la fila suma 1)."
+        )
+        for clave, servicio in (
+            ("AG", "CPF(-)"), ("AH", "CSF(-)"),
+            ("AJ", "CPF(+)"), ("AK", "CSF(+)"),
+        )
+    },
+    **{
+        clave: (
+            f"Hoja origen: FD, {cuadro} (columna {servicio}). Se busca por "
+            "Hora mes + unidad de la central (columna Central de la hoja FD "
+            "o Diccionario). Solo si Adj SSCC = 1 y la prorrata del servicio "
+            "es distinta de 0; si no, 0."
+        )
+        for clave, cuadro, servicio in (
+            ("AM", "Cuadro 2 FD CPF", "CPF(-)"),
+            ("AN", "Cuadro 1 FD CSF", "CSF(-)"),
+            ("AP", "Cuadro 2 FD CPF", "CPF(+)"),
+            ("AQ", "Cuadro 1 FD CSF", "CSF(+)"),
+        )
+    },
+    **{
+        clave: (
+            "Usa Pmax (MW) de Centrales, Cuadro 1 Resumen BESS (se busca por "
+            "Configuracion): el máximo del acumulado de la energía ajustada "
+            "del ciclo se reparte en bloques de Pmax/4 × 1000 kWh según el "
+            "Bloque ordenado. Sin Pmax queda vacía."
+        )
+        for clave in ("AW", "AX")
+    },
+}
 
 
 # Encabezados de grupo de "Calculo E Costos", confirmados contra
@@ -240,17 +338,10 @@ COLUMNAS_SALIDA_E_COSTOS = [
 # direccion) que las Prorratas -- por eso los grupos se arman con las
 # claves internas (unicas), nunca buscando por nombre de columna
 # (duplicado a proposito, como el resto de la hoja).
-GRUPOS_CALCULO_E_COSTOS = (
-    ("Dia", ["Mes", "Dia", "Hora"]),
-    ("Nombre", ["clave", "Barra"]),
-    ("BESS", ["Energia_Positiva", "Energia_Negativa", "SoC"]),
-    ("Componente 2", ["S", "T", "U"]),
-    ("Prorratas (-)", ["AG", "AH", "AI"]),
-    ("Prorratas (+)", ["AJ", "AK", "AL"]),
-    ("FD", ["AM", "AN", "AO", "AP", "AQ", "AR"]),
-    ("Energía con FD-Prorrata", ["AS", "AT", "AU", "AV", "AW", "AX"]),
-    ("Componente 1", ["AY", "AZ", "BA"]),
-)
+# Desde que la hoja va en tres cuadros (CUADROS_CALCULO_E_COSTOS) no
+# lleva encabezados de grupo: el titulo de cada cuadro hace ese papel y
+# prorratas y FD llevan el prefijo en el nombre de la columna.
+GRUPOS_CALCULO_E_COSTOS = ()
 
 
 def _completar_mapeo_con_otros_nombres(
