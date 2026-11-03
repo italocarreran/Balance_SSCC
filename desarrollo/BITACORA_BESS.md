@@ -5525,3 +5525,30 @@ entradas de la corrida), Alertas y Log con uno.
 aviso único, formato viejo, RE545 FD y FMA CPF, Ofertas, E Costos); lecturas
 del control ajustadas. Corrida de punta a punta igual que antes. 316
 pruebas, 17 salteadas.
+
+## 2026-11-03 (6) — Unidades de medida entre corchetes
+
+Pedido del usuario: "agregar unidad de medida [...] entre corchetes []. Si
+es CLP o USD igual".
+
+`nucleo/unidades.py`: `NOMBRES_CON_UNIDAD = {hoja: {nombre interno: nombre
+visible}}`. La escritura pone el nombre visible en la fila de encabezados
+(`escritura._poner_unidades`, antes del formato) y las lecturas lo devuelven
+al interno (`leer_hoja_con_fila_vacia`, `leer_tabla_bajo_titulo`,
+`calculo_existente`): el cálculo sigue con los nombres de siempre y un libro
+de antes se lee igual. Los `[$]` se muestran como `[CLP]`.
+
+Unidades (revisadas en el código): `Gen_Unidad` kWh; CMg CLP/kWh
+(`CMg[CLP/KWh]` de cmg_15min); `Energía SSCC` de Subastas MW (RE545 la pasa a
+kWh del cuarto con /4·1000); SoC p.u. (RE545: SoC × Capacidad × 1000);
+`Pmax [MW]`, `Capacidad [MWh]`; energías de E Costos/RE545 kWh; montos,
+valorizaciones, C1/C2, RECIBE/PAGA/NETO CLP. Factores (FD, FMA, prorratas,
+Eficiencia) sin corchetes.
+
+Pendiente de confirmar con el usuario: `Energía mínima` (Resumen BESS, sin
+uso confirmado), `intervalo` de Medidores, `Margen ultima hora` de RE545 y la
+columna `Total` de E Costos (valorización; no se le puso `[CLP]` para no
+duplicar el nombre `Total [CLP]` de BA).
+
+**Verificación:** `tests/test_unidades.py` (+2); punta a punta con unidades
+en todas las hojas: cálculos idénticos. 318 pruebas, 17 salteadas.

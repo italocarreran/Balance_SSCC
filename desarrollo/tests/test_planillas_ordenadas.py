@@ -220,9 +220,13 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
             self.assertIsNotNone(ws.column_dimensions["A"].width)
 
             # y los datos son los mismos
-            df = nucleo.sin_margen_izquierdo(pd.read_excel(
+            # La hoja muestra la unidad entre corchetes...
+            self.assertIn("Descarga [kWh]", [c.value for c in ws[2]])
+            # ...y al leerla vuelve el nombre de siempre.
+            from Script.nucleo.unidades import sin_unidades
+            df = sin_unidades(nucleo.sin_margen_izquierdo(pd.read_excel(
                 ruta, sheet_name=nucleo.HOJA_CALCULO_ECOSTOS, header=1
-            ))
+            )), nucleo.HOJA_CALCULO_ECOSTOS)
             self.assertEqual(list(df["Descarga kWh"]), [1.5, 2.5, 3.5])
             self.assertEqual(list(df["Configuracion"]), ["SAE UNO"] * 3)
 

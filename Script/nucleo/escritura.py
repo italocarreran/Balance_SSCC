@@ -33,6 +33,7 @@ from .ecostos import COLUMNAS_SALIDA_E_COSTOS, GRUPOS_CALCULO_E_COSTOS
 from .factores_subastas import TITULOS_FMA
 from .formato import formatear_libro
 from .sellos import sellar
+from .unidades import con_unidades
 from .hojas_entrada import fd_para_hoja, subastas_para_hoja
 from .lectura import (
     TITULO_CENTRALES_DICCIONARIO, TITULO_CENTRALES_RESUMEN, titulo_de_cuadro,
@@ -633,6 +634,7 @@ def escribir_pagos_bess(
         _ordenar_hojas(writer.book, ORDEN_HOJAS_SALIDA)
 
         crono.tramo("armar las hojas")
+        _poner_unidades(writer.book)
         formatear_libro(
             writer.book, _FILAS_ENCABEZADO, _FILAS_TITULO_CUADRO
         )
@@ -664,6 +666,13 @@ def escribir_pagos_bess(
     return ruta_salida
 
 
+
+
+def _poner_unidades(wb):
+    """La unidad de cada columna entre corchetes (ver unidades.py)."""
+
+    for nombre in wb.sheetnames:
+        con_unidades(wb[nombre], nombre, _FILAS_ENCABEZADO.get(nombre, 1))
 
 
 def _central_primero(df):
@@ -1061,6 +1070,7 @@ def escribir_salida(
         _ordenar_hojas(writer.book, ORDEN_HOJAS_SALIDA)
 
         crono.tramo("armar las hojas")
+        _poner_unidades(writer.book)
         formatear_libro(
             writer.book, _FILAS_ENCABEZADO, _FILAS_TITULO_CUADRO
         )

@@ -34,6 +34,7 @@ from .lectura import (
     leer_hoja_con_fila_vacia, leer_medidas_sae, obtener_centrales,
     sin_margen_izquierdo,
 )
+from .unidades import sin_unidades
 from .medidores import (
     completar_ofertas_en_medidores, construir_medidores,
     construir_ofertas_sscc, reponer_auxiliares_medidores,
@@ -834,9 +835,9 @@ def generar_pagos_bess(
         # ya guardadas en la planilla.
         def calculo_existente(nombre):
             try:
-                return sin_margen_izquierdo(pd.read_excel(
+                return sin_unidades(sin_margen_izquierdo(pd.read_excel(
                     rutas["salida"], sheet_name=nombre, header=1
-                ))
+                )), nombre)
             except (FileNotFoundError, ValueError) as error:
                 raise ErrorEntrada(
                     f"Primero calcula la hoja '{nombre}' de "

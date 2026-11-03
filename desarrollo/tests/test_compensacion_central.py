@@ -307,7 +307,8 @@ class TestFormatoDeLasHojas(unittest.TestCase):
             self.assertEqual(compensacion["H3"].value, "Central")
             self.assertEqual(compensacion["I3"].value, "Empresa")
             self.assertEqual(compensacion["N3"].value, "Empresa")
-            self.assertEqual(compensacion["F3"].value, "Compensación Total [$]")
+            self.assertEqual(compensacion["F3"].value, "Compensación Total [CLP]")
+            self.assertEqual(prorrata["H3"].value, "Monto a pagar [CLP]")
             self.assertIsNone(compensacion.auto_filter.ref)
             self.assertFalse(any(
                 d.hidden for d in compensacion.row_dimensions.values()
