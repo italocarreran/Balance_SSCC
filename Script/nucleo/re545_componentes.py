@@ -107,44 +107,54 @@ def calcular_bk_bl_bm_bs_re545(df_re545):
 
     df = df_re545.reset_index(drop=True)
 
-    r = pd.to_numeric(df["R"], errors="coerce").fillna(0.0)
-    q = pd.to_numeric(df["CMg"], errors="coerce").fillna(0.0)
-    i_energia = pd.to_numeric(df["Energia_Positiva"], errors="coerce")
+    # Rendimiento (2026-11-03): mismo calculo que antes, pero con listas
+    # de Python en vez de .iloc y pd.Series por fila (25 s -> < 1 s en un
+    # mes real). _normaliza_valor_vba es una funcion pura y los valores
+    # se repiten mucho: se memoriza por (tipo, valor).
+    memoria = {}
+
+    def norm(valor):
+        clave = (type(valor), valor)
+        try:
+            return memoria[clave]
+        except KeyError:
+            resultado = memoria[clave] = _normaliza_valor_vba(valor)
+            return resultado
+        except TypeError:  # valor no hasheable
+            return _normaliza_valor_vba(valor)
+
+    r = pd.to_numeric(df["R"], errors="coerce").fillna(0.0).tolist()
+    q = pd.to_numeric(df["CMg"], errors="coerce").fillna(0.0).tolist()
+    # numpy (np.float64), igual que lo que devolvia .iloc.
+    i_energia = pd.to_numeric(df["Energia_Positiva"], errors="coerce").to_numpy()
+    # El periodo de cada fila, convertido una vez para toda la columna
+    # (antes, un pd.to_numeric de una Series de 1 elemento por fila).
+    periodos = [
+        pd.to_numeric(pd.Series([valor]), errors="coerce").iloc[0]
+        if not isinstance(valor, (int, float)) else valor
+        for valor in df["BJ"]
+    ]
+
+    centrales = [norm(v) for v in df["clave"]]
+    rankings = [norm(v) for v in df["S"]]
+    ventanas = [norm(v) for v in df["T"]]
+    ordenes = [norm(v) for v in df["BI"]]
+    periodos_txt = [norm(v) for v in df["BJ"]]
 
     # Clave de ACUMULACION: se arma con S (ranking cmg) de cada fila,
     # que es lo que el SUMIFS/MATCH real compara contra "BI4".
-    claves_acumulacion = [
-        (
-            _normaliza_valor_vba(central),
-            _normaliza_valor_vba(ranking),
-            _normaliza_valor_vba(ventana),
-            _normaliza_valor_vba(periodo),
-        )
-        for central, ranking, ventana, periodo in zip(
-            df["clave"], df["S"], df["T"], df["BJ"]
-        )
-    ]
+    claves_acumulacion = list(zip(centrales, rankings, ventanas, periodos_txt))
 
     # Clave de BUSQUEDA (una por fila): se arma con el BI (Orden) de
     # esa misma fila, el criterio fijo del SUMIFS/MATCH real.
-    claves_busqueda = [
-        (
-            _normaliza_valor_vba(central),
-            _normaliza_valor_vba(orden),
-            _normaliza_valor_vba(ventana),
-            _normaliza_valor_vba(periodo),
-        )
-        for central, orden, ventana, periodo in zip(
-            df["clave"], df["BI"], df["T"], df["BJ"]
-        )
-    ]
+    claves_busqueda = list(zip(centrales, ordenes, ventanas, periodos_txt))
 
     suma_r = {}
     suma_q = {}
 
     for posicion, clave in enumerate(claves_acumulacion):
-        suma_r[clave] = suma_r.get(clave, 0.0) + float(r.iloc[posicion])
-        suma_q[clave] = suma_q.get(clave, 0.0) + float(q.iloc[posicion])
+        suma_r[clave] = suma_r.get(clave, 0.0) + float(r[posicion])
+        suma_q[clave] = suma_q.get(clave, 0.0) + float(q[posicion])
 
     # SUMIFS sin match da 0.
     bk = [suma_r.get(clave, 0.0) for clave in claves_busqueda]
@@ -154,42 +164,24 @@ def calcular_bk_bl_bm_bs_re545(df_re545):
     # CMg; el puesto k de la hora toma la inyeccion del k-esimo. Sin
     # bloque queda en blanco, como el IFERROR del original.
     bloques_hora = {}
-    for posicion, (central, ranking, ventana) in enumerate(
-        zip(df["clave"], df["S"], df["T"])
-    ):
-        clave = (
-            _normaliza_valor_vba(central),
-            _normaliza_valor_vba(ventana),
-            _normaliza_valor_vba(ranking),
-        )
+    for posicion, clave in enumerate(zip(centrales, ventanas, rankings)):
         bloques_hora.setdefault(clave, []).append(
-            (float(q.iloc[posicion]), i_energia.iloc[posicion])
+            (float(q[posicion]), i_energia[posicion])
         )
     for lista in bloques_hora.values():
         lista.sort(key=lambda bloque: bloque[0], reverse=True)
 
+    def puesto(periodo):
+        return None if pd.isna(periodo) else int(periodo / 15) + 1
+
     bs = []
-    for central, orden, ventana, periodo in zip(
-        df["clave"], df["BI"], df["T"], df["BJ"]
-    ):
-        periodo = pd.to_numeric(pd.Series([periodo]), errors="coerce").iloc[0]
-        lista = bloques_hora.get((
-            _normaliza_valor_vba(central),
-            _normaliza_valor_vba(ventana),
-            _normaliza_valor_vba(orden),
-        ), [])
-        k = None if pd.isna(periodo) else int(periodo / 15) + 1
+    for clave, periodo in zip(zip(centrales, ventanas, ordenes), periodos):
+        lista = bloques_hora.get(clave, [])
+        k = puesto(periodo)
         bs.append(lista[k - 1][1] if k and 1 <= k <= len(lista) else pd.NA)
 
     # BM: k-esimo mayor BL dentro de central + ventana + BI (obs. 4).
-    claves_bm = [
-        (
-            _normaliza_valor_vba(central),
-            _normaliza_valor_vba(ventana),
-            _normaliza_valor_vba(orden),
-        )
-        for central, ventana, orden in zip(df["clave"], df["T"], df["BI"])
-    ]
+    claves_bm = list(zip(centrales, ventanas, ordenes))
 
     por_grupo = {}
 
@@ -201,11 +193,7 @@ def calcular_bk_bl_bm_bs_re545(df_re545):
 
     bm = []
 
-    for posicion, clave in enumerate(claves_bm):
-
-        periodo = pd.to_numeric(
-            pd.Series([df["BJ"].iloc[posicion]]), errors="coerce"
-        ).iloc[0]
+    for clave, periodo in zip(claves_bm, periodos):
 
         if pd.isna(periodo):
             bm.append(pd.NA)

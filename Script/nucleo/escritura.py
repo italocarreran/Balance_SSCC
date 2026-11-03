@@ -833,6 +833,48 @@ def _formula_de_prueba(plantilla, letras, rangos, fila):
     return _MARCADOR_PRUEBA.sub(cambiar, plantilla)
 
 
+# Las formulas del COMENTARIO son texto para pegar a mano en un Excel en
+# español (el del usuario): nombres de funcion en español y ";" como
+# separador. Las que van en las celdas no se traducen: el archivo las
+# guarda en ingles y Excel las muestra en el idioma de cada equipo.
+FUNCIONES_EN_ESPANOL = {
+    "SUMIFS": "SUMAR.SI.CONJUNTO",
+    "COUNTIFS": "CONTAR.SI.CONJUNTO",
+    "AVERAGEIFS": "PROMEDIO.SI.CONJUNTO",
+    "IFERROR": "SI.ERROR",
+    "IF": "SI",
+    "AND": "Y",
+    "OR": "O",
+    "LARGE": "K.ESIMO.MAYOR",
+    "SMALL": "K.ESIMO.MENOR",
+    "INDEX": "INDICE",
+    "MATCH": "COINCIDIR",
+    "COUNT": "CONTAR",
+    "ROUND": "REDONDEAR",
+    "SUM": "SUMA",
+    "MAX": "MAX",
+    "MIN": "MIN",
+}
+
+
+def formula_en_espanol(formula):
+    """
+    La formula (en ingles, con ",") como se escribe a mano en un Excel
+    en español: funciones traducidas y ";" entre argumentos. No toca lo
+    que va entre comillas.
+    """
+
+    partes = formula.split('"')
+    for i in range(0, len(partes), 2):  # fuera de comillas
+        texto = re.sub(
+            r"\b([A-Z]+)\(",
+            lambda m: FUNCIONES_EN_ESPANOL.get(m.group(1), m.group(1)) + "(",
+            partes[i],
+        )
+        partes[i] = texto.replace(",", ";")
+    return '"'.join(partes)
+
+
 def _comentar_formulas_de_prueba(ws, celdas, plantillas, letras, rangos,
                                  matriciales=()):
     """
@@ -850,7 +892,9 @@ def _comentar_formulas_de_prueba(ws, celdas, plantillas, letras, rangos,
         saltos = [int(s) for s in re.findall(r"@(-?\d+)", plantilla)]
         fila = 4 - min([0] + saltos)
         try:
-            formula = _formula_de_prueba(plantilla, letras, rangos, fila)
+            formula = formula_en_espanol(
+                _formula_de_prueba(plantilla, letras, rangos, fila)
+            )
         except KeyError:
             continue  # la plantilla nombra una columna que no esta
         texto = (

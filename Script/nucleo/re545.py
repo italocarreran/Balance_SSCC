@@ -533,55 +533,33 @@ def calcular_s_re545(df_re545):
     por CMg Promedio).
     """
 
+    # Vectorizado (antes, dos bucles anidados por grupo: 14 s en un mes
+    # real). Mismo resultado: "mayores" es el rango MIN descendente de R
+    # dentro del grupo, menos 1, contando solo las filas con R; "empates"
+    # es lo mismo con la Hora, dentro de las filas del grupo con el mismo
+    # R y con Hora. Una fila sin R vale 1; sin Hora, no suma empates.
     df = df_re545.reset_index(drop=True)
 
-    grupos = {}
-
-    for posicion, (central, ventana) in enumerate(
-        zip(df["clave"], df["T"])
-    ):
-        clave = (
-            _normaliza_valor_vba(central),
-            _normaliza_valor_vba(ventana),
-        )
-        grupos.setdefault(clave, []).append(posicion)
-
+    grupo = pd.Series(
+        list(zip(
+            df["clave"].map(_normaliza_valor_vba),
+            df["T"].map(_normaliza_valor_vba),
+        ))
+    ).factorize()[0]
     r = pd.to_numeric(df["R"], errors="coerce")
     c = pd.to_numeric(df["Hora"], errors="coerce")
 
-    resultado = [pd.NA] * len(df)
+    mayores = (
+        r.groupby(grupo).rank(method="min", ascending=False) - 1.0
+    )
+    con_hora = c.where(r.notna())
+    empates = (
+        con_hora.groupby([grupo, r]).rank(method="min", ascending=False)
+        - 1.0
+    ).reindex(df.index).fillna(0.0)
 
-    for posiciones in grupos.values():
-
-        for posicion in posiciones:
-
-            r_fila = r.iloc[posicion]
-            c_fila = c.iloc[posicion]
-
-            if pd.isna(r_fila):
-                # COUNTIFS contra un blanco no cuenta nada: queda el +1.
-                resultado[posicion] = 1.0
-                continue
-
-            mayores = 0
-            empates = 0
-
-            for otra in posiciones:
-
-                r_otra = r.iloc[otra]
-
-                if pd.isna(r_otra):
-                    continue
-
-                if r_otra > r_fila:
-                    mayores += 1
-                elif r_otra == r_fila:
-                    c_otra = c.iloc[otra]
-                    if pd.notna(c_otra) and pd.notna(c_fila) and c_otra > c_fila:
-                        empates += 1
-
-            resultado[posicion] = (mayores + empates) / 4.0 + 1.0
-
+    resultado = ((mayores + empates) / 4.0 + 1.0).where(r.notna(), 1.0)
+    resultado = list(resultado.astype(object))
     return pd.Series(resultado, index=df_re545.index)
 
 

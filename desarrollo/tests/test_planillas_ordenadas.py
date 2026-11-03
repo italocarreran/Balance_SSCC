@@ -302,7 +302,9 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
         nombres = {c.value: c for c in ws[3] if c.value}
         monto = nombres["Monto a compensar [CLP]"].comment.text
         self.assertIn("Fórmula equivalente para probar (fila 4", monto)
-        self.assertIn("=MAX(0,(SUMIFS(", monto)
+        # En español y con ";" (para pegar en un Excel en español).
+        self.assertIn("=MAX(0;(SUMAR.SI.CONJUNTO(", monto)
+        self.assertNotIn("SUMIFS", monto)
         bloque = nombres["Bloque ordenado"].comment.text
         self.assertIn("(fila 5", bloque)  # mira la fila de arriba
         curva = nombres["Curva monotona CMg Descarga [CLP/kWh]"].comment.text
