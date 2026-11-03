@@ -500,7 +500,7 @@ def main():
         evento se redondea a 0 y no se mueve nada.
         """
 
-        resto = resto_rueda[clave]
+        resto = resto_rueda.setdefault(clave, 0.0)
         # Al cambiar de sentido el resto pendiente ya no sirve: seguirlo
         # sumando frenaria medio pixel el primer evento del otro lado.
         if resto and (resto > 0) != (cantidad > 0):
@@ -551,12 +551,24 @@ def main():
         # El puntero puede estar sobre un hijo (la barra del registro,
         # por ejemplo): se sube por los padres hasta encontrar a alguien
         # que se haya anotado para recibir la rueda.
+        inicio = widget
         while widget is not None:
             desplazar = desplazables.get(str(widget))
             if desplazar is not None:
                 desplazar(muescas)
                 return "break"
             widget = getattr(widget, "master", None)
+        # Sobre otra ventana (un dialogo como "Ejecutar todo") la rueda
+        # no mueve la principal que esta detras (pedido del usuario: "al
+        # mover la ruedita se mueve la ventana principal").
+        try:
+            otra_ventana = (
+                inicio is not None and inicio.winfo_toplevel() is not root
+            )
+        except (tk.TclError, AttributeError):
+            otra_ventana = False
+        if otra_ventana:
+            return "break"
         _desplazar_ventana(muescas)
         return "break"
 
@@ -2075,7 +2087,10 @@ def main():
         frame_pasos = tk.LabelFrame(top, text="Pasos", padx=8, pady=6)
         frame_pasos.pack(fill="both", expand=True, padx=14, pady=4)
 
-        lienzo = tk.Canvas(frame_pasos, borderwidth=0, highlightthickness=0)
+        lienzo = tk.Canvas(
+            frame_pasos, borderwidth=0, highlightthickness=0,
+            yscrollincrement=1,
+        )
         barra_pasos = tk.Scrollbar(
             frame_pasos, orient="vertical", command=lienzo.yview
         )
@@ -2103,6 +2118,34 @@ def main():
         )
         txt_avisos.pack(fill="x")
 
+        # La rueda sobre la lista desplaza la lista, y sobre los avisos
+        # los avisos: nunca la ventana principal que esta detras.
+        def desplazar_lista(muescas):
+            region = lienzo.bbox("all")
+            if not region or region[3] - region[1] <= lienzo.winfo_height():
+                return
+            pixeles = _acumular("ejecutar_todo", muescas * PIXELES_POR_MUESCA)
+            if pixeles:
+                lienzo.yview_scroll(pixeles, "units")
+
+        def desplazar_avisos(muescas):
+            lineas = _acumular("ejecutar_todo_avisos", muescas * LINEAS_POR_MUESCA)
+            if lineas:
+                txt_avisos.yview_scroll(lineas, "units")
+
+        anotados = (frame_pasos, lienzo, lista, barra_pasos)
+        for widget in anotados:
+            registrar_desplazable(widget, desplazar_lista)
+        for widget in (frame_avisos, txt_avisos):
+            registrar_desplazable(widget, desplazar_avisos)
+
+        def olvidar_desplazables(event):
+            if event.widget is top:
+                for widget in anotados + (frame_avisos, txt_avisos):
+                    desplazables.pop(str(widget), None)
+
+        top.bind("<Destroy>", olvidar_desplazables, add="+")
+
         frame_pie = tk.Frame(top)
         frame_pie.pack(fill="x", padx=14, pady=(4, 12))
 
@@ -2113,42 +2156,49 @@ def main():
 
         estado_plan = {"plan": None}
 
-        def repintar():
+        # La lista se arma UNA vez y despues solo se actualizan sus
+        # valores (pedido del usuario: "cuando selecciono una casilla hace
+        # un parpadeo"). Antes cada tilde borraba y volvia a crear todas
+        # las filas -y volvia a revisar la carpeta entera-, y la lista
+        # quedaba en blanco un instante. La estructura de la carpeta no
+        # cambia mientras la ventana esta abierta: se revisa al abrirla.
+        _, filas_arbol = nucleo.revisar_estructura(ruta, aamm)
+        vista = {
+            "armada": False,
+            "seleccionadas": set(),
+            "tareas": {},     # id -> (var, cuadro, etiqueta de estado, motivo)
+            "libro": None,    # (var, cuadro, contador, ids)
+        }
 
+        COLOR_ESTADO = {
+            "al dia": COLOR_OK,
+            "se genera": COLOR_BASE_OK,
+            "se rehace": COLOR_PENDIENTE,
+            "bloqueada": COLOR_FALTA,
+            "sin tildar": COLOR_NEUTRO,
+        }
+
+        def cambiar(ids, tildar):
+            actual = set(vista["seleccionadas"])
+            if tildar:
+                # Tildar algo arrastra lo que sale de ahi: si no, queda
+                # mezclado con la corrida anterior.
+                actual |= nucleo.propagar_seleccion(set(ids))
+            else:
+                actual -= set(ids)
+            seleccion["ids"] = actual
+            repintar()
+
+        def armar(plan):
             # La lista se arma con el mismo orden y la misma sangria que
             # el arbol de la ventana principal (pedido del usuario): cada
             # cosa con boton bajo su carpeta, y las hojas del libro
             # adentro de Balance_BESS.xlsx, que tiene su propio cuadro
             # para tildarlas o destildarlas todas juntas.
-            _, filas_arbol = nucleo.revisar_estructura(ruta, aamm)
-            plan = nucleo.planificar(
-                ruta, aamm, seleccion["ids"], filas=filas_arbol
-            )
-            estado_plan["plan"] = plan
-
-            for hijo in lista.winfo_children():
-                hijo.destroy()
-
             tarea_de_fila = {}
             for tarea in plan["tareas"]:
                 fila_estado = nucleo.TAREA_POR_ID[tarea["id"]].fila_estado
                 tarea_de_fila.setdefault(fila_estado, tarea)
-
-            seleccionadas = {
-                t["id"] for t in plan["tareas"] if t["seleccionada"]
-            }
-            deshabilitado = "disabled" if corriendo["activo"] else "normal"
-
-            def cambiar(ids, tildar):
-                actual = set(seleccionadas)
-                if tildar:
-                    # Tildar algo arrastra lo que sale de ahi: si no,
-                    # queda mezclado con la corrida anterior.
-                    actual |= nucleo.propagar_seleccion(set(ids))
-                else:
-                    actual -= set(ids)
-                seleccion["ids"] = actual
-                repintar()
 
             def pintar_tarea(tarea, sangria):
 
@@ -2156,38 +2206,28 @@ def main():
                 fila.pack(fill="x", pady=1)
 
                 var = tk.BooleanVar(value=tarea["seleccionada"])
-                tk.Checkbutton(
-                    fila, variable=var, state=deshabilitado,
+                cuadro = tk.Checkbutton(
+                    fila, variable=var,
                     command=lambda i=tarea["id"], v=var: cambiar({i}, v.get()),
-                ).pack(side="left", padx=(sangria, 0))
+                )
+                cuadro.pack(side="left", padx=(sangria, 0))
 
                 tk.Label(
                     fila, text=tarea["etiqueta"], width=44 - sangria // 8,
                     anchor="w", font=("Consolas", 9),
                 ).pack(side="left")
 
-                color = {
-                    "al dia": COLOR_OK,
-                    "se genera": COLOR_BASE_OK,
-                    "se rehace": COLOR_PENDIENTE,
-                    "bloqueada": COLOR_FALTA,
-                    "sin tildar": COLOR_NEUTRO,
-                }[tarea["estado"]]
-
-                tk.Label(
-                    fila, text=tarea["estado"], width=12, anchor="w",
-                    fg=color, font=("Segoe UI", 9, "bold"),
-                ).pack(side="left")
-
-                motivo = ", ".join(
-                    tarea["faltan_requisitos"] + tarea["faltan_dependencias"]
+                estado = tk.Label(
+                    fila, width=12, anchor="w", font=("Segoe UI", 9, "bold"),
                 )
+                estado.pack(side="left")
 
-                tk.Label(
-                    fila,
-                    text=(f"falta: {motivo}" if motivo else ""),
-                    anchor="w", fg=COLOR_NEUTRO, font=("Segoe UI", 8),
-                ).pack(side="left", fill="x", expand=True)
+                motivo = tk.Label(
+                    fila, anchor="w", fg=COLOR_NEUTRO, font=("Segoe UI", 8),
+                )
+                motivo.pack(side="left", fill="x", expand=True)
+
+                vista["tareas"][tarea["id"]] = (var, cuadro, estado, motivo)
 
             def pintar_titulo(texto, sangria):
                 tk.Label(
@@ -2199,22 +2239,21 @@ def main():
                 fila = tk.Frame(lista)
                 fila.pack(fill="x", pady=(6, 1))
                 ids = {t["id"] for t in hojas}
-                todas = ids <= seleccionadas
-                var = tk.BooleanVar(value=todas)
-                tk.Checkbutton(
-                    fila, variable=var, state=deshabilitado,
+                var = tk.BooleanVar()
+                cuadro = tk.Checkbutton(
+                    fila, variable=var,
                     command=lambda v=var: cambiar(ids, v.get()),
-                ).pack(side="left")
-                tildadas = len(ids & seleccionadas)
+                )
+                cuadro.pack(side="left")
                 tk.Label(
                     fila, text=etiqueta, anchor="w",
                     font=("Segoe UI", 9, "bold"),
                 ).pack(side="left")
-                tk.Label(
-                    fila,
-                    text=f"  {tildadas} de {len(ids)} hoja(s) tildada(s)",
-                    anchor="w", fg=COLOR_NEUTRO, font=("Segoe UI", 8),
-                ).pack(side="left")
+                contador = tk.Label(
+                    fila, anchor="w", fg=COLOR_NEUTRO, font=("Segoe UI", 8),
+                )
+                contador.pack(side="left")
+                vista["libro"] = (var, cuadro, contador, ids)
 
             pintadas = set()
             titulo_pendiente = None
@@ -2255,6 +2294,50 @@ def main():
             for tarea in plan["tareas"]:
                 if tarea["id"] not in pintadas:
                     pintar_tarea(tarea, 0)
+
+            vista["armada"] = True
+
+        def repintar():
+
+            plan = nucleo.planificar(
+                ruta, aamm, seleccion["ids"], filas=filas_arbol
+            )
+            estado_plan["plan"] = plan
+
+            if not vista["armada"]:
+                armar(plan)
+
+            seleccionadas = {
+                t["id"] for t in plan["tareas"] if t["seleccionada"]
+            }
+            vista["seleccionadas"] = seleccionadas
+            deshabilitado = "disabled" if corriendo["activo"] else "normal"
+
+            for tarea in plan["tareas"]:
+                widgets = vista["tareas"].get(tarea["id"])
+                if widgets is None:
+                    continue
+                var, cuadro, estado, motivo = widgets
+                var.set(tarea["seleccionada"])
+                cuadro.config(state=deshabilitado)
+                estado.config(
+                    text=tarea["estado"], fg=COLOR_ESTADO[tarea["estado"]]
+                )
+                faltan = ", ".join(
+                    tarea["faltan_requisitos"] + tarea["faltan_dependencias"]
+                )
+                motivo.config(text=f"falta: {faltan}" if faltan else "")
+
+            if vista["libro"] is not None:
+                var, cuadro, contador, ids = vista["libro"]
+                var.set(ids <= seleccionadas)
+                cuadro.config(state=deshabilitado)
+                contador.config(
+                    text=(
+                        f"  {len(ids & seleccionadas)} de {len(ids)} "
+                        "hoja(s) tildada(s)"
+                    )
+                )
 
             txt_avisos.delete("1.0", "end")
 

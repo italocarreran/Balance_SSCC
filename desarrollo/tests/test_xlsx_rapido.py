@@ -40,6 +40,20 @@ def partes(ruta):
         return {h["name"]: z.read(h["parte"]) for h in _hojas(z)}
 
 
+class TestListasDeEstilos(unittest.TestCase):
+    """Una lista vacia escrita como <fills count="0"/> (asi la guarda
+    Excel y, segun la version, openpyxl) se reconoce y se completa."""
+
+    def test_lista_vacia_con_atributos(self):
+        from Script.nucleo.xlsx_rapido import _agregar_a_lista
+
+        texto = '<styleSheet><fills count="0"/><borders count="1"><border/></borders></styleSheet>'
+        nuevo = _agregar_a_lista(texto, "fills", ["<fill/>"])
+        self.assertIn('<fills count="1"><fill/></fills>', nuevo)
+        nuevo = _agregar_a_lista(nuevo, "borders", ["<border/>"])
+        self.assertIn('<borders count="2"><border/><border/></borders>', nuevo)
+
+
 class TestPegarHojas(unittest.TestCase):
 
     def setUp(self):

@@ -5646,3 +5646,26 @@ mismo criterio que E Costos.
 comentarios; reserva como valor si hay aporte CTF). Caso completo:
 COMPENSACION_CENTRAL, PRORRATA_RETIROS y Resumen idénticos; la reserva sale
 como fórmula (aporte CTF = 0). 322 pruebas, 17 salteadas.
+
+## 2026-11-03 (12) — Ventana "Ejecutar todo": parpadeo y rueda; estilos vacíos en xlsx_rapido
+
+Pedido del usuario (video): al tildar una casilla la ventana "parpadea", y la
+rueda del mouse sobre el diálogo mueve la ventana principal.
+
+- Parpadeo: cada tilde destruía y volvía a crear todas las filas (y volvía a
+  correr `revisar_estructura` sobre la carpeta). Ahora la lista se arma una
+  vez al abrir y `repintar()` solo actualiza casillas, estado, motivo y el
+  contador del libro.
+- Rueda: el `bind_all` caía en la ventana principal para todo lo que no
+  estuviera anotado. La lista y los avisos del diálogo se anotan como
+  desplazables (y se olvidan al cerrar), y la rueda sobre otra ventana ya no
+  mueve la principal.
+- `xlsx_rapido._agregar_a_lista`: una lista de estilos vacía con atributos
+  (`<fills count="0"/>`, como la guarda Excel) no se reconocía como vacía y
+  pegar hojas caía con ValueError. Apareció corriendo las pruebas en otro
+  entorno (Python 3.12); ya existía.
+
+**Verificación:** +2 pruebas de ventana (fallan con el código anterior) y +1
+de estilos. Pruebas de ventana corridas con `xvfb-run` en un entorno con
+tkinter (python3.12 + venv): 325 pruebas, 0 salteadas; en el entorno normal
+325, 19 salteadas (tkinter).

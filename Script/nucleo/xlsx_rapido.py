@@ -277,8 +277,11 @@ def _agregar_a_lista(texto, lista, elementos, antes_de=()):
     la primera de 'antes_de' que encuentre.
     """
 
+    # Atributos sin el "/" final ([^>]*? perezoso): con [^>]* la barra
+    # de <fills count="2"/> quedaba dentro de los atributos y la lista
+    # vacia no se reconocia como tal (ValueError buscando </fills>).
     patron = re.compile(
-        rf"<(?:(\w+):)?{lista}(\s[^>]*)?(/?)>", re.S
+        rf"<(?:(\w+):)?{lista}(\s[^>]*?)?(/?)>", re.S
     )
     match = patron.search(texto)
     nuevos = "".join(elementos)
