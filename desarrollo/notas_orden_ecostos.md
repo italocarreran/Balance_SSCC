@@ -45,3 +45,14 @@ Pedido del usuario (2026-11-03): ir anotando y programar todo junto.
 
 - Umbral de "SoC sobre el minimo": la columna sale de la hoja (no llega al
   monto), así que la duda queda sin efecto.
+
+## Tercera vuelta (anotado, sin programar)
+
+- Curvas monótonas (AD / AF): en los puestos que ya no tienen fila que cumpla
+  (Adj SSCC = 1 y energía ≠ 0), poner un guion "–" en vez de dejar la celda
+  vacía. Solo en la hoja: el cálculo sigue con el valor vacío (ninguna
+  fórmula usa estas columnas).
+- Duda: "Bloque Mes Descarga / Carga" es el Bloque horario (cuarto de hora del
+  mes) de la fila que ocupa ese puesto de la curva. No entra en ningún
+  cálculo (el C1 usa el puesto y el CMg). Posible cambio de nombre a
+  "Bloque horario del puesto (descarga / carga)": pendiente de respuesta.
