@@ -56,3 +56,9 @@ Pedido del usuario (2026-11-03): ir anotando y programar todo junto.
   mes) de la fila que ocupa ese puesto de la curva. No entra en ningún
   cálculo (el C1 usa el puesto y el CMg). Posible cambio de nombre a
   "Bloque horario del puesto (descarga / carga)": pendiente de respuesta.
+- Monto a compensar: se queda como valor, sin fórmula (decidido con el
+  usuario). Repartido en partes iguales entre todas las filas del ciclo
+  (fiel a la macro; también filas con C1 = C2 = 0 y Adj = 0). Una fórmula
+  por fila (SUMIFS/COUNTIFS por central + ciclo) costaría ~30.000² × 3
+  comparaciones por recálculo, y COMPENSACION_CENTRAL / PRORRATA_RETIROS leen
+  el Monto de la hoja: una fórmula sin valor guardado se leería vacía.
