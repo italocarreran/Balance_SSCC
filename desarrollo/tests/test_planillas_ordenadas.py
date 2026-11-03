@@ -499,7 +499,13 @@ class TestUnaSolaPlanilla(unittest.TestCase):
 
             hojas = pd.ExcelFile(control).sheet_names
 
-            self.assertEqual(hojas, list(nucleo.ORDEN_HOJAS_CONTROL))
+            # La matriz de centrales solo sale cuando el calculo lee las
+            # entradas; las demas siempre, en su orden.
+            self.assertEqual(
+                hojas, [h for h in nucleo.ORDEN_HOJAS_CONTROL if h in hojas]
+            )
+            for hoja in (nucleo.HOJA_EJECUCION, nucleo.HOJA_ALERTAS, nucleo.HOJA_LOG):
+                self.assertIn(hoja, hojas)
 
 
 class TestFormatoNoTocaLosDatos(unittest.TestCase):

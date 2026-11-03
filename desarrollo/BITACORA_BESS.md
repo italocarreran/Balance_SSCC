@@ -5767,3 +5767,25 @@ el de ventana, que además no tiene calamine y prueba el respaldo).
 
 **Verificación:** `test_paralelo` (+4), `test_relleno_rapido`; pruebas de
 ventana con xvfb. 332 pruebas.
+
+## 2026-11-03 (17) — Ofertas SSCC por central; matriz de centrales en Control_corrida
+
+- Ofertas SSCC por día (`ofertas_sscc._ofertas_por_central`, Diccionario en
+  el formato nuevo): cada nombre del archivo de ofertas se busca en la
+  columna Ofertas del Diccionario y, si no está, en la de Subastas; si no
+  está en ninguna NO se agrega (aviso con los descartados). Antes las
+  equivalencias se tomaban por posición (Diccionario!E:F:G del formato
+  viejo), que en el nuevo son otras columnas: salían nombres sin central y
+  centrales repetidas (la de Medidores no se reconocía bajo su nombre de
+  ofertas). Las centrales de Medidores sin ofertas se agregan una vez con
+  oferta 0. La tabla trae la columna Central ya puesta. El formato viejo
+  del Diccionario sigue igual.
+- `matriz_centrales.construir_matriz_centrales` → hoja "Centrales por
+  origen" de Control_corrida.xlsx: centrales (Resumen BESS + Medidores) por
+  origen (Resumen BESS, Diccionario, Medidores, SoC, CMg por barra, Ofertas
+  SSCC, Subastas, FD CSF, FD CPF, FMA CPF), con los mismos cruces del
+  cálculo; "Sí (…)" en verde, "No (…)" en rojo. Se arma en el cálculo con
+  lo ya leído.
+
+**Verificación:** `test_ofertas_por_central` (+4), `test_matriz_centrales`
+(+2).

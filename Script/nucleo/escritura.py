@@ -52,6 +52,7 @@ from .parametros import (
     HOJA_ALERTAS, HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545, HOJA_CENTRALES,
     COLUMNA_CENTRAL, HOJA_CMG, HOJA_FMA,
     HOJA_COMPENSACION_CENTRAL, HOJA_EJECUCION, HOJA_FD, HOJA_LOG,
+    HOJA_MATRIZ_CENTRALES,
     HOJA_MEDIDORES, HOJA_PRORRATA_RETIROS, HOJA_RESUMEN, HOJA_SUBASTAS,
     ORDEN_HOJAS_CONTROL, ORDEN_HOJAS_SALIDA,
 )
@@ -332,6 +333,7 @@ def escribir_control(
     conciliacion=None,
     periodo="",
     hojas_regeneradas=(),
+    df_matriz_centrales=None,
 ):
     """
     Escribe el archivo de control de la corrida (ARCHIVO_CONTROL), que
@@ -359,7 +361,9 @@ def escribir_control(
     una corrida entera.
     """
 
-    if ruta_control is None or (df_log is None and registro is None):
+    if ruta_control is None or (
+        df_log is None and registro is None and df_matriz_centrales is None
+    ):
         return None
 
     ruta_control = Path(ruta_control)
@@ -407,6 +411,16 @@ def escribir_control(
             )
             escritas.add(HOJA_ALERTAS)
 
+        if df_matriz_centrales is not None and len(df_matriz_centrales):
+            _escribir_tabla_con_titulo(
+                writer, HOJA_MATRIZ_CENTRALES, df_matriz_centrales,
+                titulo_de_cuadro(
+                    1, "Cada central y si se encontro en cada origen de datos"
+                ),
+                fila_inicio=1,
+            )
+            escritas.add(HOJA_MATRIZ_CENTRALES)
+
         if df_log is not None:
             _escribir_tabla_con_titulo(
                 writer, HOJA_LOG, df_log,
@@ -416,14 +430,37 @@ def escribir_control(
 
         _preservar_ajenas(writer, wb_existente, escritas)
         _ordenar_hojas(writer.book, ORDEN_HOJAS_CONTROL)
-        hojas_control = (HOJA_EJECUCION, HOJA_ALERTAS, HOJA_LOG)
+        hojas_control = (
+            HOJA_EJECUCION, HOJA_MATRIZ_CENTRALES, HOJA_ALERTAS, HOJA_LOG,
+        )
         formatear_libro(
             writer.book,
             {hoja: 3 for hoja in hojas_control},
             {hoja: 2 for hoja in hojas_control},
         )
+        if HOJA_MATRIZ_CENTRALES in escritas:
+            _pintar_matriz(writer.sheets[HOJA_MATRIZ_CENTRALES])
 
     return ruta_control
+
+
+def _pintar_matriz(ws):
+    """La matriz de centrales: "Sí ..." en verde y "No ..." en rojo."""
+
+    from openpyxl.styles import Font, PatternFill
+
+    verde = PatternFill(fill_type="solid", start_color="E2EFDA", end_color="E2EFDA")
+    rojo = PatternFill(fill_type="solid", start_color="F8CBAD", end_color="F8CBAD")
+    letra_roja = Font(color="9C0006", bold=True)
+    for fila in ws.iter_rows(min_row=4, min_col=3):
+        for celda in fila:
+            texto = str(celda.value or "")
+            if texto.startswith("Sí"):
+                celda.fill = verde
+            elif texto.startswith("No"):
+                celda.fill = rojo
+                celda.font = letra_roja
+    ws.freeze_panes = "C4"
 
 
 def escribir_pagos_bess(
@@ -438,6 +475,7 @@ def escribir_pagos_bess(
     df_compensacion_cuarto=None,
     df_pagos_suministrador=None,
     df_resumen=None,
+    df_matriz_centrales=None,
     ruta_existente=None,
     hojas_regenerar=None,
     registrar=print,
@@ -640,6 +678,7 @@ def escribir_pagos_bess(
         conciliacion=conciliacion,
         periodo=periodo,
         hojas_regeneradas=escritas,
+        df_matriz_centrales=df_matriz_centrales,
     )
     crono.tramo("Control_corrida.xlsx (Alertas y Ejecucion)")
     crono.total()

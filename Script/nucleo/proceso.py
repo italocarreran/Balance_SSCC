@@ -35,6 +35,7 @@ from .lectura import (
     fila_de_encabezado, sin_margen_izquierdo,
 )
 from .lector import abrir_excel, leer_excel
+from .matriz_centrales import construir_matriz_centrales
 from .unidades import sin_unidades
 from .medidores import (
     completar_ofertas_en_medidores, construir_medidores,
@@ -850,6 +851,7 @@ def generar_pagos_bess(
 
     df_medidores = None
     df_wxy = df_resumen_ventana = None
+    df_matriz_centrales = None
     df_cmg = df_subastas = None
     df_fd_csf = df_fd_cpf = None
     centrales_del_libro = tablas_fma = None
@@ -935,6 +937,18 @@ def generar_pagos_bess(
             dic_capacidad = construir_dic_resumen_capacidad(resumen)
 
         dic_cmg = construir_dic_cmg(df_cmg)
+
+        # Control: cada central y si se encontro en cada origen (va a
+        # Control_corrida.xlsx). Con lo ya leido: no abre nada.
+        try:
+            df_matriz_centrales = construir_matriz_centrales(
+                resumen=resumen, diccionario=diccionario,
+                df_medidores=df_medidores, df_wxy=df_wxy, df_cmg=df_cmg,
+                df_subastas=df_subastas, df_fd_csf=df_fd_csf,
+                df_fd_cpf=df_fd_cpf, tablas_fma=tablas_fma,
+            )
+        except Exception as error:  # noqa: BLE001 - es solo un control
+            registrar(f"  [AVISO] no se pudo armar la matriz de centrales: {error}")
 
     avanzar(40)
 
@@ -1171,6 +1185,7 @@ def generar_pagos_bess(
         df_compensacion_cuarto=df_compensacion_cuarto,
         df_pagos_suministrador=df_pagos_suministrador,
         df_resumen=df_resumen,
+        df_matriz_centrales=df_matriz_centrales,
         ruta_existente=rutas["salida"],
         hojas_regenerar=hojas_regenerar,
         registrar=registrar,

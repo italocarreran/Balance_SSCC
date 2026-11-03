@@ -168,7 +168,11 @@ HOJA_EJECUCION = "Ejecucion"
 HOJA_ALERTAS = "Alertas"
 HOJA_LOG = "Log"
 
-ORDEN_HOJAS_CONTROL = (HOJA_EJECUCION, HOJA_ALERTAS, HOJA_LOG)
+# Cada central y si se encontro en cada origen (ver matriz_centrales.py).
+HOJA_MATRIZ_CENTRALES = "Centrales por origen"
+ORDEN_HOJAS_CONTROL = (
+    HOJA_EJECUCION, HOJA_MATRIZ_CENTRALES, HOJA_ALERTAS, HOJA_LOG,
+)
 
 # El periodo AAMM (ej. "2607") ya no se infiere del nombre del archivo:
 # lo ingresa el usuario en la ventana. El archivo de SoC solo debe

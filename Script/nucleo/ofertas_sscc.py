@@ -376,6 +376,13 @@ def cargar_resumen_en_medidores(
     anio, mes = next(iter(periodos))
     dias_del_mes = calendar.monthrange(anio, mes)[1]
 
+    filas_dic = filas_diccionario(diccionario)
+    if filas_dic:
+        return _ofertas_por_central(
+            df_resumen, claves_medidores, filas_dic, anio, mes, dias_del_mes,
+            registrar,
+        )
+
     # Equivalencias Diccionario!E:F:G (columnas 5,6,7 -> indices 4,5,6)
     dic_equivalencias = {}
 
@@ -460,6 +467,121 @@ def cargar_resumen_en_medidores(
     return df_wxy, (anio, mes), avisos
 
 
+def _ofertas_por_central(
+    df_resumen, claves_medidores, filas_dic, anio, mes, dias_del_mes, registrar,
+):
+    """
+    La tabla "Ofertas SSCC por dia" con el Diccionario en el formato
+    nuevo (columnas con nombre), una fila por CENTRAL y dia.
+
+    Pedido del usuario (2026-11-03): cada nombre del archivo de ofertas
+    se busca primero en la columna Ofertas del Diccionario y, si no
+    esta, en la de Subastas; si no esta en ninguna, NO se agrega (antes
+    entraba igual, sin central). Antes las equivalencias se tomaban por
+    posicion (Diccionario!E:F:G del formato viejo), que en el formato
+    nuevo son otras columnas: una central de Medidores no se reconocia
+    como ya presente con su nombre de ofertas y salia dos veces.
+
+    Las centrales de Medidores sin ofertas se agregan con oferta 0 (como
+    siempre), una vez. Trae la columna Central ya puesta (el nombre
+    Balance_BESS). Devuelve (df_wxy, (anio, mes), avisos).
+    """
+
+    por_ofertas, por_subastas = {}, {}
+    for fila in filas_dic:
+        central = _texto_seguro(fila.get(ROL_BALANCE_BESS))
+        if not central:
+            continue
+        for mapa, rol in ((por_ofertas, ROL_OFERTAS), (por_subastas, ROL_SUBASTAS)):
+            clave = _normalizar_nombre_clave(fila.get(rol))
+            if clave:
+                mapa.setdefault(clave, central)
+
+    nombre_de = {}      # central normalizada -> (nombre en ofertas, central)
+    ofertas = {}        # (central normalizada, dia) -> oferta
+    descartados = {}
+    otros_nombres = {}
+
+    for _, fila in df_resumen.iterrows():
+        nombre_mostrar = _limpiar_nombre_mostrar(fila["Nombre"])
+        if not nombre_mostrar:
+            continue
+        dia = fila["Día"]
+        if not (_es_numero(fila["Año"]) and _es_numero(fila["Mes"]) and _es_numero(dia)):
+            continue
+        clave = _normalizar_nombre_clave(nombre_mostrar)
+        central = por_ofertas.get(clave) or por_subastas.get(clave)
+        if not central:
+            descartados.setdefault(clave, nombre_mostrar)
+            continue
+        clave_central = _normalizar_nombre_clave(central)
+        nombre_de.setdefault(clave_central, (nombre_mostrar, central))
+        if nombre_de[clave_central][0] != nombre_mostrar:
+            # Dos nombres de ofertas para la misma central: manda el
+            # primero (se avisa).
+            otros_nombres.setdefault(central, set()).add(nombre_mostrar)
+            continue
+        ofertas[(clave_central, int(dia))] = _valor_oferta_binario(
+            fila["Oferta completa"]
+        )
+
+    sin_ofertas = []
+    for nombre_crudo in claves_medidores:
+        nombre_mostrar = _limpiar_nombre_mostrar(nombre_crudo)
+        if not nombre_mostrar:
+            continue
+        clave_central = _normalizar_nombre_clave(nombre_mostrar)
+        if clave_central not in nombre_de:
+            nombre_de[clave_central] = (nombre_mostrar, nombre_mostrar)
+            sin_ofertas.append(nombre_mostrar)
+
+    if not nombre_de:
+        raise ErrorEntrada(
+            "No se encontraron nombres en el resumen de Ofertas SSCC "
+            "ni en Medidores (columna clave)."
+        )
+
+    avisos = []
+    if descartados:
+        nombres = sorted(descartados.values(), key=str.upper)
+        avisos.append(
+            f"{len(nombres)} nombre(s) del archivo de ofertas no estan en "
+            "el Diccionario (ni en su columna Ofertas ni en Subastas): no "
+            "se agregan. " + ", ".join(nombres[:30])
+            + (f" ... y {len(nombres) - 30} mas." if len(nombres) > 30 else "")
+        )
+    if sin_ofertas:
+        nombres = sorted(sin_ofertas, key=str.upper)
+        avisos.append(
+            f"{len(nombres)} central(es) de Medidores sin ofertas en el "
+            "archivo: se incorporaron con oferta 0: " + ", ".join(nombres)
+        )
+    for central, nombres in sorted(otros_nombres.items()):
+        avisos.append(
+            f"La central {central} aparece en el archivo de ofertas con mas "
+            f"de un nombre; se usa '{nombre_de[_normalizar_nombre_clave(central)][0]}' "
+            f"y no {sorted(nombres)}."
+        )
+
+    filas_salida = []
+    for clave_central, (nombre, central) in sorted(
+        nombre_de.items(), key=lambda kv: kv[1][0].upper()
+    ):
+        for dia in range(1, dias_del_mes + 1):
+            filas_salida.append(
+                (nombre, central, dia, ofertas.get((clave_central, dia), 0))
+            )
+
+    df_wxy = pd.DataFrame(
+        filas_salida, columns=["Nombre", COLUMNA_CENTRAL, "Dia", "Oferta completa"]
+    )
+    registrar(
+        f"  Ofertas SSCC por dia: {len(df_wxy):,} filas ({len(nombre_de)} "
+        f"central(es) x {dias_del_mes} dias)"
+    )
+    return df_wxy, (anio, mes), avisos
+
+
 def _mapas_homologacion_fge(diccionario):
     """
     Precalcula los dos mapas "nombre de un origen -> nombre canonico"
@@ -539,6 +661,11 @@ def agregar_central_ofertas(df_wxy, diccionario, registrar=None):
     Ofertas -> Balance_BESS, la misma regla de Medidores!V). Vacia si
     el Diccionario no la conoce.
     """
+
+    if COLUMNA_CENTRAL in df_wxy.columns:
+        # Ya viene con la central (Diccionario en el formato nuevo, ver
+        # _ofertas_por_central).
+        return df_wxy
 
     mapa_f, mapa_g = _mapas_homologacion_fge(diccionario)
 
