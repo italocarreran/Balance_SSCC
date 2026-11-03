@@ -195,8 +195,8 @@ NOMBRES_CALCULO_E_COSTOS = {
     "AR": "CTF(+)",
     "AS": "Descarga ajustada FD-prorrata kWh",
     "AT": "Carga ajustada FD-prorrata kWh",
-    "AU": "Energía SSCC (descargada con FD-Prorrata) por remunerar",
-    "AV": "Energía SSCC (cargada con FD-Prorrata) por remunerar",
+    "AU": "Energía descargada por remunerar",
+    "AV": "Energía cargada por remunerar",
     "AW": "Asignación Descarga kWh",
     "AX": "Asignación Carga kWh",
     "AY": "Valorización Descarga [$]",
@@ -245,8 +245,29 @@ CUADROS_CALCULO_E_COSTOS = (
         "R", "W", "Y", "AB", "AC", "AD", "AU", "AV", "AW", "AX",
         "AY", "AZ", "BA",
     ]),
-    ("Componente 2 y monto a compensar", ["S", "T", "U", "BC"]),
+    ("Componente 2", ["S", "T", "U"]),
+    # Aparte y destacado (pedido del usuario): es el pago.
+    ("Monto a compensar", ["BC"]),
 )
+
+# Columnas que se calculan con datos de la MISMA fila: van a la hoja
+# como formula de Excel (pedido del usuario: "prefiero la formula"), con
+# los nombres internos entre llaves; la escritura los cambia por la
+# letra de la columna y el numero de la fila. Dan exactamente lo mismo
+# que el calculo en Python (ver calcular_energia_ajustada,
+# calcular_s_t_u y calcular_valorizacion), que sigue siendo el que
+# alimenta el monto: una celda vacia vale 0 en los dos.
+FORMULAS_E_COSTOS = {
+    "AS": "={Energia_Positiva}*({AG}*{AM}+{AH}*{AN}+{AJ}*{AP}+{AK}*{AQ})",
+    "AT": "={Energia_Negativa}*({AG}*{AM}+{AH}*{AN}+{AJ}*{AP}+{AK}*{AQ})",
+    "S": "={Energia_Positiva}*{CMg}",
+    "T": "={Energia_Negativa}*{CMg}",
+    "U": "={L}*({S}+{T})",
+    "BA": "={AY}+{AZ}",
+}
+
+# Columnas con su total en la fila 1, sobre el nombre de la columna.
+TOTALES_E_COSTOS = ("BA", "U", "BC")
 
 # Orden final de columnas internas de la hoja: los tres cuadros
 # seguidos. Lo usan renombrar_calculo_e_costos() y escribir_pagos_bess()
@@ -259,14 +280,9 @@ COLUMNAS_SALIDA_E_COSTOS = [
 # que usan un dato de otra hoja que no esta como columna): de donde sale
 # y con que condicion.
 _MEDIDORES = "Hoja origen: Medidores, Cuadro 1"
+_GRUPO = "central + ciclo (Configuracion + Ciclo de Carga del mes)"
 ORIGEN_COLUMNAS_E_COSTOS = {
-    "Mes": f"{_MEDIDORES} (Mes). Copia directa.",
-    "Dia": f"{_MEDIDORES} (Dia). Copia directa.",
-    "Hora": f"{_MEDIDORES} (Hora). Copia directa.",
-    "Hora Mes": f"{_MEDIDORES} (Hora Mes). Copia directa.",
-    "Minutos": f"{_MEDIDORES} (Minutos). Copia directa.",
-    "Cuarto de Hora": f"{_MEDIDORES} (Cuarto de Hora). Copia directa.",
-    "clave": f"{_MEDIDORES} (clave). Copia directa.",
+    # B:H (Mes ... Configuracion) sin comentario: pedido del usuario.
     "Barra": (
         "Hoja origen: Centrales, Cuadro 1 Resumen BESS (Barra inyección). "
         "Se busca por Configuracion."
@@ -323,6 +339,65 @@ ORIGEN_COLUMNAS_E_COSTOS = {
         )
         for clave in ("AW", "AX")
     },
+    # Cuadro 2: lo que se calcula mirando otras filas (no va formula).
+    "R": (
+        f"Puesto del CMg dentro de su {_GRUPO}: de mayor a menor CMg (en "
+        "empate, Bloque horario de mayor a menor); los empates comparten "
+        "el puesto."
+    ),
+    "W": (
+        "Contador de bloques: sube de 1 en 1 y vuelve a 1 cada vez que "
+        "cambia el Ciclo de Carga del mes respecto de la fila de arriba. Es "
+        "la posición del bloque en la curva monótona (Asignación)."
+    ),
+    "Y": (
+        f"Curva monótona de descarga de su {_GRUPO}: las filas con Adj "
+        "SSCC = 1 y Descarga distinta de 0, ordenadas por CMg de mayor a "
+        "menor; acá va el Bloque horario de la fila que cae en este puesto."
+    ),
+    "AB": (
+        "El CMg de esa fila de la curva monótona de descarga (vacío si el "
+        "puesto ya no tiene una fila con descarga)."
+    ),
+    "AC": (
+        f"Curva monótona de carga de su {_GRUPO}: las filas con Adj SSCC = "
+        "1 y Carga distinta de 0, ordenadas por CMg de menor a mayor; acá va "
+        "el Bloque horario de la fila que cae en este puesto."
+    ),
+    "AD": (
+        "El CMg de esa fila de la curva monótona de carga (vacío si el "
+        "puesto ya no tiene una fila con carga)."
+    ),
+    "AU": (
+        "Energía con FD-prorrata por remunerar: acumulado de la Descarga "
+        f"ajustada FD-prorrata de su {_GRUPO}, desde el último Bloque "
+        "horario hacia el primero, contando solo filas con Adj SSCC = 1. "
+        "Las filas del mismo Bloque horario llevan el mismo valor."
+    ),
+    "AV": (
+        "Energía con FD-prorrata por remunerar: acumulado de la Carga "
+        f"ajustada FD-prorrata (con el signo cambiado) de su {_GRUPO}, "
+        "desde el último Bloque horario hacia el primero, contando solo "
+        "filas con Adj SSCC = 1. Las filas del mismo Bloque horario llevan "
+        "el mismo valor."
+    ),
+    "AY": (
+        "Asignación Descarga × promedio del CMg de la curva monótona de "
+        f"descarga en las filas de su {_GRUPO} con asignación distinta de "
+        "0. Solo si la Descarga medida total del ciclo (todas las "
+        "centrales) supera 10 kWh; si no, 0."
+    ),
+    "AZ": (
+        "Asignación Carga × promedio del CMg de la curva monótona de carga "
+        f"en las filas de su {_GRUPO} con asignación distinta de 0. Solo si "
+        "la Carga medida total del ciclo (todas las centrales) es menor que "
+        "−10 kWh; si no, 0."
+    ),
+    "BC": (
+        f"Por {_GRUPO}: (Σ Total C1 − Σ Total C2) / número de filas del "
+        "grupo, nunca negativo; el mismo valor en todas las filas del "
+        "grupo. Arriba, el total del mes."
+    ),
 }
 
 

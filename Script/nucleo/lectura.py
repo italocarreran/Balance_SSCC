@@ -216,15 +216,23 @@ def fila_de_encabezado(crudo):
     antes (encabezado en la fila 1).
     """
 
+    def es_de_titulos(indice):
+        textos = [
+            _texto_seguro(v) for v in crudo.iloc[indice] if _tiene_valor(v)
+        ]
+        return bool(textos) and all(
+            t.startswith(PREFIJO_CUADRO) for t in textos
+        )
+
+    # La fila de los "Cuadro N° ..." manda (arriba puede haber algo,
+    # como los totales de Calculo E Costos en la fila 1).
+    for indice in range(min(len(crudo), 4)):
+        if es_de_titulos(indice):
+            return indice + 1 if indice + 1 < len(crudo) else 0
+
     fila = 0
     while fila < len(crudo) and not crudo.iloc[fila].notna().any():
         fila += 1
-    if fila < len(crudo):
-        textos = [
-            _texto_seguro(v) for v in crudo.iloc[fila] if _tiene_valor(v)
-        ]
-        if textos and all(t.startswith(PREFIJO_CUADRO) for t in textos):
-            fila += 1
     return fila if fila < len(crudo) else 0
 
 

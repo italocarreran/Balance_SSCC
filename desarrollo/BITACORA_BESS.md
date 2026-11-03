@@ -5577,3 +5577,29 @@ Pedido del usuario, armado en conjunto en `desarrollo/notas_orden_ecostos.md`.
 comentario de origen, columnas que salen). Caso completo antes/después:
 COMPENSACION_CENTRAL, PRORRATA_RETIROS, Resumen y el monto de E Costos
 idénticos. 319 pruebas, 17 salteadas.
+
+## 2026-11-03 (9) — Calculo E Costos: fórmulas por fila, comentarios, Monto aparte con totales
+
+Pedido del usuario sobre la hoja de 2026-11-03 (8):
+
+- Sin comentario en B:H (Mes … Configuracion).
+- `ecostos.FORMULAS_E_COSTOS`: lo que se calcula con datos de la misma fila
+  va a la hoja como fórmula de Excel (AS, AT = energía × Σ prorrata·FD; S, T =
+  energía × CMg; U = Adj × (S + T); BA = AY + AZ). El valor de Python sigue
+  siendo el que alimenta el monto; verificado en LibreOffice con datos
+  aleatorios: misma cifra (dif ≤ 4e-14). Costo en 30.000 filas: +3 s de
+  escritura, +0,2 MB.
+- Comentario en lo que mira otras filas (R, W, Y, AB, AC, AD, AU, AV, AY, AZ,
+  BC) con cómo se obtiene y su condición.
+- AU / AV: "Energía descargada / cargada por remunerar [kWh]".
+- Monto a compensar en su propio cuadro (N° 4) y en verde; total del mes en la
+  fila 1 sobre Total C1, Total C2 y Monto (`=SUM(...)`, formato `"Total: "#,##0`).
+- Fórmulas sin valor guardado: el libro pide recalcular al abrir
+  (`fullCalcOnLoad`), también cuando la hoja se pega en un libro existente
+  (`xlsx_rapido._calcular_al_abrir`).
+- `lectura.fila_de_encabezado` busca la fila de "Cuadro N°" en las primeras
+  filas (la fila 1 de E Costos ya no está vacía una vez que Excel guarda los
+  totales).
+
+**Verificación:** prueba de la hoja ampliada (totales, fórmulas, verde,
+cuadro 4, B:H sin comentario). 319 pruebas, 17 salteadas.

@@ -216,9 +216,33 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
 
             # Tres cuadros: fila 1 vacia, "Cuadro N°" en la 2, nombres
             # en la 3 (en negrita), margen en A; panel fijo en C:H.
-            self.assertTrue(all(c.value is None for c in ws[1]))
+            # Fila 1: solo los totales, sobre Total C1, Total C2 y Monto.
+            nombres = {c.value: c.column_letter for c in ws[3] if c.value}
+            totales = {c.column_letter: c.value for c in ws[1] if c.value}
+            self.assertEqual(set(totales), {
+                nombres["Total C1 [CLP]"], nombres["Total C2 [CLP]"],
+                nombres["Monto a compensar [CLP]"],
+            })
+            monto = nombres["Monto a compensar [CLP]"]
+            self.assertEqual(totales[monto], f"=SUM({monto}4:{monto}6)")
+            self.assertEqual(ws[f"{monto}1"].number_format, '"Total: "#,##0')
+            # El Monto en su propio cuadro, en verde.
+            self.assertEqual(ws[f"{monto}3"].fill.start_color.rgb[-6:], "375623")
+            self.assertTrue(str(ws[f"{monto}2"].value).startswith("Cuadro N° 4"))
+            # Lo que se calcula en la misma fila va como formula.
+            ajustada = nombres["Descarga ajustada FD-prorrata [kWh]"]
+            self.assertTrue(str(ws[f"{ajustada}4"].value).startswith(
+                f"={nombres['Descarga [kWh]']}4*("
+            ))
+            self.assertEqual(
+                ws[f"{nombres['Total C1 [CLP]']}5"].value,
+                f"={nombres['Valorización Descarga [CLP]']}5"
+                f"+{nombres['Valorización Carga [CLP]']}5",
+            )
+            # B:H sin comentario; CMg con su origen.
+            self.assertTrue(all(ws.cell(3, c).comment is None for c in range(2, 9)))
             titulos = [c.value for c in ws[2] if c.value]
-            self.assertEqual(len(titulos), 3, titulos)
+            self.assertEqual(len(titulos), 4, titulos)
             self.assertTrue(titulos[0].startswith("Cuadro N° 1"))
             self.assertEqual(ws["B3"].value, "Mes")
             self.assertTrue(ws["B3"].font.bold)

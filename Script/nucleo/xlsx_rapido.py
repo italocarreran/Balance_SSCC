@@ -457,6 +457,10 @@ def pegar_hojas(ruta_destino, ruta_nuevas, orden=(), ignorar=()):
 
         workbook = viejo.read(_WORKBOOK).decode("utf-8")
         workbook = _workbook_final(workbook, hojas_viejas, agregadas, orden)
+        if any(b"<f>" in xml for xml in reemplazos.values()) or any(
+            b"<f>" in hoja["xml"] for hoja in agregadas
+        ):
+            workbook = _calcular_al_abrir(workbook)
 
         rels = viejo.read(_WORKBOOK_RELS).decode("utf-8")
         tipos = viejo.read(_CONTENT_TYPES).decode("utf-8")
@@ -511,6 +515,38 @@ def pegar_hojas(ruta_destino, ruta_nuevas, orden=(), ignorar=()):
                     final.writestr(_info(nombre), datos)
 
     os.replace(temporal, ruta_destino)
+
+
+def _calcular_al_abrir(workbook):
+    """
+    workbook.xml con fullCalcOnLoad="1": las hojas pegadas traen
+    formulas sin valor guardado (openpyxl no las calcula) y el libro
+    final es el de antes, que pudo guardar Excel sin pedir recalcular.
+    """
+
+    calc = re.search(r"<(?:\w+:)?calcPr\b[^>]*?/?>", workbook)
+    if calc:
+        elemento = calc.group(0)
+        if "fullCalcOnLoad" in elemento:
+            nuevo = re.sub(
+                r'fullCalcOnLoad="[^"]*"', 'fullCalcOnLoad="1"', elemento
+            )
+        else:
+            cierre = "/>" if elemento.endswith("/>") else ">"
+            nuevo = elemento[: -len(cierre)].rstrip() + ' fullCalcOnLoad="1"' + cierre
+        return workbook.replace(elemento, nuevo, 1)
+
+    # Sin calcPr: va despues de definedNames (o de sheets), como pide el
+    # esquema.
+    for despues in ("</definedNames>", "</sheets>"):
+        posicion = workbook.find(despues)
+        if posicion != -1:
+            posicion += len(despues)
+            return (
+                workbook[:posicion] + '<calcPr fullCalcOnLoad="1"/>'
+                + workbook[posicion:]
+            )
+    return workbook
 
 
 def _rels_de(parte):

@@ -28,6 +28,19 @@ Pedido del usuario (2026-11-03): ir anotando y programar todo junto.
    (Dia … Configuracion; B "Mes" también, por estar a la izquierda) y las
    filas 1–3.
 
+## Segunda vuelta (aplicado, BITACORA 2026-11-03 (9))
+
+- B:H sin comentario.
+- Fórmula de Excel en lo que se calcula con la misma fila: Descarga / Carga
+  ajustada FD-prorrata, Valorizacion Descarga / Carga y Total C2 (cuadro 3),
+  Total C1. Comentario en lo que mira otras filas: ranking cmg, Bloque
+  ordenado, curvas monótonas, energía por remunerar, Valorización
+  Descarga / Carga, Monto.
+- AG:AH → "Energía descargada / cargada por remunerar [kWh]" (detalle en
+  comentario).
+- Monto a compensar en su propio cuadro (N° 4), en verde.
+- Total del mes en la fila 1 sobre Total C1, Total C2 y Monto ("Total: …").
+
 ## Dudas resueltas
 
 - Umbral de "SoC sobre el minimo": la columna sale de la hoja (no llega al

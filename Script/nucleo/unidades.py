@@ -78,10 +78,9 @@ NOMBRES_CON_UNIDAD = {
         "Descarga ajustada FD-prorrata kWh":
             f"Descarga ajustada FD-prorrata {KWH}",
         "Carga ajustada FD-prorrata kWh": f"Carga ajustada FD-prorrata {KWH}",
-        "Energía SSCC (descargada con FD-Prorrata) por remunerar":
-            f"Energía SSCC (descargada con FD-Prorrata) por remunerar {KWH}",
-        "Energía SSCC (cargada con FD-Prorrata) por remunerar":
-            f"Energía SSCC (cargada con FD-Prorrata) por remunerar {KWH}",
+        "Energía descargada por remunerar":
+            f"Energía descargada por remunerar {KWH}",
+        "Energía cargada por remunerar": f"Energía cargada por remunerar {KWH}",
         "Asignación Descarga kWh": f"Asignación Descarga {KWH}",
         "Asignación Carga kWh": f"Asignación Carga {KWH}",
         "Valorización Descarga [$]": f"Valorización Descarga {CLP}",

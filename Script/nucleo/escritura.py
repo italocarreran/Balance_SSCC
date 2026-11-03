@@ -19,6 +19,7 @@ archivo, cada una PRESERVA las hojas de la otra: lo que no se
 recalcula en esta pasada se copia tal cual del libro anterior.
 """
 
+import re
 import shutil
 import time
 from pathlib import Path
@@ -26,11 +27,13 @@ from pathlib import Path
 import openpyxl
 import pandas as pd
 from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
 
 from .alertas import ALTA, Alerta
 
 from .ecostos import (
-    CUADROS_CALCULO_E_COSTOS, ORIGEN_COLUMNAS_E_COSTOS,
+    CUADROS_CALCULO_E_COSTOS, FORMULAS_E_COSTOS, ORIGEN_COLUMNAS_E_COSTOS,
+    TOTALES_E_COSTOS,
 )
 from .factores_subastas import TITULOS_FMA
 from .formato import formatear_libro
@@ -518,7 +521,9 @@ def escribir_pagos_bess(
         if HOJA_CALCULO_ECOSTOS in regenerar:
             if df_ecostos is not None:
                 escritas.append(HOJA_CALCULO_ECOSTOS)
-                _escribir_cuadros_e_costos(writer, df_ecostos)
+                letras_e_costos = _escribir_cuadros_e_costos(
+                    writer, df_ecostos
+                )
         else:
             _preservar_o_avisar(writer, HOJA_CALCULO_ECOSTOS)
 
@@ -626,7 +631,11 @@ def escribir_pagos_bess(
             writer.book, _FILAS_ENCABEZADO, _FILAS_TITULO_CUADRO
         )
         if HOJA_CALCULO_ECOSTOS in escritas:
-            writer.sheets[HOJA_CALCULO_ECOSTOS].freeze_panes = PANEL_E_COSTOS
+            ws_e_costos = writer.sheets[HOJA_CALCULO_ECOSTOS]
+            ws_e_costos.freeze_panes = PANEL_E_COSTOS
+            _terminar_e_costos(ws_e_costos, letras_e_costos, len(df_ecostos))
+            # Formulas sin valor guardado: que Excel las calcule al abrir.
+            writer.book.calculation.fullCalcOnLoad = True
         crono.tramo("formato (encabezados, anchos, numeros, marco)")
         relleno = _asegurar_una_hoja(writer)
 
@@ -677,6 +686,7 @@ def _escribir_cuadros_e_costos(writer, df_ecostos):
     ws_nombre = HOJA_CALCULO_ECOSTOS
     columna = COLUMNA_MARGEN
     desde = 0
+    letras = {}
     for numero, (titulo, claves) in enumerate(CUADROS_CALCULO_E_COSTOS, 1):
         cuadro = df_ecostos.iloc[:, desde:desde + len(claves)]
         _, siguiente = _escribir_tabla_con_titulo(
@@ -688,8 +698,66 @@ def _escribir_cuadros_e_costos(writer, df_ecostos):
             nota = ORIGEN_COLUMNAS_E_COSTOS.get(clave)
             if nota:
                 ws.cell(3, columna + posicion + 1).comment = _comentario(nota)
+            letras[clave] = get_column_letter(columna + posicion + 1)
         desde += len(claves)
         columna = siguiente
+    return letras
+
+
+# El cuadro del Monto a compensar va en verde (es el pago), distinto del
+# azul de los demas encabezados.
+COLOR_MONTO = "375623"
+RELLENO_MONTO_DATOS = "E2EFDA"
+
+
+def _terminar_e_costos(ws, letras, filas):
+    """
+    Lo que va DESPUES del formato general en Calculo E Costos (que mira
+    los valores para decidir anchos y formatos de numero):
+
+      - formula de Excel en las columnas que se calculan con la misma
+        fila (FORMULAS_E_COSTOS), en vez del valor;
+      - el total del mes en la fila 1, sobre Total C1, Total C2 y el
+        Monto a compensar (TOTALES_E_COSTOS);
+      - el cuadro del Monto en verde.
+    """
+
+    from openpyxl.styles import Font, PatternFill
+
+    primera, ultima = 4, 3 + filas
+    marcador = re.compile(r"\{(\w+)\}")
+
+    for clave, plantilla in FORMULAS_E_COSTOS.items():
+        if clave not in letras:
+            continue
+        for fila in range(primera, ultima + 1):
+            ws[f"{letras[clave]}{fila}"].value = marcador.sub(
+                lambda m: f"{letras[m.group(1)]}{fila}", plantilla
+            )
+
+    for clave in TOTALES_E_COSTOS:
+        if clave not in letras or not filas:
+            continue
+        celda = ws[f"{letras[clave]}1"]
+        celda.value = f"=SUM({letras[clave]}{primera}:{letras[clave]}{ultima})"
+        celda.number_format = '"Total: "#,##0'
+        celda.font = Font(
+            bold=True, color=COLOR_MONTO if clave == "BC" else "244062"
+        )
+
+    monto = letras.get("BC")
+    if monto:
+        verde = PatternFill(
+            fill_type="solid", start_color=COLOR_MONTO, end_color=COLOR_MONTO
+        )
+        ws[f"{monto}3"].fill = verde
+        ws[f"{monto}2"].font = Font(bold=True, color=COLOR_MONTO)
+        claro = PatternFill(
+            fill_type="solid", start_color=RELLENO_MONTO_DATOS,
+            end_color=RELLENO_MONTO_DATOS,
+        )
+        for fila in range(primera, ultima + 1):
+            ws[f"{monto}{fila}"].fill = claro
 
 
 # Columnas que quedan fijas al moverse a la derecha en Calculo E Costos
