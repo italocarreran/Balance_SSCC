@@ -113,7 +113,8 @@ def _celda(ref, estilo, valor):
     if isinstance(valor, (datetime, date)):
         return f'<c r="{ref}"{s} t="n"><v>{"%.16g" % to_excel(valor)}</v></c>'
     if valor == "":
-        return f'<c r="{ref}"{s} t="inlineStr"/>'
+        # Sin estilo openpyxl ni la escribe (pandas deja el NaN vacio).
+        return f'<c r="{ref}"{s} t="inlineStr"/>' if s else ""
     if valor.startswith("=") and len(valor) > 1:
         return f'<c r="{ref}"{s}><f>{escape(valor[1:])}</f><v></v></c>'
     return f'<c r="{ref}"{s} t="inlineStr">{_texto_xml(valor)}</c>'
@@ -328,14 +329,17 @@ class RellenoHoja:
 
             sn, su = a_s(s_normal), a_s(s_ultima)
             celdas = [
-                f'<c r="{letra}{fila}"{sn} t="inlineStr"/>' if es_vacio
+                (f'<c r="{letra}{fila}"{sn} t="inlineStr"/>' if sn else "")
+                if es_vacio
                 else f'<c r="{letra}{fila}"{sn} t="n"><v>{texto}</v></c>'
                 for fila, es_vacio, texto in zip(filas, vacio.tolist(), textos.tolist())
             ]
             if indice_ultima is not None:
                 fila = filas[indice_ultima]
                 if vacio[indice_ultima]:
-                    celdas[indice_ultima] = f'<c r="{letra}{fila}"{su} t="inlineStr"/>'
+                    celdas[indice_ultima] = (
+                        f'<c r="{letra}{fila}"{su} t="inlineStr"/>' if su else ""
+                    )
                 else:
                     celdas[indice_ultima] = (
                         f'<c r="{letra}{fila}"{su} t="n"><v>{textos[indice_ultima]}</v></c>'
@@ -377,7 +381,7 @@ class RellenoHoja:
                 clave_valor = None
             if (
                 clave_valor is not None and guion is None
-                and isinstance(original, str)
+                and isinstance(original, str) and original != ""
             ):
                 parte = convertidos.get(clave_valor)
                 if parte is None:

@@ -23,7 +23,11 @@ from .utiles import ErrorEntrada, _texto_seguro, _tiene_valor, normalizar
 def leer_medidas_sae(ruta):
     """Lee Medidas_SAE.xlsx y valida que traiga las 9 columnas."""
 
-    df = pd.read_excel(ruta, sheet_name=HOJA_MEDIDAS_SAE)
+    # Medidas_SAE.xlsx lo escribe este programa (generar_medidas_sae):
+    # motor rapido; se comprobo que entrega las mismas fechas (lector.py).
+    from .lector import leer_excel
+
+    df = leer_excel(ruta, sheet_name=HOJA_MEDIDAS_SAE)
 
     faltantes = [
         columna for columna in COLUMNAS_AI

@@ -210,7 +210,12 @@ def extraer_soc(ruta_soc, mapa_homologacion=None):
     df_soc: central | timestamp | soc | nombre_scada_original
     """
 
-    df_crudo = pd.read_excel(
+    # Motor rapido (lector.py): con el archivo real de SoC
+    # (docs/SOC_real_2607.xlsx) entrega exactamente el mismo DataFrame,
+    # fechas incluidas, 6 veces mas rapido.
+    from .lector import leer_excel
+
+    df_crudo = leer_excel(
         ruta_soc,
         sheet_name=0,
         header=None,

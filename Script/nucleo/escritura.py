@@ -1125,6 +1125,31 @@ def _volcar(writer, hoja, df, startrow, startcol=0):
     )
 
 
+def escribir_tabla_rapida(df, ruta, hoja):
+    """
+    Lo mismo que df.to_excel(ruta, sheet_name=hoja, index=False) -- el
+    archivo se reemplaza entero --, pero con el esqueleto + relleno de
+    las hojas grandes (ver _volcar y relleno_rapido): un Medidas_SAE de
+    un mes pasa de ~20 s a ~2 s. Celda por celda sale igual (valor,
+    formato de fecha y el encabezado en negrita de pandas); lo prueba
+    desarrollo/tests/test_tabla_rapida.py.
+    """
+
+    ruta = Path(ruta)
+    if not ESCRITURA_RAPIDA or len(df) <= FILAS_MUESTRA:
+        df.to_excel(ruta, sheet_name=hoja, index=False)
+        return
+    temporal = ruta.with_name(f"~tmp_{ruta.stem}_{time.time_ns()}.xlsx")
+    try:
+        with pd.ExcelWriter(temporal, engine="openpyxl") as writer:
+            _volcar(writer, hoja, df, 0)
+            rellenos = _rellenos_de(writer.book)
+        ruta.unlink(missing_ok=True)
+        pegar_hojas(ruta, temporal, rellenos=rellenos)
+    finally:
+        temporal.unlink(missing_ok=True)
+
+
 def _filas_del_esqueleto(ws, filas):
     """Cuantas filas de datos tiene la hoja en openpyxl (ver _volcar)."""
 

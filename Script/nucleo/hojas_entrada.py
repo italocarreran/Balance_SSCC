@@ -10,7 +10,7 @@ from .cambio_hora import hora_mes_correlativa
 from .parametros import (
     COLUMNA_CENTRAL, HOJA_CMG_ORIGEN, HOJA_CPF_HORARIO, HOJA_CSF_HORARIO,
 )
-from .lector import leer_excel
+from .lector import abrir_excel, leer_excel
 from .lectura import fila_de_encabezado, leer_hoja_con_fila_vacia
 from .utiles import ErrorEntrada, _entero_a_texto, _texto_seguro
 
@@ -134,7 +134,9 @@ def leer_cmg(ruta_cmg, registrar=print):
     archivo (fila 1), igual que hace la macro al no tocarlo.
     """
 
-    with pd.ExcelFile(ruta_cmg) as excel:
+    # cmg.xlsx lo escribe este programa (generar_cmg): numeros y textos,
+    # se lee con el motor rapido (ver lector.py).
+    with abrir_excel(ruta_cmg) as excel:
         hojas = list(excel.sheet_names)
 
     if not hojas:
@@ -148,7 +150,7 @@ def leer_cmg(ruta_cmg, registrar=print):
         else hojas[0]
     )
 
-    df = pd.read_excel(ruta_cmg, sheet_name=nombre_hoja)
+    df = leer_excel(ruta_cmg, sheet_name=nombre_hoja)
 
     if df.shape[1] < 9:
         raise ErrorEntrada(
@@ -316,21 +318,23 @@ def construir_fd(ruta_sscc, registrar=print):
 
     ruta_sscc = Path(ruta_sscc)
 
+    # Las dos hojas desde UN libro abierto (antes se abria tres veces).
+    # Sigue con openpyxl: es un archivo de otro sistema, con fechas.
     with pd.ExcelFile(ruta_sscc) as excel:
         hojas = list(excel.sheet_names)
 
-    for hoja in (HOJA_CPF_HORARIO, HOJA_CSF_HORARIO):
-        if hoja not in hojas:
-            raise ErrorEntrada(
-                f"No existe la hoja '{hoja}' en {ruta_sscc.name}."
-            )
+        for hoja in (HOJA_CPF_HORARIO, HOJA_CSF_HORARIO):
+            if hoja not in hojas:
+                raise ErrorEntrada(
+                    f"No existe la hoja '{hoja}' en {ruta_sscc.name}."
+                )
 
-    df_cpf_crudo = pd.read_excel(
-        ruta_sscc, sheet_name=HOJA_CPF_HORARIO, header=None
-    )
-    df_csf_crudo = pd.read_excel(
-        ruta_sscc, sheet_name=HOJA_CSF_HORARIO, header=None
-    )
+        df_cpf_crudo = pd.read_excel(
+            excel, sheet_name=HOJA_CPF_HORARIO, header=None
+        )
+        df_csf_crudo = pd.read_excel(
+            excel, sheet_name=HOJA_CSF_HORARIO, header=None
+        )
 
     # Fila 12 de Excel (1-indexada) = indice 11 (0-indexado).
     # CPF: columnas B:J (9); CSF: columnas B:H (7).

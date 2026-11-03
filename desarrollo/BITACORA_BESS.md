@@ -5801,3 +5801,30 @@ ventana con xvfb. 332 pruebas.
 - Parte superior como en el Revisor: ruta de la carpeta alineada a la
   izquierda, marcos mas juntos (padx 14, pady 4), AAMM en Consolas 11 y
   boton azul "Ir a este mes".
+
+## 2026-11-03 (19) — Obtencion de datos mas rapida, de punta a punta
+
+- Pedido: "optimiza como puedas igual de como hiciste con la planilla
+  principal, la obtención de datos y todo eso, de punta a punta... lo de
+  hacerlo en paralelo". Mismos resultados: cada cambio se comparo contra
+  el codigo anterior con datos del tamaño de un mes real.
+- Escritura: `escritura.escribir_tabla_rapida` (esqueleto + relleno, como
+  las hojas grandes) para Medidas_SAE.xlsx, Cmg/cmg.xlsx y
+  subastas_AAMM.xlsx. 120 mil filas: 21 s -> 3.5 s; celda por celda igual
+  que `to_excel` (test_tabla_rapida). `relleno_rapido` ya no escribe las
+  celdas vacias sin estilo (openpyxl tampoco las escribe).
+- Lectura con el motor rapido (calamine): Medidas_SAE.xlsx (8.7 s -> 2 s),
+  cmg.xlsx, subastas_AAMM.xlsx y el SoC (real: 2.1 s -> 0.35 s), todos
+  comprobados iguales. SSCC_Desempeño: las dos hojas desde un solo libro.
+- APIs en paralelo: Descarga_PRMTE pide 8 puntos a la vez y
+  Generacion_Real 8 dias a la vez (`HILOS_DESCARGA`; 1 = como antes). Los
+  resultados, lotes, fallidos y avisos se procesan en el orden de siempre
+  (test_descarga_paralela).
+- Claves_Balance: fechas convertidas una vez por valor distinto y caminos
+  directos para 'aaaa-mm-dd hh:mm:ss' y '...Z'; huecos con groupby.
+  120 puntos x mes: 10.8 s -> 3.4 s, salida identica.
+- CMg desde el CSV (todas las barras del sistema): se filtran las barras
+  antes de lo que es por fila. 2.9 M filas: 15.4 s -> 5.7 s, identico.
+- FMA CPF y CSF: los reportes diarios se leen en varios procesos, en
+  orden y con sus avisos en orden; si los procesos no corren, en serie
+  (`LEER_EN_PARALELO`; test_fma_paralelo).

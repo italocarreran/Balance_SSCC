@@ -533,6 +533,7 @@ def construir_fma_cpf(carpeta_respuesta, aamm, registrar=print):
 
     partes = []
     dias_sin_archivo = []
+    por_dia = []
 
     for dia in range(1, dias_del_mes + 1):
 
@@ -548,12 +549,22 @@ def construir_fma_cpf(carpeta_respuesta, aamm, registrar=print):
             dias_sin_archivo.append(dia)
             continue
 
-        del_dia = [
-            parte for ruta in rutas
-            for parte in _leer_reporte_cpf(
-                ruta, anio, mes, dia, zona, registrar
-            )
-        ]
+        por_dia.append((dia, rutas))
+
+    # Los reportes se leen en paralelo (pedido del usuario: "lo de
+    # hacerlo en paralelo"); se juntan dia por dia en el mismo orden, con
+    # sus avisos en el mismo orden, asi que sale lo mismo que en serie.
+    leidos = iter(_en_paralelo(_leer_reporte_cpf_aparte, [
+        (ruta, anio, mes, dia, zona)
+        for dia, rutas in por_dia for ruta in rutas
+    ]))
+    for dia, rutas in por_dia:
+        del_dia = []
+        for _ in rutas:
+            partes_ruta, mensajes = next(leidos)
+            for mensaje in mensajes:
+                registrar(mensaje)
+            del_dia.extend(partes_ruta)
         partes.extend(_combinar_reportes_del_dia(del_dia))
 
     if not partes:
@@ -653,6 +664,54 @@ def _leer_reporte_cpf(ruta, anio, mes, dia, zona, registrar):
         )
 
     return partes
+
+
+def _leer_csf_diario(ruta):
+    try:
+        return pd.read_excel(ruta)
+    except Exception as error:
+        raise ErrorIndicesFma(
+            f"No se pudo leer {ruta.name}: {error}"
+        ) from error
+
+
+def _leer_reporte_cpf_aparte(ruta, anio, mes, dia, zona):
+    """_leer_reporte_cpf que devuelve tambien sus avisos (otro proceso)."""
+
+    mensajes = []
+    partes = _leer_reporte_cpf(ruta, anio, mes, dia, zona, mensajes.append)
+    return partes, mensajes
+
+
+# Archivos leidos a la vez (en procesos aparte). Con menos archivos que
+# MINIMO_PARA_PARALELO, o con LEER_EN_PARALELO = False, se lee en serie.
+LEER_EN_PARALELO = True
+MINIMO_PARA_PARALELO = 4
+
+
+def _en_paralelo(funcion, argumentos):
+    """
+    [funcion(*a) for a in argumentos], en ese orden, leyendo en varios
+    procesos. Si los procesos no pueden correr (no arrancan, se caen, no
+    se puede pasar algo entre ellos) se hace en serie, como antes: el
+    paralelo nunca es la razon de que algo falle. Un error de los datos
+    se levanta igual que en serie.
+    """
+
+    argumentos = list(argumentos)
+    if not LEER_EN_PARALELO or len(argumentos) < MINIMO_PARA_PARALELO:
+        return [funcion(*a) for a in argumentos]
+
+    import pickle
+    from concurrent.futures import ProcessPoolExecutor
+    from concurrent.futures.process import BrokenProcessPool
+
+    try:
+        procesos = max(1, min(os.cpu_count() or 1, 8, len(argumentos)))
+        with ProcessPoolExecutor(max_workers=procesos) as ejecutor:
+            return list(ejecutor.map(funcion, *zip(*argumentos)))
+    except (BrokenProcessPool, pickle.PicklingError, EOFError, OSError):
+        return [funcion(*a) for a in argumentos]
 
 
 def _cerrar_fma_cpf(partes, dias_sin_archivo, dias_del_mes, registrar):
@@ -813,6 +872,7 @@ def construir_fma_csf(carpeta_csf, aamm, registrar=print):
 
     partes = []
     dias_sin_archivo = []
+    rutas = []
 
     for dia in range(1, dias_del_mes + 1):
 
@@ -831,14 +891,10 @@ def construir_fma_csf(carpeta_csf, aamm, registrar=print):
             dias_sin_archivo.append(dia)
             continue
 
-        ruta = max(candidatos, key=lambda r: r.stat().st_mtime)
+        rutas.append(max(candidatos, key=lambda r: r.stat().st_mtime))
 
-        try:
-            partes.append(pd.read_excel(ruta))
-        except Exception as error:
-            raise ErrorIndicesFma(
-                f"No se pudo leer {ruta.name}: {error}"
-            ) from error
+    # En paralelo y en orden (ver construir_fma_cpf).
+    partes.extend(_en_paralelo(_leer_csf_diario, [(r,) for r in rutas]))
 
     if not partes:
         raise ErrorIndicesFma(

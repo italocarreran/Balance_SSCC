@@ -13,13 +13,17 @@ DataFrame (valores y tipos) que openpyxl:
 
   - las hojas de Balance_BESS.xlsx, que escribe este mismo programa
     (numeros, textos y las fechas de Medidores);
+  - los demas archivos que escribe este programa: Medidas_SAE.xlsx (con
+    sus fechas; comprobado con un mes entero), Cmg/cmg.xlsx y
+    Subastas/subastas_AAMM.xlsx (numeros y textos);
   - el archivo de Ofertas SSCC y el de Prorrata de retiros (numeros y
-    textos).
+    textos);
+  - el archivo de SoC: con el real (docs/SOC_real_2607.xlsx) da el mismo
+    DataFrame, fechas incluidas.
 
-Los archivos con fechas y horas de otros sistemas (SOC, Medidas_SAE,
-SSCC_Desempeño) siguen con openpyxl: ahi un lector distinto podria
-redondear una hora de otra forma y no hay como comprobarlo con los
-archivos reales.
+SSCC_Desempeño (de otro sistema, con fechas y sin un archivo real a mano
+para comprobarlo) sigue con openpyxl; se lee en otro proceso mientras se
+hace lo demas.
 
 Si python-calamine no esta instalado, todo se lee con openpyxl como
 antes (mismo resultado, mas lento).

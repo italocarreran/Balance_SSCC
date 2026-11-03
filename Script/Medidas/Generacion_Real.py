@@ -35,7 +35,9 @@ caso real, comparando Andes Solar III (Pmax 170,78 MW, maximo 44 por
 cuarto de hora) contra Tocopilla (116 MW, maximo 29.493).
 """
 
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
 
@@ -52,6 +54,9 @@ TIPO = 1
 TIMEOUT = 60
 REINTENTOS = 3
 ESPERA_REINTENTO = 1.0
+
+# Dias que se piden a la vez a la API (1 = uno por uno, como antes).
+HILOS_DESCARGA = 8
 
 COLUMNA_TOPOLOGY = "topologyName"
 COLUMNA_HORA = "topologyTimeHour"
@@ -96,10 +101,15 @@ def descargar_mes(
 
     user_key = user_key or leer_clave_api(CLAVE_GENERACION_REAL)
 
-    sesion = requests.Session()
-    partes = []
+    # Los dias se piden a la vez (pedido del usuario: "lo de hacerlo en
+    # paralelo"); los resultados y avisos se juntan en el orden de los
+    # dias, igual que antes.
+    por_hilo = threading.local()
 
-    for dia in range(1, ultimo_dia + 1):
+    def bajar_dia(dia):
+        if not hasattr(por_hilo, "sesion"):
+            por_hilo.sesion = requests.Session()
+        sesion = por_hilo.sesion
 
         fecha = f"{anio}-{mes:02d}-{dia:02d}"
         params = {"created": fecha, "type": TIPO, "user_key": user_key}
@@ -114,26 +124,35 @@ def descargar_mes(
 
                     if not df_dia.empty:
                         df_dia.insert(0, "fecha_consulta", fecha)
-                        partes.append(df_dia)
+                        return df_dia, None
 
-                    break
+                    return None, None
 
                 if intento == REINTENTOS - 1:
-                    registrar(
+                    return None, (
                         f"  AVISO: {fecha} -> HTTP "
                         f"{respuesta.status_code}"
                     )
-                else:
-                    time.sleep(ESPERA_REINTENTO)
+                time.sleep(ESPERA_REINTENTO)
 
             except Exception as error:
                 if intento == REINTENTOS - 1:
-                    registrar(f"  AVISO: {fecha} -> {error}")
-                else:
-                    time.sleep(ESPERA_REINTENTO)
+                    return None, f"  AVISO: {fecha} -> {error}"
+                time.sleep(ESPERA_REINTENTO)
 
-        if progreso:
-            progreso(desde + (hasta - desde) * dia / ultimo_dia)
+        return None, None
+
+    partes = []
+    dias = list(range(1, ultimo_dia + 1))
+
+    with ThreadPoolExecutor(max_workers=max(1, min(HILOS_DESCARGA, len(dias)))) as ejecutor:
+        for dia, (df_dia, aviso) in zip(dias, ejecutor.map(bajar_dia, dias)):
+            if aviso:
+                registrar(aviso)
+            if df_dia is not None:
+                partes.append(df_dia)
+            if progreso:
+                progreso(desde + (hasta - desde) * dia / ultimo_dia)
 
     if not partes:
         raise ErrorMedidas(
