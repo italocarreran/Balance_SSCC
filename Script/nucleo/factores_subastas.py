@@ -40,7 +40,8 @@ from .fma import (
 from .ecostos_prorratas import construir_dic_mapeo_diccionario
 from .parametros import FMA_CON_CTF, HOJA_FMA
 from .lectura import fila_de_titulos, leer_tabla_bajo_titulo
-from .utiles import ErrorEntrada, _texto_seguro, _tiene_valor
+from .hojas_entrada import NOMBRES_SUBASTAS
+from .utiles import ErrorEntrada, _texto_seguro, _tiene_valor, normalizar
 
 # Los nombres con que quedan las dos columnas en la copia EN MEMORIA de
 # Subastas que usa RE545 (la hoja ya no las tiene).
@@ -235,6 +236,67 @@ def leer_fma_consolidado(ruta_salida, registrar=print, libro=None):
 # EL CALCULO
 # ============================================================
 
+def _completar_con_otros_nombres(
+    df_subastas, diccionario, tablas_fd, tablas_fma, dic_unidad_fd, dic_cpf,
+    registrar,
+):
+    """
+    Configuración de Subastas -> unidad del FD y -> central de FMA CPF:
+    si el nombre que da el Diccionario (o el nombre tal cual) no esta en
+    la tabla, se prueba con los demas nombres de la central en el
+    Diccionario; si alguno esta, se usa y se avisa (DIC-002). Completa
+    dic_unidad_fd y dic_cpf en el lugar.
+    """
+
+    from .equivalencias import Equivalencias
+    from .lectura import ROL_FD, ROL_FMA_CPF
+
+    columna_config = NOMBRES_SUBASTAS["K"]
+    if diccionario is None or columna_config not in df_subastas.columns:
+        return
+
+    norm_fd = desempeno_fd._normalizar
+    unidades_fd = {
+        unidad
+        for clave in ("cpf", "csf", "participacion_csf")
+        for unidad, _hora in (tablas_fd or {}).get(clave, {})
+    }
+    tabla_cpf = (tablas_fma or {}).get("cpf")
+    centrales_cpf = (
+        {normalizar(c) for c in tabla_cpf["Central"]}
+        if tabla_cpf is not None and "Central" in tabla_cpf.columns
+        else set()
+    )
+
+    eq_fd = Equivalencias(diccionario, normalizar_fn=norm_fd)
+    eq_cpf = Equivalencias(diccionario)
+    if not eq_fd:
+        return
+
+    for config in pd.unique(df_subastas[columna_config].dropna()):
+        clave = normalizar(config)
+        if unidades_fd:
+            actual = dic_unidad_fd.get(clave, config)
+            if norm_fd(actual) not in unidades_fd:
+                unidad = eq_fd.buscar(
+                    config, ROL_FD, unidades_fd, "las unidades de la hoja FD"
+                )
+                if unidad is not None:
+                    dic_unidad_fd[clave] = unidad
+        if centrales_cpf:
+            actual = dic_cpf.get(clave, config)
+            if normalizar(actual) not in centrales_cpf:
+                central = eq_cpf.buscar(
+                    config, ROL_FMA_CPF, centrales_cpf,
+                    "las centrales de FMA CPF",
+                )
+                if central is not None:
+                    dic_cpf[clave] = central
+
+    eq_fd.informar(registrar)
+    eq_cpf.informar(registrar)
+
+
 def subastas_con_fd_y_fma(
     df_subastas, df_fd_csf, df_fd_cpf, tablas_fma, diccionario,
     registrar=print,
@@ -263,6 +325,11 @@ def subastas_con_fd_y_fma(
     registrar("  Calculo RE545: FD y FMA de cada fila de Subastas...")
 
     tablas_fd = tablas_fd_desde_hoja(df_fd_csf, df_fd_cpf, registrar=registrar)
+
+    _completar_con_otros_nombres(
+        df_subastas, diccionario, tablas_fd, tablas_fma, dic_unidad_fd,
+        dic_cpf, registrar,
+    )
 
     df = df_subastas.copy()
     df[COLUMNA_FD_SUBASTAS] = calcular_fd_subastas(

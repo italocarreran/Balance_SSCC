@@ -366,30 +366,45 @@ def escribir_control(
             if conciliacion:
                 filas += list(conciliacion.items())
 
-            pd.DataFrame(filas, columns=["campo", "valor"]).to_excel(
-                writer, sheet_name=HOJA_EJECUCION, index=False
+            # Mismo formato que la planilla: fila 1 vacia, "Cuadro N°"
+            # en la 2, margen en A y una columna entre cuadros.
+            _, columna = _escribir_tabla_con_titulo(
+                writer, HOJA_EJECUCION,
+                pd.DataFrame(filas, columns=["campo", "valor"]),
+                titulo_de_cuadro(1, "Estado de la corrida"), fila_inicio=1,
             )
             escritas.add(HOJA_EJECUCION)
 
             if manifiesto is not None and not manifiesto.empty:
                 _escribir_tabla_con_titulo(
                     writer, HOJA_EJECUCION, manifiesto,
-                    "Entradas de esta corrida (sha256 del contenido)",
-                    fila_inicio=len(filas) + 3, columna_inicio=0,
+                    titulo_de_cuadro(
+                        2, "Entradas de esta corrida (sha256 del contenido)"
+                    ),
+                    fila_inicio=1, columna_inicio=columna,
                 )
 
-            registro.tabla().to_excel(
-                writer, sheet_name=HOJA_ALERTAS, index=False
+            _escribir_tabla_con_titulo(
+                writer, HOJA_ALERTAS, registro.tabla(),
+                titulo_de_cuadro(1, "Alertas de la corrida"), fila_inicio=1,
             )
             escritas.add(HOJA_ALERTAS)
 
         if df_log is not None:
-            df_log.to_excel(writer, sheet_name=HOJA_LOG, index=False)
+            _escribir_tabla_con_titulo(
+                writer, HOJA_LOG, df_log,
+                titulo_de_cuadro(1, "Avisos e incidencias"), fila_inicio=1,
+            )
             escritas.add(HOJA_LOG)
 
         _preservar_ajenas(writer, wb_existente, escritas)
         _ordenar_hojas(writer.book, ORDEN_HOJAS_CONTROL)
-        formatear_libro(writer.book)
+        hojas_control = (HOJA_EJECUCION, HOJA_ALERTAS, HOJA_LOG)
+        formatear_libro(
+            writer.book,
+            {hoja: 3 for hoja in hojas_control},
+            {hoja: 2 for hoja in hojas_control},
+        )
 
     return ruta_control
 

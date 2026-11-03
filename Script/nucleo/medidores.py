@@ -361,7 +361,7 @@ def construir_ofertas_sscc(
 
     # La central de cada fila se homologa aca, una sola vez, y queda
     # escrita en la hoja: el calculo la toma de ahi (ver calcular_r).
-    df_wxy = agregar_central_ofertas(df_wxy, diccionario)
+    df_wxy = agregar_central_ofertas(df_wxy, diccionario, registrar=registrar)
 
     r_valor, avisos_r = calcular_r(
         df_medidores, df_wxy, diccionario, registrar=registrar

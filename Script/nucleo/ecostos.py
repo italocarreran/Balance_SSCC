@@ -27,6 +27,7 @@ from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, HOJA_CALCULO_ECOSTOS,
     HOJA_RESUMEN_BESS,
 )
+from .lectura import ROL_FD
 from .utiles import normalizar
 
 
@@ -252,6 +253,41 @@ GRUPOS_CALCULO_E_COSTOS = (
 )
 
 
+def _completar_mapeo_con_otros_nombres(
+    df, dic_mapeo, diccionario, df_fd_csf, df_fd_cpf, registrar
+):
+    """
+    Central -> unidad del FD: si la unidad del Diccionario (o la de la
+    columna 'Central' de la hoja FD) no esta en la hoja FD, se prueba
+    con los demas nombres de la central en el Diccionario (Subastas,
+    Ofertas, ...). Si alguno esta, se usa y se avisa (DIC-002).
+    """
+
+    from .equivalencias import Equivalencias
+
+    equivalencias = Equivalencias(diccionario)
+    if not equivalencias:
+        return
+    disponibles = set(unidades_bloque_fd(df_fd_csf)) | set(
+        unidades_bloque_fd(df_fd_cpf)
+    )
+    if not disponibles:
+        return
+
+    for central in pd.unique(df["clave"]):
+        clave = normalizar(central)
+        actual = dic_mapeo.get(clave)
+        if actual is not None and normalizar(actual) in disponibles:
+            continue
+        unidad = equivalencias.buscar(
+            central, ROL_FD, disponibles, "las unidades de la hoja FD"
+        )
+        if unidad is not None:
+            dic_mapeo[clave] = unidad
+
+    equivalencias.informar(registrar)
+
+
 def completar_calculo_e_costos_grupos(
     df_ecostos,
     df_subastas,
@@ -349,6 +385,9 @@ def completar_calculo_e_costos_grupos(
         if diccionario is not None else {}
     )
     dic_mapeo.update(dic_mapeo_desde_fd(df_fd_csf, df_fd_cpf))
+    _completar_mapeo_con_otros_nombres(
+        df, dic_mapeo, diccionario, df_fd_csf, df_fd_cpf, registrar
+    )
     dic_fd_csf = construir_dic_fd_bloque(df_fd_csf, "id", "CSF(+)", "CSF(-)")
     dic_fd_cpf = construir_dic_fd_bloque(df_fd_cpf, "id", "CPF(+)", "CPF(-)")
 

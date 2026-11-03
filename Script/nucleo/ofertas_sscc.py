@@ -508,7 +508,7 @@ def _homologar_fge(nombre, mapa_f, mapa_g):
     return "0"
 
 
-def agregar_central_ofertas(df_wxy, diccionario):
+def agregar_central_ofertas(df_wxy, diccionario, registrar=None):
     """
     Copia de la tabla "Ofertas SSCC por dia" con la columna
     COLUMNA_CENTRAL al lado de "Nombre": el nombre Balance_BESS de esa
@@ -522,6 +522,25 @@ def agregar_central_ofertas(df_wxy, diccionario):
     centrales = [
         _homologar_fge(nombre, mapa_f, mapa_g) for nombre in df_wxy["Nombre"]
     ]
+
+    # Lo que no cruza por Subastas ni por Ofertas se prueba con los
+    # demas nombres del Diccionario (Balance_BESS, FD, FMA_CPF), con
+    # aviso (DIC-002).
+    from .equivalencias import Equivalencias
+
+    equivalencias = Equivalencias(
+        diccionario, normalizar_fn=_normalizar_nombre_clave
+    )
+    if equivalencias:
+        centrales = [
+            central if central != "0" else (
+                equivalencias.central_de(
+                    nombre, ROL_OFERTAS, "el nombre de Ofertas SSCC"
+                ) or "0"
+            )
+            for nombre, central in zip(df_wxy["Nombre"], centrales)
+        ]
+        equivalencias.informar(registrar or (lambda _m: None))
 
     df = df_wxy.copy()
     df.insert(

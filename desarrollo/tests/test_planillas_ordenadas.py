@@ -312,7 +312,13 @@ class TestUnaSolaPlanilla(unittest.TestCase):
 
             self.assertNotIn(nucleo.HOJA_LOG, pd.ExcelFile(ruta).sheet_names)
 
-            log = pd.read_excel(control, sheet_name=nucleo.HOJA_LOG)
+            log = nucleo.leer_hoja_con_fila_vacia(control, nucleo.HOJA_LOG)
+            # Mismo formato que la planilla: fila 1 vacia, cuadro en B2.
+            hoja_log = openpyxl.load_workbook(control)[nucleo.HOJA_LOG]
+            self.assertIsNone(hoja_log["A1"].value)
+            self.assertEqual(
+                hoja_log["B2"].value, "Cuadro N° 1 — Avisos e incidencias"
+            )
             self.assertIn("un aviso de la corrida", list(log["detalle"]))
 
     def test_el_control_conserva_las_hojas_que_no_reescribe(self):

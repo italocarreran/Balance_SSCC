@@ -403,8 +403,8 @@ class PagosBessEndToEndTest(unittest.TestCase):
             self.assertIn(nucleo.HOJA_ALERTAS, hojas_control)
             self.assertIn(nucleo.HOJA_EJECUCION, hojas_control)
 
-            ejecucion = pd.read_excel(
-                control, sheet_name=nucleo.HOJA_EJECUCION
+            ejecucion = nucleo.leer_hoja_con_fila_vacia(
+                control, nucleo.HOJA_EJECUCION
             )
             campos = dict(zip(ejecucion["campo"], ejecucion["valor"]))
 
@@ -500,9 +500,8 @@ class PagosBessEndToEndTest(unittest.TestCase):
             except nucleo.ErrorEntrada as error:
                 self.fail(f"el caso sintetico no corrio: {error}")
 
-            ejecucion = pd.read_excel(
-                base / nucleo.ARCHIVO_CONTROL,
-                sheet_name=nucleo.HOJA_EJECUCION,
+            ejecucion = nucleo.leer_hoja_con_fila_vacia(
+                base / nucleo.ARCHIVO_CONTROL, nucleo.HOJA_EJECUCION
             )
             campos = dict(zip(ejecucion["campo"], ejecucion["valor"]))
 

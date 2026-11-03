@@ -5488,3 +5488,40 @@ PRORRATA_RETIROS, Calculo E Costos). Corrida de punta a punta con todas las
 hojas de entrada reescritas en el formato nuevo: Calculo E Costos, Calculo
 RE545, COMPENSACION_CENTRAL, PRORRATA_RETIROS y Resumen dan idénticos al
 libro de antes. 307 pruebas, 17 salteadas.
+
+## 2026-11-03 (5) — Cada cruce busca con todos los nombres del Diccionario; formato de Control_corrida
+
+Pedido del usuario: "para subastas, ofertas y todo, que se busque con todos
+los nombres del diccionario [...] y que se indique tipo 'central conejo no
+coincide con nombre de subastas del diccionario, pero sí se encuentra por el
+nombre de FD'".
+
+`nucleo/equivalencias.py` (`Equivalencias`): las filas del Diccionario
+(formato nuevo) buscables por cualquiera de sus nombres. Cada cruce prueba
+**primero** el nombre de su columna; si no está en la tabla de destino,
+prueba los demás de la misma fila (orden Balance_BESS, Subastas, FD, Ofertas,
+FMA_CPF) y, si alguno cruza, lo usa y avisa una vez por central y cruce:
+`[AVISO] DIC-002: central 'X': su nombre FD del Diccionario ('…') no coincide
+con las unidades de la hoja FD, pero sí se encuentra por su nombre Subastas
+('…').` Va al log (y a la hoja Log de Control_corrida).
+
+Dónde se aplica:
+- Importar FD: unidad sin central por la columna FD → se busca en las otras
+  columnas (`proceso`, antes de dejar afuera las que no tienen central).
+- Importar Ofertas: lo que no cruza por Subastas ni Ofertas
+  (`agregar_central_ofertas`).
+- Calculo E Costos: central → unidad del FD
+  (`ecostos._completar_mapeo_con_otros_nombres`).
+- Calculo RE545: Configuración → unidad del FD (FD y participación CSF) y →
+  central de FMA CPF (`factores_subastas._completar_con_otros_nombres`).
+
+Un Diccionario en el formato viejo (bloques) no tiene filas: nada cambia.
+
+Control_corrida.xlsx con el formato de la planilla: fila 1 vacía, `Cuadro N°
+…` en la fila 2, margen en A; Ejecucion con dos cuadros lado a lado (estado y
+entradas de la corrida), Alertas y Log con uno.
+
+**Verificación:** `tests/test_equivalencias.py` (9 pruebas: búsqueda,
+aviso único, formato viejo, RE545 FD y FMA CPF, Ofertas, E Costos); lecturas
+del control ajustadas. Corrida de punta a punta igual que antes. 316
+pruebas, 17 salteadas.

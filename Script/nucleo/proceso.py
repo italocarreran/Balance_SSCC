@@ -283,6 +283,24 @@ def generar_consolidado(
             df_fd_csf = agregar_central_fd(df_fd_csf, mapa_central)
             df_fd_cpf = agregar_central_fd(df_fd_cpf, mapa_central)
 
+            # Una unidad que no esta en la columna FD del Diccionario
+            # pero si en otra de sus columnas (Subastas, Balance_BESS...)
+            # se reconoce igual, avisando (DIC-002).
+            from .equivalencias import Equivalencias
+            from .lectura import ROL_FD
+
+            equivalencias = Equivalencias(diccionario_fd)
+            if equivalencias:
+                for df_fd in (df_fd_csf, df_fd_cpf):
+                    vacias = df_fd[COLUMNA_CENTRAL].eq("")
+                    df_fd.loc[vacias, COLUMNA_CENTRAL] = [
+                        equivalencias.central_de(
+                            unidad, ROL_FD, "la unidad del archivo de FD"
+                        ) or ""
+                        for unidad in df_fd.loc[vacias, "Unidad"]
+                    ]
+                equivalencias.informar(registrar)
+
             sin_central = sorted({
                 unidad
                 for df_fd in (df_fd_csf, df_fd_cpf)
