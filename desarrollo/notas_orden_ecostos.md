@@ -20,6 +20,16 @@ Referencia: hoja actual (margen en A; grupos en la fila 1, nombres en la 2).
    origen, p. ej. en CMg: "Hoja origen: CMg, Cuadro 1 (F_CMg); se busca por
    Barra + Bloque horario".
 
+6. Comentario también en las columnas que usan un dato de otra hoja que NO
+   aparece como columna, diciendo cómo se obtiene y con qué condición:
+
+   | Columna (letra actual) | Dato oculto | Comentario |
+   |---|---|---|
+   | P SoC sobre el minimo | % Energía sobre mínima (Centrales, Cuadro 1) | 1 si SoC > umbral; el umbral es el de la PRIMERA fila de Resumen BESS, uno para todas las centrales |
+   | AB / AC Energía descargada / cargada | Pmax (MW) (Centrales, Cuadro 1) | energía máxima del ciclo repartida en bloques de Pmax/4·1000 kWh según el Bloque ordenado; Pmax por Configuracion; sin Pmax queda vacía |
+   | AT / AU Asignación Descarga / Carga | Pmax (MW) (Centrales, Cuadro 1) | ídem, con la energía ajustada FD-prorrata |
+   | AD:AI Prorratas | Subastas, Cuadro 1 | no se copian: por central y Hora mes, filas de Subastas de cada servicio / total (la fila suma 1) |
+
 ## En evaluación
 
 - Separar la hoja en ~3 cuadros (el primero con la información traída de
@@ -55,4 +65,6 @@ Energía descargada/cargada) y % Energía sobre mínima de Centrales (umbral de
 
 ## Dudas en curso
 
-(se van agregando)
+- El umbral de "SoC sobre el minimo" es el % Energía sobre mínima de la
+  primera fila de Resumen BESS para todas las centrales (como la celda fija
+  H8 del original). ¿Debería ser el de cada central?
