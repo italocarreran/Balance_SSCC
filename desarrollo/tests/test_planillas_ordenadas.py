@@ -197,6 +197,24 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
         )
         return ruta
 
+    def test_puesto_sin_fila_en_la_curva_monotona_lleva_guion(self):
+        df = self.armar_calculo()
+        df.loc[1:, "Curva monotona CMg Descarga"] = pd.NA
+        df.loc[2, "Curva monotona CMg Carga"] = pd.NA
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            nucleo.escribir_pagos_bess(
+                ruta, df_ecostos=df, registrar=lambda *a: None
+            )
+            ws = openpyxl.load_workbook(ruta)[nucleo.HOJA_CALCULO_ECOSTOS]
+        nombres = {c.value: c.column_letter for c in ws[3] if c.value}
+        descarga = nombres["Curva monotona CMg Descarga [CLP/kWh]"]
+        carga = nombres["Curva monotona CMg Carga [CLP/kWh]"]
+        self.assertEqual(
+            [ws[f"{descarga}{f}"].value for f in (4, 5, 6)], [1, "–", "–"]
+        )
+        self.assertEqual([ws[f"{carga}{f}"].value for f in (4, 5, 6)], [1, 2, "–"])
+
     def test_el_resumen_queda_primero_y_el_calculo_detras(self):
         with tempfile.TemporaryDirectory() as carpeta:
             ruta = self.escribir(carpeta)
@@ -238,6 +256,11 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
                 ws[f"{nombres['Total C1 [CLP]']}5"].value,
                 f"={nombres['Valorización Descarga [CLP]']}5"
                 f"+{nombres['Valorización Carga [CLP]']}5",
+            )
+            # Curva monotona sin fila en ese puesto: guion, no vacio.
+            curva = nombres["Curva monotona CMg Descarga [CLP/kWh]"]
+            self.assertEqual(
+                [ws[f"{curva}{f}"].value for f in (4, 5, 6)], [1, 2, 3]
             )
             # B:H sin comentario; CMg con su origen.
             self.assertTrue(all(ws.cell(3, c).comment is None for c in range(2, 9)))

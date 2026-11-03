@@ -269,6 +269,13 @@ FORMULAS_E_COSTOS = {
 # Columnas con su total en la fila 1, sobre el nombre de la columna.
 TOTALES_E_COSTOS = ("BA", "U", "BC")
 
+# Curvas monotonas de CMg: el puesto que ya no tiene una fila que cumpla
+# (Adj SSCC = 1 y energia distinta de 0) se ve con un guion, no vacio
+# (pedido del usuario). Solo en la hoja: el calculo usa el valor vacio y
+# ninguna formula mira estas columnas.
+SIN_PUESTO_E_COSTOS = ("AB", "AD")
+GUION_SIN_PUESTO = "–"
+
 # Orden final de columnas internas de la hoja: los tres cuadros
 # seguidos. Lo usan renombrar_calculo_e_costos() y escribir_pagos_bess()
 # (que la parte en sus cuadros).

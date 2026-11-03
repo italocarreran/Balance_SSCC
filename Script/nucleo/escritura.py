@@ -33,7 +33,7 @@ from .alertas import ALTA, Alerta
 
 from .ecostos import (
     CUADROS_CALCULO_E_COSTOS, FORMULAS_E_COSTOS, ORIGEN_COLUMNAS_E_COSTOS,
-    TOTALES_E_COSTOS,
+    GUION_SIN_PUESTO, SIN_PUESTO_E_COSTOS, TOTALES_E_COSTOS,
 )
 from .factores_subastas import TITULOS_FMA
 from .formato import formatear_libro
@@ -719,10 +719,11 @@ def _terminar_e_costos(ws, letras, filas):
         fila (FORMULAS_E_COSTOS), en vez del valor;
       - el total del mes en la fila 1, sobre Total C1, Total C2 y el
         Monto a compensar (TOTALES_E_COSTOS);
-      - el cuadro del Monto en verde.
+      - el cuadro del Monto en verde;
+      - un guion en los puestos de las curvas monotonas sin fila.
     """
 
-    from openpyxl.styles import Font, PatternFill
+    from openpyxl.styles import Alignment, Font, PatternFill
 
     primera, ultima = 4, 3 + filas
     marcador = re.compile(r"\{(\w+)\}")
@@ -734,6 +735,17 @@ def _terminar_e_costos(ws, letras, filas):
             ws[f"{letras[clave]}{fila}"].value = marcador.sub(
                 lambda m: f"{letras[m.group(1)]}{fila}", plantilla
             )
+
+    derecha = Alignment(horizontal="right")
+    for clave in SIN_PUESTO_E_COSTOS:
+        if clave not in letras:
+            continue
+        for fila in range(primera, ultima + 1):
+            celda = ws[f"{letras[clave]}{fila}"]
+            # pandas deja el vacio como texto vacio, no como None.
+            if celda.value is None or celda.value == "":
+                celda.value = GUION_SIN_PUESTO
+                celda.alignment = derecha
 
     for clave in TOTALES_E_COSTOS:
         if clave not in letras or not filas:

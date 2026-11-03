@@ -46,7 +46,7 @@ Pedido del usuario (2026-11-03): ir anotando y programar todo junto.
 - Umbral de "SoC sobre el minimo": la columna sale de la hoja (no llega al
   monto), así que la duda queda sin efecto.
 
-## Tercera vuelta (anotado, sin programar)
+## Tercera vuelta (aplicado, BITACORA 2026-11-03 (10))
 
 - Curvas monótonas (AD / AF): en los puestos que ya no tienen fila que cumpla
   (Adj SSCC = 1 y energía ≠ 0), poner un guion "–" en vez de dejar la celda
@@ -55,7 +55,8 @@ Pedido del usuario (2026-11-03): ir anotando y programar todo junto.
 - Duda: "Bloque Mes Descarga / Carga" es el Bloque horario (cuarto de hora del
   mes) de la fila que ocupa ese puesto de la curva. No entra en ningún
   cálculo (el C1 usa el puesto y el CMg). Posible cambio de nombre a
-  "Bloque horario del puesto (descarga / carga)": pendiente de respuesta.
+  "Bloque horario del puesto (descarga / carga)": el usuario prefiere
+  dejarlo como está.
 - Monto a compensar: se queda como valor, sin fórmula (decidido con el
   usuario). Repartido en partes iguales entre todas las filas del ciclo
   (fiel a la macro; también filas con C1 = C2 = 0 y Adj = 0). Una fórmula

@@ -5603,3 +5603,17 @@ Pedido del usuario sobre la hoja de 2026-11-03 (8):
 
 **Verificación:** prueba de la hoja ampliada (totales, fórmulas, verde,
 cuadro 4, B:H sin comentario). 319 pruebas, 17 salteadas.
+
+## 2026-11-03 (10) — Calculo E Costos: guion en las curvas monótonas sin fila
+
+Pedido del usuario: en "Curva monotona CMg Descarga / Carga", el puesto que ya
+no tiene una fila que cumpla (Adj SSCC = 1 y energía ≠ 0) se ve con "–" en vez
+de vacío (`ecostos.SIN_PUESTO_E_COSTOS`, en `escritura._terminar_e_costos`).
+Solo en la hoja: el cálculo sigue con el vacío y ninguna fórmula mira esas
+columnas. "Bloque Mes Descarga / Carga" queda con su nombre. El Monto a
+compensar se queda como valor (sin fórmula) y repartido en partes iguales en
+el ciclo, como la macro (decidido con el usuario; ver notas).
+
+**Verificación:** prueba nueva (puestos sin fila con guion); caso completo:
+COMPENSACION_CENTRAL, PRORRATA_RETIROS y Resumen idénticos. 320 pruebas, 17
+salteadas.
