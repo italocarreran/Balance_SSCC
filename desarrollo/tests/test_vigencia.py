@@ -35,7 +35,7 @@ class TestVigencia(unittest.TestCase):
                 os.utime(ruta, (self.t0, self.t0))
         self.cmg = self.base / "Cmg" / nucleo.ARCHIVO_CMG
         os.utime(self.cmg, (self.t0 + 10, self.t0 + 10))
-        libro = self.base / nucleo.ARCHIVO_SALIDA
+        libro = self.base / nucleo.nombre_salida("2607")
         sellos = {h: self.t0 + 20 for h in nucleo.ORDEN_HOJAS_SALIDA}
         ruta_sellos(libro).write_text(json.dumps(sellos), encoding="utf-8")
 
@@ -45,14 +45,14 @@ class TestVigencia(unittest.TestCase):
     def test_se_sellan_las_hojas_escritas(self):
         antes = time.time()
         correr_pagos(self.base, {"ecostos"}, [])
-        sellos = leer_sellos(self.base / nucleo.ARCHIVO_SALIDA)
+        sellos = leer_sellos(self.base / nucleo.nombre_salida("2607"))
         self.assertGreaterEqual(sellos[nucleo.HOJA_CALCULO_ECOSTOS], antes)
         # la que no se escribio conserva su sello
         self.assertEqual(sellos[nucleo.HOJA_CALCULO_RE545], self.t0 + 20)
 
     def test_una_hoja_sin_sello_no_avisa(self):
         # Un libro de antes de los sellos: no se puede saber, no se avisa.
-        ruta_sellos(self.base / nucleo.ARCHIVO_SALIDA).unlink()
+        ruta_sellos(self.base / nucleo.nombre_salida("2607")).unlink()
         os.utime(self.cmg, (self.t0 + 50, self.t0 + 50))
         filas = _estados(self.base)
         self.assertFalse([i for i, f in filas.items() if f.get("desactualizada")])

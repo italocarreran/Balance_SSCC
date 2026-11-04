@@ -339,7 +339,7 @@ class PagosBessEndToEndTest(unittest.TestCase):
         })
         cmg.to_excel(base / "Cmg" / "cmg.xlsx", index=False)
 
-        with pd.ExcelWriter(base / nucleo.ARCHIVO_SALIDA) as w:
+        with pd.ExcelWriter(base / nucleo.nombre_salida("2607")) as w:
             medidores.to_excel(w, sheet_name="Medidores", index=False)
             # El CMg de los pagos sale de la hoja 'CMg' del
             # consolidado, no de volver a abrir cmg.xlsx.
@@ -390,7 +390,7 @@ class PagosBessEndToEndTest(unittest.TestCase):
             except nucleo.ErrorEntrada as error:
                 self.fail(f"el caso sintetico no corrio: {error}")
 
-            salida = base / nucleo.ARCHIVO_SALIDA
+            salida = base / nucleo.nombre_salida("2607")
             hojas = pd.ExcelFile(salida).sheet_names
             self.assertIn(nucleo.HOJA_CALCULO_RE545, hojas)
 
@@ -398,7 +398,7 @@ class PagosBessEndToEndTest(unittest.TestCase):
             self.assertNotIn(nucleo.HOJA_ALERTAS, hojas)
             self.assertNotIn(nucleo.HOJA_EJECUCION, hojas)
 
-            control = base / nucleo.ARCHIVO_CONTROL
+            control = base / nucleo.CARPETA_LOG / nucleo.ARCHIVO_CONTROL
             hojas_control = pd.ExcelFile(control).sheet_names
             self.assertIn(nucleo.HOJA_ALERTAS, hojas_control)
             self.assertIn(nucleo.HOJA_EJECUCION, hojas_control)
@@ -464,7 +464,7 @@ class PagosBessEndToEndTest(unittest.TestCase):
             except nucleo.ErrorEntrada as error:
                 self.fail(f"abrio algo que no necesitaba: {error}")
 
-            hojas = pd.ExcelFile(base / nucleo.ARCHIVO_SALIDA).sheet_names
+            hojas = pd.ExcelFile(base / nucleo.nombre_salida("2607")).sheet_names
             self.assertIn(nucleo.HOJA_PRORRATA_RETIROS, hojas)
 
             # y las hojas de entrada siguen ahi: la escritura del
@@ -473,7 +473,7 @@ class PagosBessEndToEndTest(unittest.TestCase):
             self.assertIn(nucleo.HOJA_SUBASTAS, hojas)
 
             resumen = nucleo.leer_hoja_con_fila_vacia(
-                base / nucleo.ARCHIVO_SALIDA, nucleo.HOJA_RESUMEN
+                base / nucleo.nombre_salida("2607"), nucleo.HOJA_RESUMEN
             )
             self.assertIn("NETO", resumen.columns)
 
@@ -501,7 +501,7 @@ class PagosBessEndToEndTest(unittest.TestCase):
                 self.fail(f"el caso sintetico no corrio: {error}")
 
             ejecucion = nucleo.leer_hoja_con_fila_vacia(
-                base / nucleo.ARCHIVO_CONTROL, nucleo.HOJA_EJECUCION
+                base / nucleo.CARPETA_LOG / nucleo.ARCHIVO_CONTROL, nucleo.HOJA_EJECUCION
             )
             campos = dict(zip(ejecucion["campo"], ejecucion["valor"]))
 

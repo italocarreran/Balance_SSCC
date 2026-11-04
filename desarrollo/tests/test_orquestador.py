@@ -409,7 +409,7 @@ class TestCorrida(unittest.TestCase):
         )
         self.assertRegex(texto, r"Resumen de la corrida \(total \d+,\d s")
         resumen = [m for m in mensajes if ": ok - tardo" in m]
-        self.assertEqual(len(resumen), 9, mensajes)
+        self.assertEqual(len(resumen), 10, mensajes)  # + SAE_AAMM.csv
         self.assertTrue(all("empezo a los" in m for m in resumen))
 
     def test_formatear_duracion(self):
@@ -477,7 +477,8 @@ class TestCorrida(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual(simultaneos, 1)
         ids = [g for g, _ in corridos]
-        self.assertEqual(len(ids), 9)
+        self.assertEqual(len(ids), 10)
+        self.assertEqual(ids[-1], "sae_csv")  # el ultimo paso
         self.assertLess(ids.index("consolidado"), ids.index("pagos"))
 
     def test_no_se_ejecuta_un_plan_bloqueado(self):

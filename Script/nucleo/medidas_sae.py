@@ -166,7 +166,7 @@ def generar_medidas_sae(
     periodo = f"{anio}{mes:02d}"
     ultimo_dia = calendar.monthrange(anio, mes)[1]
 
-    rutas = resolver_rutas(carpeta_base)
+    rutas = resolver_rutas(carpeta_base, aamm)
 
     if not rutas["base"].is_dir():
         raise ErrorEntrada(f"No se encontro la carpeta base {rutas['base']}")

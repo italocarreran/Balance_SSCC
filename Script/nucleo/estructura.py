@@ -12,7 +12,8 @@ from .externos import (
 )
 from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, ARCHIVO_CONTROL, ARCHIVO_MEDIDAS_SAE,
-    ARCHIVO_PUNTOS_FALLIDOS, ARCHIVO_SALIDA, CARPETA_AUXILIARES, CARPETA_CMG,
+    ARCHIVO_PUNTOS_FALLIDOS, ARCHIVO_REGISTRO, ARCHIVO_SALIDA,
+    CARPETA_AUXILIARES, CARPETA_LOG, CARPETA_CMG,
     CARPETA_DB_SUBASTAS, CARPETA_FD_FMA, CARPETA_MEDIDAS, FMA_CON_CTF,
     CARPETA_OFERTAS, CARPETA_PRORRATA_RETIROS, CARPETA_SUBASTAS,
     HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545, HOJA_CENTRALES, HOJA_CMG,
@@ -321,7 +322,7 @@ def revisar_estructura(carpeta_base, aamm=None):
     y no es parte de la estructura de carpetas).
     """
 
-    rutas = resolver_rutas(carpeta_base)
+    rutas = resolver_rutas(carpeta_base, aamm)
     filas = []
 
     def agregar(id_fila, etiqueta, nivel, existe, detalle="", ruta=None,
@@ -825,7 +826,7 @@ def revisar_estructura(carpeta_base, aamm=None):
 
     filas.append(
         _fila(
-            "salida", ARCHIVO_SALIDA, 0,
+            "salida", rutas["salida"].name, 0,
             "ok" if (rutas["salida"].is_file() and completas) else "pendiente",
             detalle_salida,
             ruta=rutas["salida"],
@@ -833,15 +834,41 @@ def revisar_estructura(carpeta_base, aamm=None):
     )
     filas.extend(filas_hojas)
 
-    # El control de la corrida (Alertas, Ejecucion, Log) vive en su
-    # propio archivo, al lado de la planilla: no se genera solo, lo
-    # deja cada corrida.
+    # El CSV de pagos que se sube (macro Generar_CSV_SAE), el ultimo
+    # paso: sale de Calculo E Costos y Calculo RE545.
     filas.append(
         _fila(
-            "control", ARCHIVO_CONTROL, 0,
+            "sae_csv", rutas["csv_sae"].name, 0,
+            "ok" if rutas["csv_sae"].is_file() else "pendiente",
+            "CSV de pagos para subir (Calculo E Costos + Calculo RE545)",
+            ruta=rutas["csv_sae"],
+        )
+    )
+
+    # Lo de cada corrida va en Log/ (pedido del usuario): el control
+    # (Alertas, Ejecucion, Log) y el registro de la ultima corrida.
+    filas.append(
+        _fila(
+            "log_dir", f"{CARPETA_LOG}/", 0,
+            "ok" if rutas["log_dir"].is_dir() else "pendiente",
+            "lo deja cada corrida",
+            ruta=rutas["log_dir"], es_carpeta=True,
+        )
+    )
+    filas.append(
+        _fila(
+            "control", ARCHIVO_CONTROL, 1,
             "ok" if rutas["control"].is_file() else "pendiente",
             "control de la corrida: Alertas, Ejecucion y Log",
             ruta=rutas["control"],
+        )
+    )
+    filas.append(
+        _fila(
+            "registro", ARCHIVO_REGISTRO, 1,
+            "ok" if rutas["registro"].is_file() else "pendiente",
+            "el registro de la ultima corrida",
+            ruta=rutas["registro"],
         )
     )
 

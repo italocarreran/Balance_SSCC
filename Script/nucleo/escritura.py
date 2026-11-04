@@ -367,6 +367,7 @@ def escribir_control(
         return None
 
     ruta_control = Path(ruta_control)
+    ruta_control.parent.mkdir(parents=True, exist_ok=True)
     wb_existente = _abrir_existente(ruta_control)
     escritas = set()
 

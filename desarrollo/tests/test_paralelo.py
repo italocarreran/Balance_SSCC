@@ -29,7 +29,7 @@ def _correr(carpeta, paralelo):
         nucleo.generar_pagos_bess(
             base, {"ecostos", "re545"}, registrar=lineas.append
         )
-    hojas = pd.read_excel(base / nucleo.ARCHIVO_SALIDA, sheet_name=None, header=None)
+    hojas = pd.read_excel(base / nucleo.nombre_salida("2607"), sheet_name=None, header=None)
     sin_hora = [l for l in lineas if "escritura:" not in l and "Corrida:" not in l]
     return hojas, sin_hora
 

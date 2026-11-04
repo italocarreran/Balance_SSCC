@@ -5850,3 +5850,47 @@ ventana con xvfb. 332 pruebas.
   hora que no existe del cambio de hora (en 0, sin Hora Mes) y la matriz
   'Centrales por origen' la contaba. Ahora FD CSF / FD CPF cuentan solo
   filas con Hora Mes.
+
+## 2026-11-04 (23) — 11_PAGOS_BESS_AAMM.xlsx, carpeta Log/ y el CSV SAE_AAMM.csv
+
+- Pedidos: "El archivo de salida ya no se debe llamar Balance_BESS si no
+  que 11_PAGOS_BESS_AAMM", "debe haber un botón final que genere el
+  siguiente documento" (SAE_2609.csv), "que es el json que apareció en la
+  carpeta?" y "el control de corrida y el registro de ultima corrida deben
+  quedar en una carpeta... Log quizás".
+- Planilla: `rutas.nombre_salida(aamm)` -> 11_PAGOS_BESS_AAMM.xlsx;
+  `resolver_rutas(base, aamm)`. Sin AAMM valido se usa la que haya en la
+  carpeta. Un caso de antes se renombra solo (nunca pisa un archivo; si
+  la planilla esta abierta se sigue usando la vieja y se reintenta).
+- Log/: Control_corrida.xlsx, Registro_ultima_corrida.txt y los sellos
+  (`Log/sellos_11_PAGOS_BESS_AAMM.json`; antes `.sellos_Balance_BESS.json`
+  al lado del libro: es cuando se escribio cada hoja, para que la ventana
+  marque lo desactualizado). Se leen tambien de donde estaban antes.
+- `csv_sae.generar_csv_sae`: replica la macro C_Exporta_pagos.Generar_CSV_SAE
+  (AZ de E Costos = nuestro "Monto a compensar", CE de RE545 = "Monto a
+  compensar"): sin ceros, suma por bloque + configuracion, Fecha_Hora =
+  dia + (Hora-1) h + Minuto, Pago con dos decimales, UTF-8 con BOM y CRLF,
+  ordenado por bloque y configuracion. Saltos de hora y totales por
+  configuracion al registro (era la hoja Verificacion_CSV). Fila
+  "SAE_AAMM.csv" con boton "Generar" y tarea `sae_csv`, el ultimo paso de
+  "Ejecutar todo". Mes de 13 centrales: 6 s.
+
+## 2026-11-04 (24) — Configuracion en __config__ (modo_bess, modo_cra, tks.json)
+
+- Regla del usuario: "ese tipo de documentos json deben quedar en la
+  carpeta __config__ > AAAA > MM mes, si es especifico de un mes, no en las
+  carpetas de trabajo". __config__ es la carpeta hermana de la del programa
+  (la misma del Revisor; repo abby, __comun__/salidas.py).
+- `Script/config.py`: __config__/config.json compartido, seccion
+  "modo_bess" (Balance_BESS.py) y "modo_cra" (Balance_CRA.py) con un bloque
+  por <equipo>_<usuario>, como "modo_15min". Reglas de abby: nunca borra lo
+  ajeno, no escribe sobre un archivo roto, escritura atomica. La primera
+  vez copia el bloque del config.json de antes.
+- Tokens: __config__/tks.json {"coordinador": {"prmte", "generacion_real"}}
+  (`migrar_tokens` copia los de "claves_api"; tks.ejemplo.json reemplaza a
+  config.ejemplo.json).
+- Sellos: __config__/AAAA/MM Mes/Balance BESS/<caso>_<marca>/ (marca = 8
+  caracteres del sha1 de la ruta del caso: un mes puede tener mas de un
+  caso con el mismo nombre de carpeta). Los que quedaron en el caso (.sellos
+  o Log/) se mueven solos. Control y registro siguen en <caso>/Log/.
+- Pruebas: desarrollo/tests/__init__.py usa BESS_CARPETA_CONFIG temporal.

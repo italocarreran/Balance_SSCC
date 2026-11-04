@@ -36,7 +36,7 @@ def traer_csv_cmg(carpeta_base, aamm, registrar=print, progreso=None):
     """
 
     aamm = validar_aamm(aamm)
-    rutas = resolver_rutas(carpeta_base)
+    rutas = resolver_rutas(carpeta_base, aamm)
 
     if not rutas["base"].is_dir():
         raise ErrorEntrada(f"No se encontro la carpeta base {rutas['base']}")
@@ -72,7 +72,7 @@ def traer_subastas(carpeta_base, aamm, registrar=print, progreso=None):
     """
 
     aamm = validar_aamm(aamm)
-    rutas = resolver_rutas(carpeta_base)
+    rutas = resolver_rutas(carpeta_base, aamm)
 
     if not rutas["base"].is_dir():
         raise ErrorEntrada(f"No se encontro la carpeta base {rutas['base']}")
@@ -123,7 +123,7 @@ def consolidar_subastas(carpeta_base, aamm, registrar=print, progreso=None):
     """
 
     aamm = validar_aamm(aamm)
-    rutas = resolver_rutas(carpeta_base)
+    rutas = resolver_rutas(carpeta_base, aamm)
 
     if not rutas["subastas_dir"].is_dir():
         raise ErrorEntrada(
@@ -177,7 +177,7 @@ def traer_fd(carpeta_base, aamm, version=None, registrar=print, progreso=None):
     """
 
     aamm = validar_aamm(aamm)
-    rutas = resolver_rutas(carpeta_base)
+    rutas = resolver_rutas(carpeta_base, aamm)
 
     if not rutas["base"].is_dir():
         raise ErrorEntrada(f"No se encontro la carpeta base {rutas['base']}")
@@ -239,7 +239,7 @@ def generar_fma(
     """
 
     aamm = validar_aamm(aamm)
-    rutas = resolver_rutas(carpeta_base)
+    rutas = resolver_rutas(carpeta_base, aamm)
 
     if not rutas["base"].is_dir():
         raise ErrorEntrada(f"No se encontro la carpeta base {rutas['base']}")
@@ -306,7 +306,7 @@ def generar_cmg(
             progreso(valor)
 
     aamm = validar_aamm(aamm)
-    rutas = resolver_rutas(carpeta_base)
+    rutas = resolver_rutas(carpeta_base, aamm)
 
     if not rutas["base"].is_dir():
         raise ErrorEntrada(f"No se encontro la carpeta base {rutas['base']}")
