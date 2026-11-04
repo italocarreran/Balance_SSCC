@@ -164,7 +164,7 @@ class TestEscrituraDeLaPlanilla(unittest.TestCase):
 
     def test_actualizar_una_hoja_no_reescribe_las_demas(self):
         with tempfile.TemporaryDirectory() as carpeta:
-            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            ruta = Path(carpeta) / nucleo.nombre_salida("2607")
             nucleo.escribir_salida(
                 pd.DataFrame({"Mes": [7, 7]}), ruta, [], [],
                 df_cmg=pd.DataFrame({"cmg": [1.0]}),
@@ -191,12 +191,9 @@ class TestEscrituraDeLaPlanilla(unittest.TestCase):
             self.assertIn(nucleo.HOJA_CENTRALES, despues)
             # sin restos del libro temporal
             self.assertEqual(
-                sorted(
-                    p.name for p in Path(carpeta).iterdir()
-                    # los sellos de cuando se escribio cada hoja
-                    if not p.name.startswith(".sellos_")
-                ),
-                [nucleo.ARCHIVO_SALIDA],
+                # y los sellos de cuando se escribio cada hoja, en Log/
+                sorted(p.name for p in Path(carpeta).iterdir()),
+                [nucleo.nombre_salida("2607"), nucleo.CARPETA_LOG],
             )
 
 

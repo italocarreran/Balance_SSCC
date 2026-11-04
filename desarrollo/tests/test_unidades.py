@@ -29,7 +29,7 @@ class TestUnidades(unittest.TestCase):
             "Energía SSCC": [1.0],
         })
         with tempfile.TemporaryDirectory() as carpeta:
-            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            ruta = Path(carpeta) / nucleo.nombre_salida("2607")
             nucleo.escribir_salida(
                 medidores, ruta, [], [], df_cmg=cmg, df_subastas=subastas,
                 hojas_regenerar={
@@ -74,7 +74,7 @@ class TestCentralesSinEnergiaMinima(unittest.TestCase):
         })
         diccionario = pd.DataFrame([["Balance_BESS", "FD"], ["SAE UNO", "U"]])
         with tempfile.TemporaryDirectory() as carpeta:
-            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            ruta = Path(carpeta) / nucleo.nombre_salida("2607")
             nucleo.escribir_salida(
                 None, ruta, [], [], hojas_regenerar={nucleo.HOJA_CENTRALES},
                 centrales=(resumen, diccionario), registrar=lambda *a: None,

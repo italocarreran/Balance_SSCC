@@ -1,7 +1,7 @@
 """La ventana de "Ejecutar todo" con el mismo orden que el arbol.
 
 Pedido del usuario: que salgan todas las cosas que tienen boton en la
-ventana principal, y las hojas del Excel adentro de Balance_BESS.xlsx,
+ventana principal, y las hojas del Excel adentro de 11_PAGOS_BESS_AAMM.xlsx,
 con su propio cuadro selector. Y la fila nueva de las subastas
 consolidadas (subastas_AAMM.xlsx) con su boton "Consolidar".
 
@@ -58,8 +58,8 @@ class TestVentanaEjecutarTodo(base.TestVentanaActualizar):
                 ("Subastas/", "Traer subastas (Access del periodo)"),
                 ("Traer subastas (Access del periodo)",
                  "Consolidar subastas_AAMM.xlsx"),
-                ("Consolidar subastas_AAMM.xlsx", "Balance_BESS.xlsx"),
-                ("Balance_BESS.xlsx", "hoja 'Resumen'"),
+                ("Consolidar subastas_AAMM.xlsx", "11_PAGOS_BESS_2609.xlsx"),
+                ("11_PAGOS_BESS_2609.xlsx", "hoja 'Resumen'"),
                 ("hoja 'Resumen'", "hoja 'Centrales'"),
             ):
                 indice = {t: i for i, t in reversed(list(enumerate(textos)))}
@@ -80,7 +80,7 @@ class TestVentanaEjecutarTodo(base.TestVentanaActualizar):
             libro = next(
                 w for w in self._todos(dialogo)
                 if w.winfo_class() == "Label"
-                and w.cget("text") == "Balance_BESS.xlsx"
+                and w.cget("text") == "11_PAGOS_BESS_2609.xlsx"
             ).master
             cuadro = next(
                 w for w in libro.winfo_children()
@@ -100,7 +100,7 @@ class TestVentanaEjecutarTodo(base.TestVentanaActualizar):
             libro = next(
                 w for w in self._todos(dialogo)
                 if w.winfo_class() == "Label"
-                and w.cget("text") == "Balance_BESS.xlsx"
+                and w.cget("text") == "11_PAGOS_BESS_2609.xlsx"
             ).master
             next(
                 w for w in libro.winfo_children()
@@ -163,7 +163,7 @@ class TestVentanaEjecutarTodo(base.TestVentanaActualizar):
                 w for w in self._todos(dialogo)
                 if w.winfo_class() == "Checkbutton"
                 and w.master.winfo_children()[1].cget("text")
-                != "Balance_BESS.xlsx"
+                != "11_PAGOS_BESS_2609.xlsx"
             )
             cuadro.invoke()
             self.root.update()

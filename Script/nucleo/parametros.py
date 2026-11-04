@@ -93,7 +93,26 @@ CARPETA_DB_SUBASTAS = ofertas_adj.CARPETA_DB_SUBASTAS
 # (Consolidado_entradas.xlsx + Pagos_BESS.xlsx); ahora las entradas y
 # el calculo viven en el mismo libro, ordenado de FIN A INICIO: el
 # Resumen primero y las entradas al final (ver ORDEN_HOJAS_SALIDA).
-ARCHIVO_SALIDA = "Balance_BESS.xlsx"
+#
+# Se llama 11_PAGOS_BESS_AAMM.xlsx, con el periodo (pedido del usuario
+# 2026-11-04; antes era Balance_BESS.xlsx). ARCHIVO_SALIDA es el nombre
+# generico, para mostrar; el del caso lo da rutas.nombre_salida(aamm).
+PREFIJO_SALIDA = "11_PAGOS_BESS_"
+ARCHIVO_SALIDA = f"{PREFIJO_SALIDA}AAMM.xlsx"
+# El nombre de antes: si un caso lo tiene, se renombra solo (ver
+# rutas._migrar_archivos_antiguos).
+ARCHIVO_SALIDA_ANTIGUO = "Balance_BESS.xlsx"
+
+# El CSV de pagos que se sube (lo armaba la macro C_Exporta_pagos:
+# Generar_CSV_SAE), al lado de la planilla.
+PREFIJO_CSV_SAE = "SAE_"
+ARCHIVO_CSV_SAE = f"{PREFIJO_CSV_SAE}AAMM.csv"
+
+# Lo que deja cada corrida (control, registro de la ultima corrida y los
+# sellos de cuando se escribio cada hoja) va en su propia carpeta del
+# caso, no suelto al lado de la planilla (pedido del usuario).
+CARPETA_LOG = "Log"
+ARCHIVO_REGISTRO = "Registro_ultima_corrida.txt"
 
 # Las hojas de control de la corrida (Alertas, Ejecucion, Log) ya no
 # ensucian la planilla de trabajo: viven en su propio archivo, al lado

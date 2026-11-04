@@ -48,7 +48,7 @@ def correr_pagos(base, secciones, lineas):
 
 def hoja(base, nombre, header=1):
     return pd.read_excel(
-        base / nucleo.ARCHIVO_SALIDA, sheet_name=nombre, header=header
+        base / nucleo.nombre_salida("2607"), sheet_name=nombre, header=header
     )
 
 
@@ -82,7 +82,7 @@ class TestHojaCentrales(unittest.TestCase):
             )
             self.assertIn(
                 nucleo.HOJA_CENTRALES,
-                pd.ExcelFile(base / nucleo.ARCHIVO_SALIDA).sheet_names,
+                pd.ExcelFile(base / nucleo.nombre_salida("2607")).sheet_names,
             )
 
             (base / "Auxiliares" / nucleo.ARCHIVO_CENTRALES).unlink()
@@ -105,7 +105,7 @@ class TestHojaCentrales(unittest.TestCase):
             # falso que vio el usuario).
             self.assertNotIn("TRA-010", texto)
 
-            hojas = pd.ExcelFile(base / nucleo.ARCHIVO_SALIDA).sheet_names
+            hojas = pd.ExcelFile(base / nucleo.nombre_salida("2607")).sheet_names
             for nombre in (
                 nucleo.HOJA_CALCULO_ECOSTOS, nucleo.HOJA_CALCULO_RE545,
                 HOJA_COMPENSACION_CENTRAL,
@@ -118,7 +118,7 @@ class TestHojaCentrales(unittest.TestCase):
             # y RE545 lado a lado), y al final el total por empresa.
             import openpyxl
             libro = openpyxl.load_workbook(
-                base / nucleo.ARCHIVO_SALIDA, read_only=True
+                base / nucleo.nombre_salida("2607"), read_only=True
             )
             fila_titulos = next(libro[HOJA_COMPENSACION_CENTRAL].iter_rows(
                 min_row=2, max_row=2, values_only=True
@@ -195,7 +195,7 @@ class TestHojaCentrales(unittest.TestCase):
 
         for diccionario in (nuevo, viejo):
             with tempfile.TemporaryDirectory() as carpeta:
-                ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+                ruta = Path(carpeta) / nucleo.nombre_salida("2607")
                 nucleo.escribir_salida(
                     None, ruta, [], [],
                     hojas_regenerar={nucleo.HOJA_CENTRALES},
@@ -271,7 +271,7 @@ class TestOfertasSola(unittest.TestCase):
             # lectura de Centrales.xlsx para dejarla escrita.
             self.assertIn(
                 nucleo.HOJA_CENTRALES,
-                pd.ExcelFile(base / nucleo.ARCHIVO_SALIDA).sheet_names,
+                pd.ExcelFile(base / nucleo.nombre_salida("2607")).sheet_names,
             )
 
 
@@ -313,7 +313,7 @@ class TestColumnaCentral(unittest.TestCase):
         mapa = nucleo.mapa_unidad_fd_a_central(self.DICCIONARIO_NUEVO)
 
         with tempfile.TemporaryDirectory() as carpeta:
-            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            ruta = Path(carpeta) / nucleo.nombre_salida("2607")
             nucleo.escribir_salida(
                 None, ruta, [], [],
                 df_fd_csf=nucleo.agregar_central_fd(csf, mapa),
@@ -352,7 +352,7 @@ class TestColumnaCentral(unittest.TestCase):
             correr_pagos(referencia, {"ecostos"}, [])
 
             base = armar_caso(dos)
-            ruta = base / nucleo.ARCHIVO_SALIDA
+            ruta = base / nucleo.nombre_salida("2607")
             csf, cpf = nucleo.leer_fd_consolidado(
                 ruta, registrar=lambda *a: None
             )
@@ -487,7 +487,7 @@ class TestFdYFmaSeAplicanEnRe545(unittest.TestCase):
 
             # Ahora: la hoja FD de la planilla (ida y vuelta por Excel).
             csf, cpf = nucleo.construir_fd(archivo, registrar=lambda *a: None)
-            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            ruta = Path(carpeta) / nucleo.nombre_salida("2607")
             nucleo.escribir_salida(
                 None, ruta, [], [], df_fd_csf=csf, df_fd_cpf=cpf,
                 hojas_regenerar={nucleo.HOJA_FD}, registrar=lambda *a: None,
@@ -585,7 +585,7 @@ class TestFdYFmaSeAplicanEnRe545(unittest.TestCase):
         }
 
         with tempfile.TemporaryDirectory() as carpeta:
-            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            ruta = Path(carpeta) / nucleo.nombre_salida("2607")
             nucleo.escribir_salida(
                 None, ruta, [], [], hojas_regenerar={nucleo.HOJA_FMA},
                 tablas_fma=tablas, registrar=lambda *a: None,
@@ -611,7 +611,7 @@ class TestFdYFmaSeAplicanEnRe545(unittest.TestCase):
             "ctf_configuracion": None,
         }
         with tempfile.TemporaryDirectory() as carpeta:
-            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            ruta = Path(carpeta) / nucleo.nombre_salida("2607")
             nucleo.escribir_salida(
                 None, ruta, [], [], hojas_regenerar={nucleo.HOJA_FMA},
                 tablas_fma=tablas, registrar=lambda *a: None,
@@ -640,7 +640,7 @@ class TestFdYFmaSeAplicanEnRe545(unittest.TestCase):
     def test_una_hoja_fma_de_antes_se_sigue_leyendo(self):
         # Titulos en la fila 1, sin "Cuadro N°" (como se escribia antes).
         with tempfile.TemporaryDirectory() as carpeta:
-            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            ruta = Path(carpeta) / nucleo.nombre_salida("2607")
             with pd.ExcelWriter(ruta) as writer:
                 pd.DataFrame([["FMA CPF (fma_cpf)"]]).to_excel(
                     writer, sheet_name=nucleo.HOJA_FMA, index=False,
@@ -659,7 +659,7 @@ class TestFdYFmaSeAplicanEnRe545(unittest.TestCase):
     def test_re545_sin_hoja_fma_dice_que_hay_que_generarla(self):
         with tempfile.TemporaryDirectory() as carpeta:
             base = armar_caso(carpeta)
-            ruta = base / nucleo.ARCHIVO_SALIDA
+            ruta = base / nucleo.nombre_salida("2607")
             hojas = pd.read_excel(ruta, sheet_name=None, header=None)
             del hojas[nucleo.HOJA_FMA]
             with pd.ExcelWriter(ruta) as writer:

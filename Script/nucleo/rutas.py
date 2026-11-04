@@ -9,7 +9,8 @@ from pathlib import Path
 from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, ARCHIVO_CONTROL, ARCHIVO_MEDIDAS_SAE,
     ARCHIVO_PUNTOS_FALLIDOS,
-    ARCHIVO_SALIDA, CARPETA_AUXILIARES, CARPETA_CMG,
+    ARCHIVO_REGISTRO, ARCHIVO_SALIDA_ANTIGUO, CARPETA_AUXILIARES,
+    CARPETA_CMG, CARPETA_LOG, PREFIJO_CSV_SAE, PREFIJO_SALIDA,
     CARPETA_DB_SUBASTAS, CARPETA_FD_FMA, CARPETA_FD_FMA_ANTIGUA,
     CARPETA_MEDIDAS, CARPETA_OFERTAS, CARPETA_PRORRATA_RETIROS,
     CARPETA_SUBASTAS,
@@ -23,10 +24,94 @@ from .utiles import ErrorEntrada, normalizar
 # RESOLUCION DE RUTAS
 # ============================================================
 
-def resolver_rutas(carpeta_base):
+def nombre_salida(aamm):
+    """'2609' -> '11_PAGOS_BESS_2609.xlsx'."""
+
+    return f"{PREFIJO_SALIDA}{aamm}.xlsx"
+
+
+def nombre_csv_sae(aamm):
+    """'2609' -> 'SAE_2609.csv'."""
+
+    return f"{PREFIJO_CSV_SAE}{aamm}.csv"
+
+
+def _aamm_o_none(aamm):
+    texto = str(aamm).strip() if aamm is not None else ""
+    return texto if re.fullmatch(PATRON_AAMM, texto) else None
+
+
+def _salida_sin_periodo(base):
+    """
+    Sin un AAMM valido: la 11_PAGOS_BESS_AAMM.xlsx que haya en la
+    carpeta (cada caso es de un solo periodo), o el nombre de antes si
+    solo esta ese, o un nombre generico.
+    """
+
+    try:
+        encontradas = sorted(
+            p for p in base.glob(f"{PREFIJO_SALIDA}*.xlsx")
+            if re.fullmatch(rf"{re.escape(PREFIJO_SALIDA)}\d{{4}}\.xlsx", p.name)
+        )
+    except OSError:
+        encontradas = []
+    if len(encontradas) == 1:
+        return encontradas[0]
+    if (base / ARCHIVO_SALIDA_ANTIGUO).is_file():
+        return base / ARCHIVO_SALIDA_ANTIGUO
+    return base / f"{PREFIJO_SALIDA}AAMM.xlsx"
+
+
+def _mover(origen, destino):
+    """Mueve origen a destino si destino no esta; True si quedo en destino."""
+
+    if destino.exists():
+        return True
+    if not origen.exists():
+        return False
+    try:
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        origen.replace(destino)
+        return True
+    except OSError:
+        # Abierto en Excel, sin permiso...: queda donde estaba y se
+        # vuelve a intentar la proxima vez.
+        return False
+
+
+def _migrar_archivos_antiguos(base, salida):
+    """
+    Un caso de antes del cambio de nombres (pedido del usuario
+    2026-11-04): Balance_BESS.xlsx pasa a 11_PAGOS_BESS_AAMM.xlsx y el
+    control, el registro y los sellos, a la carpeta Log/. Nunca pisa un
+    archivo que ya este. Devuelve la ruta de la planilla a usar: la
+    nueva, o la vieja si no se pudo renombrar (estaba abierta).
+    """
+
+    log = base / CARPETA_LOG
+    from .sellos import ruta_sellos, ruta_sellos_antigua
+
+    vieja = base / ARCHIVO_SALIDA_ANTIGUO
+    if vieja.is_file() and not salida.exists():
+        if _mover(vieja, salida):
+            _mover(ruta_sellos_antigua(vieja), ruta_sellos(salida))
+        else:
+            salida = vieja
+    _mover(ruta_sellos_antigua(salida), ruta_sellos(salida))
+    for nombre in (ARCHIVO_CONTROL, ARCHIVO_REGISTRO):
+        if (base / nombre).is_file():
+            _mover(base / nombre, log / nombre)
+    return salida
+
+
+def resolver_rutas(carpeta_base, aamm=None):
     """
     Deriva todas las rutas desde la carpeta base elegida por el
     usuario. Nada depende de donde vive el .py.
+
+    aamm: el periodo del caso. La planilla se llama
+    11_PAGOS_BESS_AAMM.xlsx; sin un AAMM valido se usa la que haya en la
+    carpeta (ver _salida_sin_periodo).
     """
 
     base = Path(carpeta_base)
@@ -44,6 +129,13 @@ def resolver_rutas(carpeta_base):
     subastas_dir = base / CARPETA_SUBASTAS
     prorrata_retiros_dir = base / CARPETA_PRORRATA_RETIROS
 
+    periodo = _aamm_o_none(aamm)
+    salida = (
+        base / nombre_salida(periodo) if periodo else _salida_sin_periodo(base)
+    )
+    if base.is_dir():
+        salida = _migrar_archivos_antiguos(base, salida)
+
     return {
         "base": base,
         "medidas_dir": medidas_dir,
@@ -59,10 +151,13 @@ def resolver_rutas(carpeta_base):
         "trabajo_medidas": medidas_dir / CARPETA_TRABAJO_MEDIDAS,
         "centrales": auxiliares_dir / ARCHIVO_CENTRALES,
         "cmg": cmg_dir / ARCHIVO_CMG,
-        # Una sola planilla (entradas + calculo) y, al lado, el
-        # archivo de control de la corrida.
-        "salida": base / ARCHIVO_SALIDA,
-        "control": base / ARCHIVO_CONTROL,
+        # Una sola planilla (entradas + calculo), el CSV de pagos al
+        # lado y lo de cada corrida en Log/.
+        "salida": salida,
+        "csv_sae": base / nombre_csv_sae(periodo or "AAMM"),
+        "log_dir": base / CARPETA_LOG,
+        "control": base / CARPETA_LOG / ARCHIVO_CONTROL,
+        "registro": base / CARPETA_LOG / ARCHIVO_REGISTRO,
     }
 
 

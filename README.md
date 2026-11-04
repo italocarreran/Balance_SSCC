@@ -114,7 +114,7 @@ python Balance_BESS.py
    - `Cmg/cmg<AAMM>_def_15minutal.csv` → **Traer** (lo baja de la
      unidad de red).
    - `Cmg/cmg.xlsx` → **Generar** (lo arma con ese CSV).
-   - `Balance_BESS.xlsx` —la única planilla de salida— se desglosa por hoja,
+   - `11_PAGOS_BESS_AAMM.xlsx` —la única planilla de salida— se desglosa por hoja,
      igual que `Centrales.xlsx`, y cada hoja tiene su botón (**Actualizar**
      las de entrada, **Calcular** las de cálculo). El de la fila del
      archivo, **Actualizar**, las hace todas: primero las entradas y
@@ -178,8 +178,7 @@ cálculo conserva el comportamiento de la planilla —algunos faltantes quedan
 vacíos y otros se rellenan con cero—, pero ahora informa la causa, las
 centrales/claves afectadas y el impacto antes de continuar.
 
-Cada corrida deja además, **en una planilla aparte** (`Control_corrida.xlsx`,
-al lado de `Balance_BESS.xlsx`), las hojas de control — a pedido del usuario,
+Cada corrida deja además, **en una planilla aparte** (`Log/Control_corrida.xlsx`), las hojas de control — a pedido del usuario,
 para que no ensucien la planilla de trabajo:
 
 - **`Alertas`** — una fila por alerta, con su id, severidad, etapa, central y
@@ -266,7 +265,7 @@ Ver `desarrollo/MAPA.md` para qué hace cada módulo.
 ├── Prorrata retiros/
 │   └── Prorrata_Retiros_<AAMM>_pre.xlsx o _def.xlsx
 │       (hoja "Prorrata 15min")
-├── Balance_BESS.xlsx            <- LA salida: entradas y cálculo en un
+├── 11_PAGOS_BESS_AAMM.xlsx      <- LA salida: entradas y cálculo en un
 │                                   solo libro, ordenado de fin a
 │                                   inicio (Resumen, PRORRATA_RETIROS,
 │                                   COMPENSACION_CENTRAL, Calculo RE545,
@@ -274,9 +273,24 @@ Ver `desarrollo/MAPA.md` para qué hace cada módulo.
 │                                   Ofertas SSCC, Medidores). Una fila
 │                                   por hoja en la ventana, cada una con
 │                                   su botón
-└── Control_corrida.xlsx         <- Ejecucion, Alertas y Log de la
-                                    última corrida
+├── SAE_AAMM.csv                 <- el CSV de pagos que se sube (botón
+│                                   "Generar", el último): Calculo E
+│                                   Costos + Calculo RE545 por bloque y
+│                                   configuración, como la macro
+│                                   Generar_CSV_SAE
+└── Log/                         <- lo que deja cada corrida
+    ├── Control_corrida.xlsx     <- Ejecucion, Alertas, Log y la matriz
+    │                               de centrales
+    ├── Registro_ultima_corrida.txt
+    └── sellos_11_PAGOS_BESS_AAMM.json  <- cuándo se escribió cada hoja
+                                    (la ventana lo usa para marcar lo
+                                    que quedó desactualizado)
 ```
+
+Un caso de antes (con `Balance_BESS.xlsx` y el control al lado) se ordena
+solo la primera vez que se abre: la planilla se renombra a
+`11_PAGOS_BESS_AAMM.xlsx` y el control, el registro y los sellos pasan a
+`Log/`. Si la planilla está abierta en Excel, se reintenta la vez siguiente.
 
 Ningún archivo (salvo `cmg.xlsx`) sigue un nombre fijo:
 
@@ -382,7 +396,7 @@ resultado, siempre que la carpeta base seleccionada sea la misma.
 
 ## Estado actual
 
-`Balance_BESS.xlsx` es **la** planilla de salida: antes eran dos
+`11_PAGOS_BESS_AAMM.xlsx` (antes `Balance_BESS.xlsx`) es **la** planilla de salida: antes eran dos
 (`Consolidado_entradas.xlsx` y `Pagos_BESS.xlsx`) y el usuario pidió
 combinarlas. Sus hojas quedan ordenadas **de fin a inicio** — arriba el
 `Resumen`, que es lo primero que se mira, y abajo las entradas de las que

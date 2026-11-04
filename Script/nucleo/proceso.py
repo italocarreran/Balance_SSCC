@@ -123,7 +123,7 @@ def generar_consolidado(
         if id_seccion in secciones_activas:
             hojas_regenerar.update(hojas)
 
-    rutas = resolver_rutas(carpeta_base)
+    rutas = resolver_rutas(carpeta_base, aamm)
 
     # El maestro de centrales sale de la hoja "Centrales" de la planilla
     # (pedido del usuario: copiar Centrales.xlsx una vez y que cada
@@ -827,7 +827,7 @@ def generar_pagos_bess(
         if id_seccion in secciones_activas:
             hojas_regenerar.update(hojas)
 
-    rutas = resolver_rutas(carpeta_base)
+    rutas = resolver_rutas(carpeta_base, aamm)
 
     # ----------------------------------------------------------
     # LECTURA DE ENTRADAS: SOLO LO QUE PIDEN LAS SECCIONES TILDADAS

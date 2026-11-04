@@ -77,7 +77,7 @@ class TestRegistro(base.TestVentanaActualizar):
         self.assertIn("▶ ", lineas_con("encabezado"))
         self.assertIn("listo en", lineas_con("encabezado_fin"))
 
-        guardado = self.caso / self.app.ARCHIVO_REGISTRO
+        guardado = self.caso / "Log" / self.app.ARCHIVO_REGISTRO
         self.assertTrue(guardado.is_file())
         self.assertIn("[AVISO] faltan 2 dias", guardado.read_text(encoding="utf-8"))
 

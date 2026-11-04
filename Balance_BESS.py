@@ -54,14 +54,18 @@ Script/nucleo/orquestador.py; esta ventana solo los dibuja.
             hoja 'CMg'                     [Actualizar]
             hoja 'Ofertas SSCC'            [Actualizar]
             hoja 'Medidores'               [Actualizar]
-        Control_corrida.xlsx
+        SAE_AAMM.csv                   [Generar]
+        Log/
+            Control_corrida.xlsx
+            Registro_ultima_corrida.txt
 
 La salida es UNA sola planilla (antes eran dos,
 Consolidado_entradas.xlsx y Pagos_BESS.xlsx) y sus hojas quedan
 ordenadas de FIN A INICIO: arriba el Resumen -lo primero que se mira-
 y abajo las entradas de las que sale todo. Las hojas de control de la
 corrida (Alertas, Ejecucion, Log) ya no estan ahi adentro: viven en
-Control_corrida.xlsx, al lado.
+Log/Control_corrida.xlsx. La planilla se llama 11_PAGOS_BESS_AAMM.xlsx
+(con el periodo) y el ultimo boton deja SAE_AAMM.csv, el CSV de pagos.
 
 La planilla se desglosa por hoja igual que Centrales.xlsx: cada hoja
 se actualiza sola, y lo que no se toca se conserva tal cual estaba en
@@ -142,9 +146,9 @@ COLOR_REGISTRO = {
     "error": "#c00020",
 }
 
-# Donde queda el registro de la ultima corrida, en la carpeta del caso
-# (para poder mandarlo sin copiar a mano).
-ARCHIVO_REGISTRO = "Registro_ultima_corrida.txt"
+# Donde queda el registro de la ultima corrida, en la carpeta Log/ del
+# caso (para poder mandarlo sin copiar a mano).
+ARCHIVO_REGISTRO = nucleo.ARCHIVO_REGISTRO
 
 _PATRON_ERROR = re.compile(
     r"\bERROR\b|Traceback|\bNO se corre\b|: error\b|termino con problemas",
@@ -997,6 +1001,9 @@ def main():
         if id_fila == "salida":
             return ("Actualizar", actualizar_planilla_entera)
 
+        if id_fila == "sae_csv":
+            return ("Generar", generar_csv_sae)
+
         if id_fila.startswith("consolidado:"):
             seccion = id_fila.split(":", 1)[1]
             return ("Actualizar", lambda s=seccion: actualizar_consolidado({s}))
@@ -1157,13 +1164,15 @@ def main():
         cola_log.put((time.time(), mensaje))
 
     def guardar_registro():
-        """Deja el registro en <caso>/Registro_ultima_corrida.txt."""
+        """Deja el registro en <caso>/Log/Registro_ultima_corrida.txt."""
 
         base = var_base.get()
         if not base or not os.path.isdir(base):
             return None
-        ruta = os.path.join(base, ARCHIVO_REGISTRO)
+        carpeta_log = os.path.join(base, nucleo.CARPETA_LOG)
+        ruta = os.path.join(carpeta_log, ARCHIVO_REGISTRO)
         try:
+            os.makedirs(carpeta_log, exist_ok=True)
             with open(ruta, "w", encoding="utf-8") as archivo:
                 archivo.write(txt_log.get("1.0", "end"))
         except OSError:
@@ -1828,6 +1837,40 @@ def main():
             f"subastas_{aamm}.xlsx",
         )
 
+    def nombre_planilla():
+        """11_PAGOS_BESS_AAMM.xlsx con el periodo escrito arriba."""
+
+        aamm = var_aamm.get().strip()
+        try:
+            return nucleo.nombre_salida(nucleo.validar_aamm(aamm))
+        except nucleo.ErrorEntrada:
+            return nucleo.ARCHIVO_SALIDA
+
+    def generar_csv_sae():
+        """
+        El ultimo boton: SAE_AAMM.csv, el CSV de pagos que se sube, desde
+        Calculo E Costos y Calculo RE545 (lo que hacia la macro
+        Generar_CSV_SAE).
+        """
+
+        ruta = caso_listo()
+        if ruta is None:
+            return
+
+        aamm = var_aamm.get().strip()
+
+        try:
+            nucleo.validar_aamm(aamm)
+        except nucleo.ErrorEntrada as error:
+            messagebox.showwarning("Falta el periodo", str(error))
+            return
+
+        lanzar(
+            nucleo.generar_csv_sae,
+            dict(carpeta_base=ruta, aamm=aamm),
+            nucleo.nombre_csv_sae(aamm),
+        )
+
     def generar_cmg():
         """Arma cmg.xlsx con el CSV que ya esta en Cmg/."""
 
@@ -1900,7 +1943,7 @@ def main():
                 aamm=var_aamm.get().strip(),
                 secciones_activas=secciones,
             ),
-            nucleo.ARCHIVO_SALIDA,
+            nombre_planilla(),
         )
 
     def actualizar_pagos(secciones):
@@ -1917,7 +1960,7 @@ def main():
             nucleo.generar_pagos_bess,
             dict(carpeta_base=ruta, secciones_activas=secciones,
                  aamm=var_aamm.get().strip()),
-            nucleo.ARCHIVO_SALIDA,
+            nombre_planilla(),
         )
 
     def actualizar_planilla_entera():
@@ -1956,7 +1999,7 @@ def main():
                 progreso=lambda v: progreso(50 + v / 2),
             )
 
-        lanzar(correr, {}, nucleo.ARCHIVO_SALIDA)
+        lanzar(correr, {}, nombre_planilla())
 
     # --------------------------------------------------------
     # CASO NUEVO: CREAR LA CARPETA DEL PERIODO CON SUS SUBCARPETAS
@@ -2486,7 +2529,7 @@ def main():
             lanzar(
                 nucleo.ejecutar_plan,
                 dict(carpeta_base=ruta, aamm=aamm, seleccion=ids),
-                nucleo.ARCHIVO_SALIDA,
+                nombre_planilla(),
             )
 
         btn_ejecutar.config(command=ejecutar)

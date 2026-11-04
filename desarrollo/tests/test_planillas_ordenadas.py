@@ -188,7 +188,7 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
         )
 
     def escribir(self, carpeta):
-        ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+        ruta = Path(carpeta) / nucleo.nombre_salida("2607")
         nucleo.escribir_pagos_bess(
             ruta,
             df_ecostos=self.armar_calculo(),
@@ -207,7 +207,7 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
         df.loc[1:, "Curva monotona CMg Descarga"] = pd.NA
         df.loc[2, "Curva monotona CMg Carga"] = pd.NA
         with tempfile.TemporaryDirectory() as carpeta:
-            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            ruta = Path(carpeta) / nucleo.nombre_salida("2607")
             nucleo.escribir_pagos_bess(
                 ruta, df_ecostos=df, registrar=lambda *a: None
             )
@@ -233,7 +233,7 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
         resumen = pd.DataFrame({
             nombre: [1.0] for nombre in nucleo.NOMBRES_RESUMEN_RE545.values()
         })
-        ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+        ruta = Path(carpeta) / nucleo.nombre_salida("2607")
         nucleo.escribir_pagos_bess(
             ruta, df_re545=df, df_resumen_re545=resumen,
             registrar=lambda *a: None,
@@ -431,7 +431,7 @@ class TestUnaSolaPlanilla(unittest.TestCase):
 
     def test_las_hojas_quedan_del_resumen_a_las_entradas(self):
         with tempfile.TemporaryDirectory() as carpeta:
-            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            ruta = Path(carpeta) / nucleo.nombre_salida("2607")
             self.entradas(ruta)
             self.calculo(ruta)
 
@@ -445,7 +445,7 @@ class TestUnaSolaPlanilla(unittest.TestCase):
 
     def test_cada_mitad_preserva_la_otra(self):
         with tempfile.TemporaryDirectory() as carpeta:
-            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            ruta = Path(carpeta) / nucleo.nombre_salida("2607")
 
             self.entradas(ruta)
             self.calculo(ruta)
@@ -464,8 +464,8 @@ class TestUnaSolaPlanilla(unittest.TestCase):
 
     def test_el_control_va_en_su_propio_archivo(self):
         with tempfile.TemporaryDirectory() as carpeta:
-            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
-            control = Path(carpeta) / nucleo.ARCHIVO_CONTROL
+            ruta = Path(carpeta) / nucleo.nombre_salida("2607")
+            control = Path(carpeta) / nucleo.CARPETA_LOG / nucleo.ARCHIVO_CONTROL
 
             self.entradas(ruta, control)
 
@@ -482,7 +482,7 @@ class TestUnaSolaPlanilla(unittest.TestCase):
 
     def test_el_control_conserva_las_hojas_que_no_reescribe(self):
         with tempfile.TemporaryDirectory() as carpeta:
-            control = Path(carpeta) / nucleo.ARCHIVO_CONTROL
+            control = Path(carpeta) / nucleo.CARPETA_LOG / nucleo.ARCHIVO_CONTROL
 
             registro = nucleo.Registro()
             nucleo.escribir_control(
@@ -560,7 +560,7 @@ class TestNoSeAbrenPlanillasDeMas(unittest.TestCase):
         """
 
         with tempfile.TemporaryDirectory() as carpeta:
-            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            ruta = Path(carpeta) / nucleo.nombre_salida("2607")
             cmg = pd.DataFrame({
                 "A": ["x"], "B": ["y"], "C": ["z"],
                 "D_Barra": ["BARRA A"], "E": [""], "F_CMg": [50.0],
@@ -579,7 +579,7 @@ class TestNoSeAbrenPlanillasDeMas(unittest.TestCase):
 
     def test_sin_la_hoja_cmg_el_error_dice_que_hay_que_generarla(self):
         with tempfile.TemporaryDirectory() as carpeta:
-            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            ruta = Path(carpeta) / nucleo.nombre_salida("2607")
             pd.DataFrame({"a": [1]}).to_excel(
                 ruta, sheet_name="Medidores", index=False
             )

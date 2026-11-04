@@ -57,6 +57,7 @@ Script/
         relleno_rapido.py      <- filas de datos de las hojas grandes generadas directo en XML (mismo formato)
         lector.py              <- leer Excel con calamine (si esta) donde se verifico que da lo mismo
         matriz_centrales.py    <- matriz de control: cada central y si se encontro en cada origen (Control_corrida)
+        csv_sae.py             <- SAE_AAMM.csv, el CSV de pagos (macro Generar_CSV_SAE): boton final
         formato.py             <- ancho/negrita/panel fijo de las hojas
         proceso.py             <- los dos procesos completos
         orquestador.py         <- el grafo de "Ejecutar todo" (plan y corrida)
@@ -160,14 +161,15 @@ importable como cualquier módulo.
   | `FD y FMA/fma_cft_<AAMM>.xlsx` | **Generar** | `nucleo.generar_fma` con `{"ctf"}` — desde el `CTF_<AAAA><MM>.csv` del DCO | **Oculta** desde 2026-11-03 (`parametros.FMA_CON_CTF = False`): no aparece en la ventana ni en la hoja FMA; el código sigue.
   | `Subastas/DB subastas/` | **Traer** | `nucleo.traer_subastas` — copia los `OfertasSSCCAdj*.accdb` del período desde la unidad de red |
   | `Subastas/subastas_AAMM.xlsx` | **Consolidar** | `nucleo.consolidar_subastas` — junta los Access del período (PO + PID desde su hora) en un Excel; la hoja `Subastas` se lleva de ahí |
-  | `Balance_BESS.xlsx` | **Actualizar** | las dos mitades de un viaje: `generar_consolidado` con todas las secciones y después `generar_pagos_bess` con todas |
-  | `Balance_BESS.xlsx/Centrales` | **Actualizar** | copia `Resumen BESS` y `Diccionario` de `Centrales.xlsx` a la planilla: es lo único que abre ese archivo |
+  | `11_PAGOS_BESS_AAMM.xlsx` | **Actualizar** | las dos mitades de un viaje: `generar_consolidado` con todas las secciones y después `generar_pagos_bess` con todas |
+  | `11_PAGOS_BESS_AAMM.xlsx/Centrales` | **Actualizar** | copia `Resumen BESS` y `Diccionario` de `Centrales.xlsx` a la planilla: es lo único que abre ese archivo |
   | cada `hoja '...'` de entrada | **Actualizar** | `generar_consolidado` con esa sola sección |
   | cada `hoja '...'` de cálculo | **Calcular** | `generar_pagos_bess` con esa sola |
-  | `Balance_BESS.xlsx/COMPENSACION_CENTRAL` | **Resumir** | compensación por central y ciclo/ventana y total por central (E Costos y RE545 lado a lado, con total) y total por empresa |
-  | `Balance_BESS.xlsx/PRORRATA_RETIROS` | **Traer** | reparte el monto de cada cuarto de hora segun `Prorrata 15min` |
-  | `Balance_BESS.xlsx/Resumen` | **Asignar** | consolida `RECIBE`, `PAGA` y `NETO` por empresa |
-  | `Control_corrida.xlsx` | (sin botón) | lo deja cada corrida: `Ejecucion`, `Alertas` y `Log` |
+  | `11_PAGOS_BESS_AAMM.xlsx/COMPENSACION_CENTRAL` | **Resumir** | compensación por central y ciclo/ventana y total por central (E Costos y RE545 lado a lado, con total) y total por empresa |
+  | `11_PAGOS_BESS_AAMM.xlsx/PRORRATA_RETIROS` | **Traer** | reparte el monto de cada cuarto de hora segun `Prorrata 15min` |
+  | `11_PAGOS_BESS_AAMM.xlsx/Resumen` | **Asignar** | consolida `RECIBE`, `PAGA` y `NETO` por empresa |
+  | `SAE_AAMM.csv` | **Generar** | el CSV de pagos que se sube: `Monto a compensar` de Calculo E Costos + Calculo RE545 por bloque y configuración (`csv_sae.generar_csv_sae`) |
+  | `Log/Control_corrida.xlsx` | (sin botón) | lo deja cada corrida: `Ejecucion`, `Alertas` y `Log` |
 
   Los botones dicen **solo el verbo** (pedido del usuario: *"los botones de
   resumir y traer que digan solo eso"*): de qué hoja se trata ya lo dice la
@@ -228,7 +230,7 @@ importable como cualquier módulo.
   `carpetas_por_periodo` —qué carpeta usó cada mes—, por PC/usuario).
 - **Produce:** `config.json` actualizado con la carpeta base, el AAMM y la
   carpeta de ese período (`recordar_carpeta()`); dispara en `nucleo` la escritura del CSV de CMg, `cmg.xlsx`,
-  `Balance_BESS.xlsx` (y `Control_corrida.xlsx`) dentro de la carpeta
+  `11_PAGOS_BESS_AAMM.xlsx` (y `Control_corrida.xlsx`) dentro de la carpeta
   base del caso (cada hoja por su botón).
 - **Expone:** `main()` — punto de entrada (`python Balance_BESS.py`);
   `carpeta_a_abrir(ruta, es_archivo=False)` y
@@ -691,7 +693,7 @@ importable como cualquier módulo.
   SSCC), la carga de CMg, FD y Subastas, y una primera etapa (base) de
   Calculo E Costos, sin interfaz. Resuelve las rutas de un caso a partir de
   la carpeta base, valida que existan las entradas requeridas (incluido el
-  período AAMM que ingresa el usuario), y escribe `Balance_BESS.xlsx` (una
+  período AAMM que ingresa el usuario), y escribe `11_PAGOS_BESS_AAMM.xlsx` (una
   sola planilla: `Resumen`, `PRORRATA_RETIROS`, `COMPENSACION_CENTRAL`,
   `Calculo RE545`, `Calculo E Costos`, `Subastas`, `FMA`, `FD`, `CMg`,
   `Ofertas SSCC`, `Medidores`, `Centrales`) y `Control_corrida.xlsx`
@@ -708,7 +710,7 @@ importable como cualquier módulo.
   | `Ofertas SSCC` sola | lee la hoja `Medidores` ya escrita (`_leer_medidores_del_libro`): no abre `Medidas_SAE.xlsx` ni el SoC. |
   | Hojas de cálculo | no abren ningún archivo de entrada; la conciliación de energía solo corre si se recalcula E Costos o RE545. |
   | "Ejecutar todo" | la tarea `consolidado:centrales` es dependencia **opcional** de las demás: ordena y deja viejo lo que sale de ella, pero no bloquea. |
-  | Escritura | `escribir_salida`/`escribir_pagos_bess` escriben **solo** las hojas de esta pasada en un libro temporal chico y `xlsx_rapido.pegar_hojas()` las pega en el zip de `Balance_BESS.xlsx`: las demás hojas se copian comprimidas tal cual (ni se descomprimen), los textos van en línea y los estilos se agregan al `styles.xml` como texto. Actualizar `Centrales` en un libro de 61 MB: de 430 s a 0,8 s. |
+  | Escritura | `escribir_salida`/`escribir_pagos_bess` escriben **solo** las hojas de esta pasada en un libro temporal chico y `xlsx_rapido.pegar_hojas()` las pega en el zip de `11_PAGOS_BESS_AAMM.xlsx`: las demás hojas se copian comprimidas tal cual (ni se descomprimen), los textos van en línea y los estilos se agregan al `styles.xml` como texto. Actualizar `Centrales` en un libro de 61 MB: de 430 s a 0,8 s. |
 
   **FD y FMA de las subastas se aplican en RE545, no en `Subastas`**
   (pedido del usuario, 2026-10-13: evitar un descuento doble). La hoja
@@ -831,7 +833,7 @@ importable como cualquier módulo.
   `Medidores!Copia_Ventana`) y Q/`CMg` (homologado por `Barra` + `Cuarto de
   Hora` normalizado, vía `NormalizaCuarto`). Vivió un tiempo en un archivo
   separado (`Pagos_BESS.xlsx`); hoy es una hoja más de la única planilla
-  `Balance_BESS.xlsx` (el usuario pidió volver a combinarlas).
+  `11_PAGOS_BESS_AAMM.xlsx` (el usuario pidió volver a combinarlas).
 
   **Calculo E Costos, etapas 2 y 3** (plan §25.6-25.10): agrega `L, M, N,
   O, R, S, T, U, W, X, Y, AB, AC, AD, AE, AF, AG, AH, AI, AJ, AK, AL, AM,
@@ -936,7 +938,7 @@ importable como cualquier módulo.
     usuario lo confirmó): se sacó de la ventana y del código. Nunca fue el
     origen
 - **Produce:**
-  - `<CARPETA_BASE>/Balance_BESS.xlsx` — **una sola planilla**, con las
+  - `<CARPETA_BASE>/11_PAGOS_BESS_AAMM.xlsx` — **una sola planilla**, con las
     hojas de fin a inicio (`ORDEN_HOJAS_SALIDA`): `Resumen`,
     `PRORRATA_RETIROS`, `COMPENSACION_CENTRAL`, `Calculo RE545`,
     `Calculo E Costos`, `Subastas` (con sus nombres reales, hasta
@@ -1060,7 +1062,7 @@ importable como cualquier módulo.
     Medidores en memoria pero no lo reescribe si no se pidió. `"cmg"`,
     `"fd"`, `"subastas"` siguen siendo independientes de punta a punta.
   - `generar_consolidado(carpeta_base, aamm, secciones_activas, registrar=print, progreso=None)`
-    — genera/actualiza las hojas de entrada de `Balance_BESS.xlsx`
+    — genera/actualiza las hojas de entrada de `11_PAGOS_BESS_AAMM.xlsx`
     recalculando solo las
     secciones pedidas; valida los archivos de entrada únicamente para esas
     secciones (si no se pide `"medidores"`, no exige
@@ -1109,7 +1111,7 @@ importable como cualquier módulo.
     layout) vive en `Script/Cmg/Extrae_CMG_barras.py`, ver su bloque más
     arriba.
   - `generar_pagos_bess(carpeta_base, registrar=print, progreso=None)` —
-    genera/actualiza las hojas de cálculo de `Balance_BESS.xlsx`; lee
+    genera/actualiza las hojas de cálculo de `11_PAGOS_BESS_AAMM.xlsx`; lee
     `Medidores` Y `Subastas` de las hojas de entrada ya generadas de esa
     misma planilla (no los recalcula), y
     Centrales.xlsx/cmg.xlsx/`SSCC_Desempeño_*` frescos (este último, nuevo,

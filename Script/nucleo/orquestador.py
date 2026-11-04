@@ -46,6 +46,8 @@ from .parametros import (
     FMA_CON_CTF,
     HOJA_COMPENSACION_CENTRAL, HOJA_DICCIONARIO, HOJA_RESUMEN_BESS,
 )
+from .csv_sae import generar_csv_sae
+from .parametros import ARCHIVO_CSV_SAE
 from .proceso import generar_consolidado, generar_pagos_bess
 from .medidas_sae import generar_medidas_sae
 from .rutas import validar_aamm
@@ -130,6 +132,12 @@ def _correr_pagos(carpeta_base, aamm, secciones, registrar, progreso):
     )
 
 
+def _correr_csv_sae(carpeta_base, aamm, secciones, registrar, progreso):
+    return generar_csv_sae(
+        carpeta_base, aamm, registrar=registrar, progreso=progreso
+    )
+
+
 GRUPOS = (
     Grupo("medidas_sae", ARCHIVO_MEDIDAS_SAE, "medidas", _correr_medidas_sae),
     Grupo("cmg_csv", "CSV 15-minutal de CMg", "cmg", _correr_traer_cmg),
@@ -149,6 +157,9 @@ GRUPOS = (
     Grupo(
         "pagos", f"{ARCHIVO_SALIDA} (calculo)", "salida", _correr_pagos,
     ),
+    # El ultimo paso: lee la planilla, asi que no corre mientras se
+    # escribe (mismo recurso).
+    Grupo("sae_csv", ARCHIVO_CSV_SAE, "salida", _correr_csv_sae),
 )
 
 GRUPO_POR_ID = {grupo.id: grupo for grupo in GRUPOS}
@@ -299,6 +310,13 @@ TAREAS = (
         "pagos", "resumen", "pagos:resumen",
         _REQ_CENTRALES_RESUMEN + ("prorrata_archivo",),
         ("pagos:prorrata_retiros",), ("consolidado:centrales",),
+    ),
+    Tarea(
+        # El CSV de pagos que se sube (macro Generar_CSV_SAE): sale de
+        # las dos hojas de calculo.
+        "sae_csv", f"Generar {ARCHIVO_CSV_SAE}",
+        "sae_csv", None, "sae_csv",
+        (), ("pagos:ecostos", "pagos:re545"), (),
     ),
 )
 

@@ -67,7 +67,7 @@ class TestMatrizCentrales(unittest.TestCase):
 
     def test_va_al_control_pintada(self):
         with tempfile.TemporaryDirectory() as carpeta:
-            ruta = Path(carpeta) / nucleo.ARCHIVO_CONTROL
+            ruta = Path(carpeta) / nucleo.CARPETA_LOG / nucleo.ARCHIVO_CONTROL
             nucleo.escribir_control(
                 ruta, df_matriz_centrales=matriz().reset_index()
             )
