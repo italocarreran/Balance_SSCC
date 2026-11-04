@@ -160,6 +160,11 @@ def construir_matriz_centrales(
 
     for etiqueta, bloque in (("FD CSF", df_fd_csf), ("FD CPF", df_fd_cpf)):
         if bloque is not None and "Central" in bloque:
+            # Solo las horas que existen: la hora que se salta en el
+            # cambio de hora queda en la hoja FD (en 0 y sin Hora Mes) y
+            # no cuenta (septiembre: 719 horas, no 720).
+            if "Hora Mes" in bloque:
+                bloque = bloque[pd.to_numeric(bloque["Hora Mes"], errors="coerce").notna()]
             por_central = bloque["Central"].map(normalizar).value_counts().to_dict()
             columnas[etiqueta] = [
                 _si_no(por_central.get(normalizar(c), 0), "horas") for c in centrales

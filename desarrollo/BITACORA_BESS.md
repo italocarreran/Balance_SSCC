@@ -5843,3 +5843,10 @@ ventana con xvfb. 332 pruebas.
   original, para probar". `Script/Medidas/Generacion_Real.py` queda
   exactamente como antes de la optimizacion (commit 2e257d9): un dia a la
   vez, una sola sesion, sin hilos. Se saco su prueba de paralelo.
+
+## 2026-11-04 (22) — Matriz de centrales: FD cuenta solo las horas que existen
+
+- Usuario: "En el FD me sale 720 horas y son 719". La hoja FD guarda la
+  hora que no existe del cambio de hora (en 0, sin Hora Mes) y la matriz
+  'Centrales por origen' la contaba. Ahora FD CSF / FD CPF cuentan solo
+  filas con Hora Mes.

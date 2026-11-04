@@ -39,7 +39,8 @@ def matriz():
         }),
         df_cmg=pd.DataFrame({"A": [""], "B": [""], "C": [""], "D": ["B1"]}),
         df_subastas=pd.DataFrame({"Configuración": ["BAT_UNO", "BAT_UNO"]}),
-        df_fd_csf=pd.DataFrame({"Central": ["SAE-UNO"]}),
+        # La segunda fila es la hora que no existe (cambio de hora): no cuenta.
+        df_fd_csf=pd.DataFrame({"Central": ["SAE-UNO"] * 2, "Hora Mes": [1, None]}),
         df_fd_cpf=pd.DataFrame({"Central": []}),
         tablas_fma={"cpf": pd.DataFrame({"Central": ["Uno - BESS"]})},
     ).set_index("Central")
@@ -59,6 +60,7 @@ class TestMatrizCentrales(unittest.TestCase):
         # Subastas y FMA CPF se encuentran por el nombre del Diccionario.
         self.assertEqual(uno["Subastas"], "Sí (2 filas)")
         self.assertEqual(uno["FMA CPF"], "Sí (1 horas)")
+        self.assertEqual(uno["FD CSF"], "Sí (1 horas)")
         self.assertEqual(uno["FD CPF"], "No")
         self.assertEqual(uno["Ofertas SSCC"], "Sí (1 de 2 días completos)")
         self.assertTrue(dos["Ofertas SSCC"].startswith("No"))
