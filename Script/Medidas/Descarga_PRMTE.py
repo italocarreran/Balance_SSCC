@@ -21,7 +21,9 @@ guarda de a lotes y se puede reanudar: si se corta a la mitad, la
 corrida siguiente arranca donde quedo.
 """
 
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pandas as pd
@@ -50,6 +52,14 @@ TAMANO_LOTE = 100
 REINTENTOS = 10
 ESPERA_REINTENTO = 1.0
 TIMEOUT = 30
+
+# Puntos que se piden a la vez (pedido del usuario: "mucho más rápido...
+# lo de hacerlo en paralelo"). Casi todo el tiempo de la descarga es
+# esperar la respuesta de la API; con varios pedidos en vuelo se espera
+# en paralelo. Los resultados se procesan en el MISMO orden de antes
+# (lotes, puntos anotados, fallidos), asi que el resultado no cambia.
+# Con 1 vuelve a ser uno por uno.
+HILOS_DESCARGA = 8
 
 # Columnas de cabecera que el original copiaba del registro a cada
 # fila de 'mediciones'.
@@ -356,7 +366,20 @@ def descargar(
         if progreso:
             progreso(desde + (hasta - desde) * indice / total)
 
-    sesion = requests.Session()
+    # Una sesion por hilo: requests.Session no es segura entre hilos.
+    por_hilo = threading.local()
+
+    def sesion_del_hilo():
+        if not hasattr(por_hilo, "sesion"):
+            por_hilo.sesion = requests.Session()
+        return por_hilo.sesion
+
+    def bajar_punto(punto):
+        sesion = sesion_del_hilo()
+        return [
+            extraer_datos_api(sesion, punto, canal, periodo, user_key)
+            for canal in CANALES
+        ]
 
     def guardar_lote(resultados):
         nonlocal numero_lote
@@ -369,30 +392,37 @@ def descargar(
         registrar(f"  lote guardado: {archivo.name}")
         numero_lote += 1
 
-    for indice, punto in enumerate(pendientes, start=1):
+    hilos = max(1, min(HILOS_DESCARGA, len(pendientes)))
+    ejecutor = ThreadPoolExecutor(max_workers=hilos)
+    try:
+        # map entrega en el orden de 'pendientes', aunque las respuestas
+        # lleguen desordenadas.
+        resultados_en_orden = ejecutor.map(bajar_punto, pendientes)
 
-        partes = [
-            extraer_datos_api(sesion, punto, canal, periodo, user_key)
-            for canal in CANALES
-        ]
-        partes = [parte for parte in partes if not parte.empty]
+        for indice, (punto, partes) in enumerate(
+            zip(pendientes, resultados_en_orden), start=1
+        ):
 
-        if not partes:
-            fallidos.append(punto)
-        else:
-            acumulado.append(pd.concat(partes, ignore_index=True))
+            partes = [parte for parte in partes if not parte.empty]
 
-        if len(acumulado) >= TAMANO_LOTE:
-            guardar_lote(acumulado)
-            acumulado = []
+            if not partes:
+                fallidos.append(punto)
+            else:
+                acumulado.append(pd.concat(partes, ignore_index=True))
 
-        if indice % 25 == 0 or indice == len(pendientes):
-            registrar(
-                f"  puntos consultados: {indice:,}/{len(pendientes):,} "
-                f"(fallidos: {len(fallidos):,})"
-            )
+            if len(acumulado) >= TAMANO_LOTE:
+                guardar_lote(acumulado)
+                acumulado = []
 
-        avanzar(indice)
+            if indice % 25 == 0 or indice == len(pendientes):
+                registrar(
+                    f"  puntos consultados: {indice:,}/{len(pendientes):,} "
+                    f"(fallidos: {len(fallidos):,})"
+                )
+
+            avanzar(indice)
+    finally:
+        ejecutor.shutdown(wait=True, cancel_futures=True)
 
     if acumulado:
         guardar_lote(acumulado)

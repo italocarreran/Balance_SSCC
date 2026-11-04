@@ -3,6 +3,7 @@
 L, M y N/O: iguales en las dos hojas de calculo.
 """
 
+import numpy as np
 import pandas as pd
 
 from .utiles import _columna_clave_vba, _normaliza_valor_vba
@@ -57,31 +58,41 @@ def calcular_n_o(df_ecostos):
     grupo (no solo a las que tienen L=1).
     """
 
-    def _por_grupo(grupo):
+    # Vectorizado (antes, un groupby.apply por central + ventana: varios
+    # segundos por corrida). Mismas sumas en el mismo orden: por grupo y
+    # Cuarto de Hora se suma en el orden de las filas, y se acumula de
+    # mayor a menor Cuarto de Hora. Las filas sin clave, ventana o cuarto
+    # quedan en NaN, como antes (el groupby las dejaba fuera).
+    valido = df_ecostos["L"] == 1
+    tabla = pd.DataFrame({
+        "g1": df_ecostos["clave"],
+        "g2": df_ecostos["Copia_Ventana"],
+        "q": df_ecostos["Cuarto de Hora"],
+        "i": df_ecostos["Energia_Positiva"].where(valido, 0.0),
+        "j": df_ecostos["Energia_Negativa"].where(valido, 0.0),
+    })
+    sumas = tabla.groupby(["g1", "g2", "q"], sort=False)[["i", "j"]].sum()
+    sumas = sumas.sort_index(level="q", ascending=False, sort_remaining=False)
+    sumas = sumas.sort_index(level=["g1", "g2"], sort_remaining=False, kind="mergesort")
+    # cumsum de numpy por grupo (como el Series.cumsum de antes): el
+    # cumsum de un groupby usa otra suma (compensada) y difiere en el
+    # ultimo decimal.
+    acumulado = sumas.copy()
+    grupos = sumas.index.droplevel("q")
+    cortes = np.flatnonzero(grupos[1:] != grupos[:-1]) + 1
+    for columna in ("i", "j"):
+        valores = sumas[columna].to_numpy(dtype=float)
+        acumulado[columna] = np.concatenate([
+            np.cumsum(tramo) for tramo in np.split(valores, cortes)
+        ]) if len(valores) else valores
 
-        valido = grupo["L"] == 1
-
-        i_valido = grupo["Energia_Positiva"].where(valido, 0.0)
-        j_valido = grupo["Energia_Negativa"].where(valido, 0.0)
-
-        suma_i_por_f = i_valido.groupby(grupo["Cuarto de Hora"]).sum()
-        suma_j_por_f = j_valido.groupby(grupo["Cuarto de Hora"]).sum()
-
-        acumulado_i = suma_i_por_f.sort_index(ascending=False).cumsum()
-        acumulado_j = suma_j_por_f.sort_index(ascending=False).cumsum()
-
-        n = grupo["Cuarto de Hora"].map(acumulado_i)
-        o = -grupo["Cuarto de Hora"].map(acumulado_j)
-
-        return pd.DataFrame({"N": n, "O": o}, index=grupo.index)
-
-    resultado = (
-        df_ecostos
-        .groupby(["clave", "Copia_Ventana"], sort=False, group_keys=False)
-        .apply(_por_grupo)
-    )
-
-    return resultado["N"], resultado["O"]
+    claves = pd.MultiIndex.from_arrays([tabla["g1"], tabla["g2"], tabla["q"]])
+    n = pd.Series(acumulado["i"].reindex(claves).to_numpy(), index=df_ecostos.index)
+    o = -pd.Series(acumulado["j"].reindex(claves).to_numpy(), index=df_ecostos.index)
+    # Como el groupby de antes: las filas sin clave o sin ventana no
+    # vienen en el resultado (en los datos reales no las hay).
+    con_grupo = tabla["g1"].notna() & tabla["g2"].notna()
+    return n[con_grupo], o[con_grupo]
 
 
 def calcular_m(df_ecostos, umbral_soc_minimo):

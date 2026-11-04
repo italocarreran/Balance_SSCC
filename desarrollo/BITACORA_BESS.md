@@ -5375,3 +5375,478 @@ energía ajustada. Ejemplo: factor 0,9, descarga y carga ajustadas 5.400 kWh,
 C1 583.200, C2 494.000, monto 89.200.
 
 **Verificación:** las dos páginas renderizan sin errores ni placeholders.
+
+## 2026-11-03 — Formato de PRORRATA_RETIROS y COMPENSACION_CENTRAL
+
+Pedido del usuario (las dos hojas): fila 1 vacía (sin el título de la hoja),
+filas 1 y 2 de alto 14,5; el título de cada cuadro (fila 2) combinado sobre su
+cuadro, sin fondo, en negrita y en el azul del encabezado, en una sola línea;
+la columna del cuarto de hora al ancho de su nombre.
+
+- `formato.formatear_hoja(..., fila_titulos_cuadro=2)` (desde
+  `escritura._FILAS_TITULO_CUADRO`): combina cada título sobre las columnas de
+  su cuadro y, si no cabe, ensancha la **última** columna del cuadro. Un texto
+  combinado sobre varias columnas ya no decide el ancho de la primera (vale
+  para todas las hojas, también los grupos de Calculo E Costos/RE545).
+- PRORRATA_RETIROS: comentario con la fórmula en `I3` (`Pago(e,q) = M(q) ×
+  p(e,q) / Σ_k p(k,q)`) y `M3` (`Total(e) = Σ_q Pago(e,q)`).
+  `xlsx_rapido.pegar_hojas` ahora pasa los comentarios (comments + VML y las
+  relaciones de la hoja) al pegar; antes solo pasaba el XML de la hoja. Los
+  comentarios de la versión anterior de la hoja se sacan.
+- COMPENSACION_CENTRAL: fila 3 con el formato de encabezado (no estaba en
+  `_FILAS_ENCABEZADO`). Quedan tres cuadros: `B:F` detalle por central y
+  ciclo/ventana (sin Empresa; Ecostos, RE545 y Total), `H:L` por central
+  (con Empresa; Ecostos, RE545 y Total), `N:O` total por empresa (sin
+  cambios). `compensacion.detalle_combinado` / `por_central_combinado`.
+- Autofiltro en el detalle, ya aplicado (`Total ≠ 0`, filas ocultas). Un
+  filtro oculta filas enteras, así que las filas en cero van al final del
+  detalle: quedan debajo de los otros dos cuadros, que son más cortos. Si no
+  lo fueran, el filtro queda puesto sin aplicar (antes que tapar filas de otro
+  cuadro). Se agregó la columna Total para poder filtrar "cero en los dos".
+
+**Verificación:** `tests/test_compensacion_central.py` +4 pruebas (cuadros
+combinados; títulos, alto, comentarios, filtro y filas ocultas en el libro
+escrito dos veces); `test_pasos_sueltos` revisa los tres títulos. 305
+pruebas, 17 salteadas.
+
+## 2026-11-03 (2) — FMA sin CTF; fila vacía arriba en Subastas y FMA
+
+Pedido del usuario: sacar el CTF de la hoja FMA y de la ventana (no se usa:
+las BESS no prestan CTF), **sin borrar el programa**; una fila vacía al
+inicio de Subastas y de FMA, y en FMA cada tabla con su "Cuadro N° …" en el
+formato de PRORRATA_RETIROS (letra azul, sin fondo).
+
+- `parametros.FMA_CON_CTF = False` es el único interruptor. Apagado: la fila
+  `fma_ctf` sale de `revisar_estructura` (ventana), la tarea `fma_ctf` sale de
+  `orquestador.TAREAS` (y de la dependencia opcional de la hoja FMA),
+  `cargar_tablas_fma` no lee el `fma_cft` ni avisa que falta, y
+  `TITULOS_FMA` queda con CPF y CSF. `Indices_FMA.py`, `construir_fma_ctf`,
+  `generar_fma(tipos={"ctf"})` y el cálculo del CTF en `fma.py` quedan como
+  estaban: con `True` vuelve todo. Las filas CTF de Subastas (si hubiera)
+  quedan con FMA 0, igual que cuando faltaba el archivo.
+- Hoja FMA: fila 1 vacía, `Cuadro N° 1 — FMA CPF (fma_cpf)` /
+  `Cuadro N° 2 — FMA CSF (fma_csf)` en la fila 2 (combinado sobre su tabla),
+  encabezados en la 3. `leer_fma_consolidado` busca la fila de títulos
+  (`lectura.fila_de_titulos`) y acepta también los títulos de antes, así que
+  un libro viejo se sigue leyendo sin regenerar la hoja.
+- Hoja Subastas: fila 1 vacía (alto 14,5), encabezados en la 2. Se lee con
+  `lectura.leer_hoja_con_fila_vacia` (encabezado en la 1 si el libro es de
+  antes).
+
+**Verificación:** `test_pasos_sueltos` +2 (FMA con cuadros y sin CTF; FMA de
+antes se sigue leyendo); `test_subastas_hoja_y_cambio_hora` y
+`test_origenes_fd` ajustadas. 307 pruebas, 17 salteadas.
+
+## 2026-11-03 (3) — Títulos de cuadro a la izquierda; Resumen y Subastas con cuadro; sin filtro
+
+Pedido del usuario:
+- Títulos de cuadro (fila 2) alineados a la izquierda (`formato.formatear_hoja`).
+- Hojas `Resumen` y `Subastas`: fila 1 vacía, `Cuadro N° 1 — …` en la fila 2,
+  encabezado en la 3 (las dos en `_FILAS_TITULO_CUADRO`). Se leen con
+  `lectura.leer_hoja_con_fila_vacia`, que toma como encabezado la primera
+  fila con más de una celda con algo (libros de antes: la fila 1).
+- COMPENSACION_CENTRAL: **sin autofiltro** (se quitó
+  `_filtrar_sin_compensacion`); el detalle vuelve a ir ordenado por central
+  y ciclo/ventana, con las ventanas de cada central juntas. Se mantiene la
+  columna `Compensación Total [$]`.
+
+**Verificación:** pruebas ajustadas (`test_compensacion_central`,
+`test_subastas_hoja_y_cambio_hora`, lecturas del Resumen). 307 pruebas, 17
+salteadas.
+
+## 2026-11-03 (4) — Mismo formato en todas las hojas de la planilla
+
+Pedido del usuario: en todas las hojas, fila 1 vacía y `Cuadro N° …` en la
+fila 2 (sin fondo, letra azul, a la izquierda), columna A de margen (el primer
+cuadro empieza en la B) y **una** columna vacía entre cuadros.
+
+- Nuevas con título de cuadro: `Medidores`, `CMg`, `FD` (CSF y CPF),
+  `Ofertas SSCC` (títulos sin el paréntesis "equivalente a …"), `Centrales`
+  (`Cuadro N° 1 — Resumen BESS`, `Cuadro N° 2 — Diccionario`).
+- Margen en A en todas: también `Calculo E Costos` / `Calculo RE545` (sin
+  título de cuadro, siguen con encabezados de grupo en la fila 1),
+  `Subastas`, `Resumen`, `FMA`. `escritura.COLUMNA_MARGEN`;
+  `_escribir_tabla_con_titulo` separa con una columna (antes dos).
+  PRORRATA_RETIROS queda `B:C`, `E:H`, `J:K` (comentarios ahora en `H3` y
+  `K3`). `Control_corrida.xlsx` no cambia.
+- Centrales: el Diccionario se escribe sin sus filas vacías de arriba, así
+  sus encabezados caen en la fila de encabezados (antes la primera fila de
+  la tabla salía vacía y los encabezados como dato). No cambia ninguna
+  lectura: la fila de encabezados del Diccionario se busca.
+- FD: `Central` es la primera columna de cada bloque (la lectura la vuelve a
+  dejar al final, como espera el resto); las columnas `Respuesta …` (antes F,
+  S y T) van a la izquierda con formato `0.00`; las unidades sin central en
+  el Diccionario de la hoja Centrales **no se traen** (antes se avisaba y
+  quedaban con `Central` vacía).
+- Lecturas: `lectura.fila_de_encabezado` (salta la fila vacía y la de
+  "Cuadro N°"), `leer_hoja_con_fila_vacia` y `sin_margen_izquierdo` (quita la
+  columna A vacía). Ofertas, Centrales y FMA buscan los títulos en la fila 2
+  o, en un libro de antes, en la 1, y aceptan también los títulos de antes.
+
+**Verificación:** pruebas de formato ajustadas (FD, Subastas, FMA,
+PRORRATA_RETIROS, Calculo E Costos). Corrida de punta a punta con todas las
+hojas de entrada reescritas en el formato nuevo: Calculo E Costos, Calculo
+RE545, COMPENSACION_CENTRAL, PRORRATA_RETIROS y Resumen dan idénticos al
+libro de antes. 307 pruebas, 17 salteadas.
+
+## 2026-11-03 (5) — Cada cruce busca con todos los nombres del Diccionario; formato de Control_corrida
+
+Pedido del usuario: "para subastas, ofertas y todo, que se busque con todos
+los nombres del diccionario [...] y que se indique tipo 'central conejo no
+coincide con nombre de subastas del diccionario, pero sí se encuentra por el
+nombre de FD'".
+
+`nucleo/equivalencias.py` (`Equivalencias`): las filas del Diccionario
+(formato nuevo) buscables por cualquiera de sus nombres. Cada cruce prueba
+**primero** el nombre de su columna; si no está en la tabla de destino,
+prueba los demás de la misma fila (orden Balance_BESS, Subastas, FD, Ofertas,
+FMA_CPF) y, si alguno cruza, lo usa y avisa una vez por central y cruce:
+`[AVISO] DIC-002: central 'X': su nombre FD del Diccionario ('…') no coincide
+con las unidades de la hoja FD, pero sí se encuentra por su nombre Subastas
+('…').` Va al log (y a la hoja Log de Control_corrida).
+
+Dónde se aplica:
+- Importar FD: unidad sin central por la columna FD → se busca en las otras
+  columnas (`proceso`, antes de dejar afuera las que no tienen central).
+- Importar Ofertas: lo que no cruza por Subastas ni Ofertas
+  (`agregar_central_ofertas`).
+- Calculo E Costos: central → unidad del FD
+  (`ecostos._completar_mapeo_con_otros_nombres`).
+- Calculo RE545: Configuración → unidad del FD (FD y participación CSF) y →
+  central de FMA CPF (`factores_subastas._completar_con_otros_nombres`).
+
+Un Diccionario en el formato viejo (bloques) no tiene filas: nada cambia.
+
+Control_corrida.xlsx con el formato de la planilla: fila 1 vacía, `Cuadro N°
+…` en la fila 2, margen en A; Ejecucion con dos cuadros lado a lado (estado y
+entradas de la corrida), Alertas y Log con uno.
+
+**Verificación:** `tests/test_equivalencias.py` (9 pruebas: búsqueda,
+aviso único, formato viejo, RE545 FD y FMA CPF, Ofertas, E Costos); lecturas
+del control ajustadas. Corrida de punta a punta igual que antes. 316
+pruebas, 17 salteadas.
+
+## 2026-11-03 (6) — Unidades de medida entre corchetes
+
+Pedido del usuario: "agregar unidad de medida [...] entre corchetes []. Si
+es CLP o USD igual".
+
+`nucleo/unidades.py`: `NOMBRES_CON_UNIDAD = {hoja: {nombre interno: nombre
+visible}}`. La escritura pone el nombre visible en la fila de encabezados
+(`escritura._poner_unidades`, antes del formato) y las lecturas lo devuelven
+al interno (`leer_hoja_con_fila_vacia`, `leer_tabla_bajo_titulo`,
+`calculo_existente`): el cálculo sigue con los nombres de siempre y un libro
+de antes se lee igual. Los `[$]` se muestran como `[CLP]`.
+
+Unidades (revisadas en el código): `Gen_Unidad` kWh; CMg CLP/kWh
+(`CMg[CLP/KWh]` de cmg_15min); `Energía SSCC` de Subastas MW (RE545 la pasa a
+kWh del cuarto con /4·1000); SoC p.u. (RE545: SoC × Capacidad × 1000);
+`Pmax [MW]`, `Capacidad [MWh]`; energías de E Costos/RE545 kWh; montos,
+valorizaciones, C1/C2, RECIBE/PAGA/NETO CLP. Factores (FD, FMA, prorratas,
+Eficiencia) sin corchetes.
+
+Cerrado con el usuario (2026-11-03 (7)): `Energía mínima` sale de la hoja
+Centrales (no la usa ningún cálculo; todo se busca por nombre de columna);
+`intervalo` de Medidores es la fecha con hora:minuto → `intervalo [fecha
+hh:mm]`; `Margen ultima hora` queda sin unidad; en E Costos `U` "Total" (grupo
+Componente 2) se muestra `Total C2 [CLP]` y `BA` "Total [CLP]" (AY + AZ, el
+Componente 1) `Total C1 [CLP]`.
+
+**Verificación:** `tests/test_unidades.py` (+2); punta a punta con unidades
+en todas las hojas: cálculos idénticos. 318 pruebas, 17 salteadas.
+
+## 2026-11-03 (8) — Calculo E Costos en tres cuadros
+
+Pedido del usuario, armado en conjunto en `desarrollo/notas_orden_ecostos.md`.
+
+- `ecostos.CUADROS_CALCULO_E_COSTOS`: (1) Información y energía con
+  FD-prorrata, (2) Componente 1, (3) Componente 2 y monto a compensar.
+  `COLUMNAS_SALIDA_E_COSTOS` es su concatenación; `escritura.
+  _escribir_cuadros_e_costos` los escribe lado a lado (margen en A, una
+  columna entre cuadros, fila 1 vacía, título en la 2, nombres en la 3).
+- Fuera de la hoja (siguen calculándose): CTF AI/AL/AO/AR y M, N, O, AE, AF
+  (método anterior, no llegan al monto). `GRUPOS_CALCULO_E_COSTOS = ()`;
+  prorratas y FD con prefijo ("Prorrata CPF(-)", "FD CPF(-)"), así los 41
+  nombres de la hoja son únicos.
+- `ecostos.ORIGEN_COLUMNAS_E_COSTOS`: comentario de origen en el encabezado.
+- Panel fijo en `I4` (C:H, pedido del usuario).
+- `calculo_existente` (proceso) detecta la fila de nombres: 3 en el formato
+  nuevo de E Costos, 2 en RE545 y en un E Costos de antes.
+
+**Verificación:** pruebas de la hoja ajustadas (tres cuadros, panel,
+comentario de origen, columnas que salen). Caso completo antes/después:
+COMPENSACION_CENTRAL, PRORRATA_RETIROS, Resumen y el monto de E Costos
+idénticos. 319 pruebas, 17 salteadas.
+
+## 2026-11-03 (9) — Calculo E Costos: fórmulas por fila, comentarios, Monto aparte con totales
+
+Pedido del usuario sobre la hoja de 2026-11-03 (8):
+
+- Sin comentario en B:H (Mes … Configuracion).
+- `ecostos.FORMULAS_E_COSTOS`: lo que se calcula con datos de la misma fila
+  va a la hoja como fórmula de Excel (AS, AT = energía × Σ prorrata·FD; S, T =
+  energía × CMg; U = Adj × (S + T); BA = AY + AZ). El valor de Python sigue
+  siendo el que alimenta el monto; verificado en LibreOffice con datos
+  aleatorios: misma cifra (dif ≤ 4e-14). Costo en 30.000 filas: +3 s de
+  escritura, +0,2 MB.
+- Comentario en lo que mira otras filas (R, W, Y, AB, AC, AD, AU, AV, AY, AZ,
+  BC) con cómo se obtiene y su condición.
+- AU / AV: "Energía descargada / cargada por remunerar [kWh]".
+- Monto a compensar en su propio cuadro (N° 4) y en verde; total del mes en la
+  fila 1 sobre Total C1, Total C2 y Monto (`=SUM(...)`, formato `"Total: "#,##0`).
+- Fórmulas sin valor guardado: el libro pide recalcular al abrir
+  (`fullCalcOnLoad`), también cuando la hoja se pega en un libro existente
+  (`xlsx_rapido._calcular_al_abrir`).
+- `lectura.fila_de_encabezado` busca la fila de "Cuadro N°" en las primeras
+  filas (la fila 1 de E Costos ya no está vacía una vez que Excel guarda los
+  totales).
+
+**Verificación:** prueba de la hoja ampliada (totales, fórmulas, verde,
+cuadro 4, B:H sin comentario). 319 pruebas, 17 salteadas.
+
+## 2026-11-03 (10) — Calculo E Costos: guion en las curvas monótonas sin fila
+
+Pedido del usuario: en "Curva monotona CMg Descarga / Carga", el puesto que ya
+no tiene una fila que cumpla (Adj SSCC = 1 y energía ≠ 0) se ve con "–" en vez
+de vacío (`ecostos.SIN_PUESTO_E_COSTOS`, en `escritura._terminar_e_costos`).
+Solo en la hoja: el cálculo sigue con el vacío y ninguna fórmula mira esas
+columnas. "Bloque Mes Descarga / Carga" queda con su nombre. El Monto a
+compensar se queda como valor (sin fórmula) y repartido en partes iguales en
+el ciclo, como la macro (decidido con el usuario; ver notas).
+
+**Verificación:** prueba nueva (puestos sin fila con guion); caso completo:
+COMPENSACION_CENTRAL, PRORRATA_RETIROS y Resumen idénticos. 320 pruebas, 17
+salteadas.
+
+## 2026-11-03 (11) — Calculo RE545 en cinco cuadros
+
+Pedido del usuario, armado en `desarrollo/notas_orden_re545.md` con el
+mismo criterio que E Costos.
+
+- `re545.CUADROS_CALCULO_RE545`: (1) Información y reservas, (2)
+  Componente 1, (3) Componente 2, (4) Monto a compensar (verde); la tabla
+  por central + ventana va como (5) "Resumen por central y ventana" (su
+  primera columna ahora se llama "Central"). Fila 1 vacía (totales del mes
+  sobre Total C1, Total C2 y Monto), título en la 2, nombres en la 3, margen
+  en A, una columna entre cuadros, panel en I4.
+- Fuera de la hoja (siguen calculándose): CTF ×6, M, N, O, BK y BY.
+  `GRUPOS_CALCULO_RE545 = ()`; prefijos "Reserva / FD / FMA"; renombradas
+  AU "Reserva con FD y FMA", BN "Energía asignada", BO/CC "Total C1/C2".
+- `FORMULAS_RE545` (misma fila): AU, BO, BQ, BV, BW, CA, CC. AU solo como
+  fórmula si el aporte de las CTF (que no se escriben) es 0 en todas las
+  filas (`attrs["ctf_en_cero"]` en `renombrar_calculo_re545`; el FMA CTF(+)
+  es la constante 1). Verificado en LibreOffice: mismas cifras, incluidas
+  las celdas vacías (BO / CC con `IF(COUNT(...)<2,"",...)`).
+- `ORIGEN_COLUMNAS_RE545` / `ORIGEN_RESUMEN_RE545`: comentario de origen y
+  condición (B:H sin comentario).
+- `escritura._escribir_cuadros` / `_terminar_cuadros`: lo común de las dos
+  hojas de cálculo (E Costos los usa igual que antes).
+
+**Verificación:** +2 pruebas (cinco cuadros, fórmulas, totales, verde,
+comentarios; reserva como valor si hay aporte CTF). Caso completo:
+COMPENSACION_CENTRAL, PRORRATA_RETIROS y Resumen idénticos; la reserva sale
+como fórmula (aporte CTF = 0). 322 pruebas, 17 salteadas.
+
+## 2026-11-03 (12) — Ventana "Ejecutar todo": parpadeo y rueda; estilos vacíos en xlsx_rapido
+
+Pedido del usuario (video): al tildar una casilla la ventana "parpadea", y la
+rueda del mouse sobre el diálogo mueve la ventana principal.
+
+- Parpadeo: cada tilde destruía y volvía a crear todas las filas (y volvía a
+  correr `revisar_estructura` sobre la carpeta). Ahora la lista se arma una
+  vez al abrir y `repintar()` solo actualiza casillas, estado, motivo y el
+  contador del libro.
+- Rueda: el `bind_all` caía en la ventana principal para todo lo que no
+  estuviera anotado. La lista y los avisos del diálogo se anotan como
+  desplazables (y se olvidan al cerrar), y la rueda sobre otra ventana ya no
+  mueve la principal.
+- `xlsx_rapido._agregar_a_lista`: una lista de estilos vacía con atributos
+  (`<fills count="0"/>`, como la guarda Excel) no se reconocía como vacía y
+  pegar hojas caía con ValueError. Apareció corriendo las pruebas en otro
+  entorno (Python 3.12); ya existía.
+
+**Verificación:** +2 pruebas de ventana (fallan con el código anterior) y +1
+de estilos. Pruebas de ventana corridas con `xvfb-run` en un entorno con
+tkinter (python3.12 + venv): 325 pruebas, 0 salteadas; en el entorno normal
+325, 19 salteadas (tkinter).
+
+## 2026-11-03 (13) — Totales del Resumen; fórmula de prueba en los comentarios
+
+- Resumen: total del mes en la fila 1 sobre RECIBE, PAGA (azul) y NETO
+  (`=ROUND(SUM(...),0)`: verde si da 0, rojo si no — el rojo por el formato
+  de número, el verde por la letra; `[Color10]` LibreOffice lo muestra casi
+  blanco). `escritura._totales_resumen`.
+- Comentarios de E Costos y RE545: en las columnas que se calculan mirando
+  otras filas, la fórmula de Excel equivalente para la fila de ejemplo, con
+  las letras reales ("para que los coordinados puedan probar"). Plantillas
+  `FORMULAS_PRUEBA_E_COSTOS`, `FORMULAS_PRUEBA_RE545`,
+  `FORMULAS_PRUEBA_RESUMEN_RE545` (cuadro 5); `escritura._formula_de_prueba`.
+  No se escriben en las celdas. Las que necesitan otra hoja (Pmax,
+  Capacidad, Eficiencia, Subastas) quedan solo con la explicación.
+  Verificado en LibreOffice pegando cada fórmula en todas las filas de un
+  caso calculado con las funciones reales: E Costos 9/9, RE545 15/15
+  iguales al programa (un ajuste: el rango "filas siguientes" termina una
+  fila después de la tabla, si no en la última fila se daba vuelta).
+
+**Verificación:** +2 pruebas. 327 pruebas (19 salteadas en el entorno sin
+tkinter; 0 en el de ventana).
+
+## 2026-11-03 (14) — Alto fijo en la fila de nombres de columna
+
+Pedido del usuario: con el panel inmovilizado, al volver a subir por la hoja
+el encabezado aparecía con su color y su comentario pero sin las letras,
+hasta hacer clic o zoom. La fila de nombres tenía texto ajustado y alto
+automático: Excel lo recalcula al dibujar y, en el panel fijo, a veces pinta
+el fondo sin el texto. `formato._alto_fijo_encabezado` le pone un alto fijo
+(15 pt por línea, según el nombre más largo, el ancho de su columna y los
+saltos de línea; tope 5 líneas). No se pudo reproducir en este entorno (no
+hay Excel): queda por confirmar con el usuario.
+
+## 2026-11-03 (15) — Rendimiento: escritura rápida, lector calamine, RE545 y Ofertas
+
+Pedido del usuario: "mucho más rápido [...] que no cague la planilla, mismos
+resultados". Tiempos del usuario (mes real, 37.388 filas): entradas 1 min
+27 s, cálculo 4 min 29 s (escritura 195 s, de ella formato 63 s y guardar
+89 s; Ofertas 36 s; RE545 27 + 12 s).
+
+- **Escritura** (`relleno_rapido.py` + `escritura._volcar` +
+  `xlsx_rapido._partir_para_relleno`): toda tabla de más de FILAS_MUESTRA
+  filas se escribe con openpyxl solo hasta ahí (el esqueleto: encabezados,
+  formato, comentarios, anchos, totales, con el código de siempre y la misma
+  muestra) y sus filas de datos las genera `RellenoHoja` directo en XML con
+  las mismas reglas (pandas + openpyxl + formatear_hoja + `_terminar_*`),
+  ya con los estilos del libro final, en el momento de pegar. Medido con
+  datos de tamaño real: escribir el libro de cálculo 387 s → 11 s (mismo
+  tamaño de archivo, compresión de siempre). `test_relleno_rapido`: el libro
+  sale igual celda por celda (valor, formato, fuente, relleno, borde,
+  alineación, comentario, combinadas, panel, anchos, altos) que con
+  `ESCRITURA_RAPIDA = False`; se comprobó que la prueba falla si se rompe el
+  relleno.
+- **Lectura** (`lector.py`): motor calamine de pandas (python-calamine,
+  agregado a requirements.txt) para Balance_BESS.xlsx, Ofertas y Prorrata;
+  verificado idéntico (valores y tipos) hoja por hoja; 4-6× más rápido. SOC,
+  Medidas_SAE y SSCC_Desempeño (fechas de otros sistemas) siguen con
+  openpyxl. Sin python-calamine instalado, todo con openpyxl como antes.
+- **Ofertas**: se filtra BESS/SAE/BAT y _RS de una vez antes de recorrer
+  fila por fila (antes `iterrows` sobre todas las centrales del sistema).
+  194 mil filas: 18 s → 2,6 s, resultado idéntico (valores y tipos).
+- **RE545**: `calcular_s_re545` vectorizado (14 s → 0,14 s) y
+  `calcular_bk_bl_bm_bs_re545` con listas y memoria de `_normaliza_valor_vba`
+  (Componentes 34 s → 1,8 s); idénticos fila por fila (incl. vacíos y
+  empates).
+- Comentarios con la fórmula de prueba: en español y con ";".
+
+**Verificación:** 328 pruebas (19 salteadas en el entorno sin tkinter; 0 en
+el de ventana, que además no tiene calamine y prueba el respaldo).
+
+## 2026-11-03 (16) — Rendimiento (2): cálculo, paralelo y ventana
+
+- E Costos: `calcular_fd_prorrateado` sin pd.Series por fila
+  (`ecostos_prorratas._numero_de`), `calcular_n_o` vectorizado (con cumsum
+  de numpy por grupo: el de groupby usa suma compensada y difería en el
+  último decimal) y `calcular_y_ab_ac_ad` por posición. RE545: bucles de
+  C1/C2 con listas. Todo idéntico (comparado contra el código anterior con
+  vacíos y empates).
+- Paralelo (`proceso.Bitacora`, `_lanzar_aparte`, `_resultado_aparte`):
+  RE545 corre en otro proceso mientras se calcula E Costos (desde
+  FILAS_PARA_PARALELO filas); en el consolidado, SSCC_Desempeño y Ofertas se
+  leen en otros procesos mientras se leen SoC y Medidas_SAE (desde
+  BYTES_PARA_LECTURA_APARTE). El registro (líneas y alertas) se repite en
+  el mismo orden que en serie. Si el otro proceso no arranca o se cae, se
+  hace en serie (probado con 'spawn', el modo de Windows); un error de los
+  datos se levanta igual. `CALCULO_EN_PARALELO = False` lo apaga.
+- Caso sintético del tamaño de un mes real (37.440 filas, 236 mil de
+  prorrata): cálculo completo 196 s (código antes de hoy) → 17-18 s;
+  comparado hoja por hoja con el código de antes: 0 celdas distintas.
+- Ventana: sin barra de progreso (queda el tiempo); cada paso abre con un
+  encabezado destacado (`ENCABEZADO_REGISTRO`) y cierra con su tiempo
+  (`FIN_REGISTRO`); los mensajes del hilo llegan por una cola y se escriben
+  de a tandas cada 100 ms, sin `update_idletasks` por línea (era lo que
+  hacía que "Estructura del caso" se viera con filas repetidas al
+  desplazarla durante una corrida).
+
+**Verificación:** `test_paralelo` (+4), `test_relleno_rapido`; pruebas de
+ventana con xvfb. 332 pruebas.
+
+## 2026-11-03 (17) — Ofertas SSCC por central; matriz de centrales en Control_corrida
+
+- Ofertas SSCC por día (`ofertas_sscc._ofertas_por_central`, Diccionario en
+  el formato nuevo): cada nombre del archivo de ofertas se busca en la
+  columna Ofertas del Diccionario y, si no está, en la de Subastas; si no
+  está en ninguna NO se agrega (aviso con los descartados). Antes las
+  equivalencias se tomaban por posición (Diccionario!E:F:G del formato
+  viejo), que en el nuevo son otras columnas: salían nombres sin central y
+  centrales repetidas (la de Medidores no se reconocía bajo su nombre de
+  ofertas). Las centrales de Medidores sin ofertas se agregan una vez con
+  oferta 0. La tabla trae la columna Central ya puesta. El formato viejo
+  del Diccionario sigue igual.
+- `matriz_centrales.construir_matriz_centrales` → hoja "Centrales por
+  origen" de Control_corrida.xlsx: centrales (Resumen BESS + Medidores) por
+  origen (Resumen BESS, Diccionario, Medidores, SoC, CMg por barra, Ofertas
+  SSCC, Subastas, FD CSF, FD CPF, FMA CPF), con los mismos cruces del
+  cálculo; "Sí (…)" en verde, "No (…)" en rojo. Se arma en el cálculo con
+  lo ya leído.
+
+**Verificación:** `test_ofertas_por_central` (+4), `test_matriz_centrales`
+(+2).
+
+## 2026-11-03 (18) — Cursor del AAMM y parte superior al estilo Revisor_Relq_15min
+
+- Pedido: "el cursor de texto se queda parpadeando siempre en el cuadro de
+  AAMM... que se quite cuando se hace clic en otra parte" y guiarse por la
+  ventana del Revisor_Relq_15min (repo abby).
+- `Balance_BESS.py`: `soltar_foco` (bind_all `<Button-1>`) le quita el foco a
+  un campo de texto cuando se hace clic fuera de uno; el `<FocusOut>` sigue
+  aplicando el AAMM. Enter tambien suelta el foco.
+- Parte superior como en el Revisor: ruta de la carpeta alineada a la
+  izquierda, marcos mas juntos (padx 14, pady 4), AAMM en Consolas 11 y
+  boton azul "Ir a este mes".
+
+## 2026-11-03 (19) — Obtencion de datos mas rapida, de punta a punta
+
+- Pedido: "optimiza como puedas igual de como hiciste con la planilla
+  principal, la obtención de datos y todo eso, de punta a punta... lo de
+  hacerlo en paralelo". Mismos resultados: cada cambio se comparo contra
+  el codigo anterior con datos del tamaño de un mes real.
+- Escritura: `escritura.escribir_tabla_rapida` (esqueleto + relleno, como
+  las hojas grandes) para Medidas_SAE.xlsx, Cmg/cmg.xlsx y
+  subastas_AAMM.xlsx. 120 mil filas: 21 s -> 3.5 s; celda por celda igual
+  que `to_excel` (test_tabla_rapida). `relleno_rapido` ya no escribe las
+  celdas vacias sin estilo (openpyxl tampoco las escribe).
+- Lectura con el motor rapido (calamine): Medidas_SAE.xlsx (8.7 s -> 2 s),
+  cmg.xlsx, subastas_AAMM.xlsx y el SoC (real: 2.1 s -> 0.35 s), todos
+  comprobados iguales. SSCC_Desempeño: las dos hojas desde un solo libro.
+- APIs en paralelo: Descarga_PRMTE pide 8 puntos a la vez y
+  Generacion_Real 8 dias a la vez (`HILOS_DESCARGA`; 1 = como antes). Los
+  resultados, lotes, fallidos y avisos se procesan en el orden de siempre
+  (test_descarga_paralela).
+- Claves_Balance: fechas convertidas una vez por valor distinto y caminos
+  directos para 'aaaa-mm-dd hh:mm:ss' y '...Z'; huecos con groupby.
+  120 puntos x mes: 10.8 s -> 3.4 s, salida identica.
+- CMg desde el CSV (todas las barras del sistema): se filtran las barras
+  antes de lo que es por fila. 2.9 M filas: 15.4 s -> 5.7 s, identico.
+- FMA CPF y CSF: los reportes diarios se leen en varios procesos, en
+  orden y con sus avisos en orden; si los procesos no corren, en serie
+  (`LEER_EN_PARALELO`; test_fma_paralelo).
+
+## 2026-11-04 (20) — Operacion real vuelve a pedir un dia a la vez
+
+- Corrida real del usuario: la descarga de medidas en paralelo bajo 62
+  puntos en 20 s, pero la API de operacion real (hoja 'Gen real') con 8
+  dias a la vez respondio HTTP 504 a los 30 dias (6,5 min perdidos y la
+  corrida fallo). `Generacion_Real.HILOS_DESCARGA = 1`: uno por uno, como
+  antes. Descarga_PRMTE sigue con 8.
+
+## 2026-11-04 (21) — Generacion_Real.py vuelve al codigo original
+
+- Pedido: "Opreal me da errores, puedes hacer que vuelva al formato
+  original, para probar". `Script/Medidas/Generacion_Real.py` queda
+  exactamente como antes de la optimizacion (commit 2e257d9): un dia a la
+  vez, una sola sesion, sin hilos. Se saco su prueba de paralelo.
+
+## 2026-11-04 (22) — Matriz de centrales: FD cuenta solo las horas que existen
+
+- Usuario: "En el FD me sale 720 horas y son 719". La hoja FD guarda la
+  hora que no existe del cambio de hora (en 0, sin Hora Mes) y la matriz
+  'Centrales por origen' la contaba. Ahora FD CSF / FD CPF cuentan solo
+  filas con Hora Mes.

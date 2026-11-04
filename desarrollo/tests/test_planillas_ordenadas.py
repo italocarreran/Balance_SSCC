@@ -134,11 +134,21 @@ class TestColumnasDeSalidaDeLosCalculos(unittest.TestCase):
         y las energias con FD siguen en la hoja.
         """
 
-        for clave in ("W", "Y", "AB", "AC", "AD", "R", "AE", "AF", "AS", "AT"):
+        for clave in ("W", "Y", "AB", "AC", "AD", "R", "AS", "AT"):
             self.assertIn(clave, nucleo.COLUMNAS_SALIDA_E_COSTOS)
 
-        for clave in ("S", "U", "V", "BK", "BM", "BN", "BS", "BT"):
+        # Salen (pedido 2026-11-03): las CTF (siempre 0) y las del metodo
+        # anterior que no llegan al monto.
+        for clave in ("AI", "AL", "AO", "AR", "M", "N", "O", "AE", "AF"):
+            self.assertNotIn(clave, nucleo.COLUMNAS_SALIDA_E_COSTOS)
+
+        for clave in ("S", "U", "V", "BM", "BN", "BS", "BT"):
             self.assertIn(clave, nucleo.COLUMNAS_SALIDA_RE545)
+
+        # Salen (pedido 2026-11-03): CTF, las que no llegan al monto.
+        for clave in ("AE", "AH", "AK", "AN", "AQ", "AT", "M", "N", "O",
+                      "BK", "BY"):
+            self.assertNotIn(clave, nucleo.COLUMNAS_SALIDA_RE545)
 
     def test_los_grupos_siguen_cayendo_sobre_columnas_de_la_hoja(self):
         """
@@ -192,6 +202,114 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
         )
         return ruta
 
+    def test_puesto_sin_fila_en_la_curva_monotona_lleva_guion(self):
+        df = self.armar_calculo()
+        df.loc[1:, "Curva monotona CMg Descarga"] = pd.NA
+        df.loc[2, "Curva monotona CMg Carga"] = pd.NA
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            nucleo.escribir_pagos_bess(
+                ruta, df_ecostos=df, registrar=lambda *a: None
+            )
+            ws = openpyxl.load_workbook(ruta)[nucleo.HOJA_CALCULO_ECOSTOS]
+        nombres = {c.value: c.column_letter for c in ws[3] if c.value}
+        descarga = nombres["Curva monotona CMg Descarga [CLP/kWh]"]
+        carga = nombres["Curva monotona CMg Carga [CLP/kWh]"]
+        self.assertEqual(
+            [ws[f"{descarga}{f}"].value for f in (4, 5, 6)], [1, "–", "–"]
+        )
+        self.assertEqual([ws[f"{carga}{f}"].value for f in (4, 5, 6)], [1, 2, "–"])
+
+    def _escribir_re545(self, carpeta, ctf_en_cero=True):
+        filas = 3
+        base = {c: [1.0, 2.0, 3.0] for c in nucleo.COLUMNAS_SALIDA_RE545}
+        base["clave"] = ["SAE UNO"] * filas
+        base["Barra"] = ["BARRA A"] * filas
+        df = (
+            pd.DataFrame(base)[nucleo.COLUMNAS_SALIDA_RE545]
+            .rename(columns=nucleo.NOMBRES_CALCULO_RE545)
+        )
+        df.attrs["ctf_en_cero"] = ctf_en_cero
+        resumen = pd.DataFrame({
+            nombre: [1.0] for nombre in nucleo.NOMBRES_RESUMEN_RE545.values()
+        })
+        ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+        nucleo.escribir_pagos_bess(
+            ruta, df_re545=df, df_resumen_re545=resumen,
+            registrar=lambda *a: None,
+        )
+        return openpyxl.load_workbook(ruta)[nucleo.HOJA_CALCULO_RE545]
+
+    def test_re545_en_cinco_cuadros_con_formulas_y_totales(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            ws = self._escribir_re545(carpeta)
+        titulos = [c.value for c in ws[2] if c.value]
+        self.assertEqual(len(titulos), 5, titulos)
+        self.assertTrue(titulos[4].endswith("Resumen por central y ventana"))
+        self.assertEqual(ws.freeze_panes, "I4")
+        nombres = {c.value: c.column_letter for c in ws[3] if c.value}
+        self.assertIn("Central", nombres)  # antes sin nombre
+        self.assertIn("Reserva CPF(-) [MW]", nombres)
+        self.assertNotIn("CTF(-)", nombres)
+        reserva = nombres["Reserva con FD y FMA [kWh]"]
+        self.assertTrue(str(ws[f"{reserva}4"].value).startswith("=("))
+        c1 = nombres["Total C1 [CLP]"]
+        self.assertEqual(
+            ws[f"{c1}4"].value,
+            f'=IF(COUNT({nombres["Energía asignada [kWh]"]}4,'
+            f'{nombres["Curva Cmg Decendente [CLP/kWh]"]}4)<2,"",'
+            f'{nombres["Energía asignada [kWh]"]}4*'
+            f'{nombres["Curva Cmg Decendente [CLP/kWh]"]}4)',
+        )
+        monto = nombres["Monto a compensar [CLP]"]
+        self.assertEqual(ws[f"{monto}1"].value, f"=SUM({monto}4:{monto}6)")
+        self.assertEqual(ws[f"{monto}3"].fill.start_color.rgb[-6:], "375623")
+        self.assertTrue(all(ws.cell(3, c).comment is None for c in range(2, 9)))
+        self.assertIn("Hoja origen: CMg", ws[f'{nombres["CMg Promedio [CLP/kWh]"]}3'].comment.text)
+        self.assertIn("Edisp_T", ws[f'{nombres["Energía asignada [kWh]"]}3'].comment.text)
+        self.assertIn(
+            "Fórmula equivalente",
+            ws[f'{nombres["Monto a compensar [CLP]"]}3'].comment.text,
+        )
+
+    def test_re545_con_aporte_ctf_deja_la_reserva_como_valor(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            ws = self._escribir_re545(carpeta, ctf_en_cero=False)
+        nombres = {c.value: c.column_letter for c in ws[3] if c.value}
+        reserva = nombres["Reserva con FD y FMA [kWh]"]
+        self.assertEqual(ws[f"{reserva}4"].value, 1)
+
+    def test_el_resumen_lleva_sus_totales(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = self.escribir(carpeta)
+            ws = openpyxl.load_workbook(ruta)[nucleo.HOJA_RESUMEN]
+            resumen = nucleo.leer_hoja_con_fila_vacia(ruta, nucleo.HOJA_RESUMEN)
+        # B NOMBRE, C RECIBE, D PAGA, E NETO; una empresa (fila 4).
+        self.assertEqual(ws["C1"].value, "=SUM(C4:C4)")
+        self.assertEqual(ws["D1"].value, "=SUM(D4:D4)")
+        self.assertEqual(ws["C1"].font.color.rgb[-6:], "244062")
+        self.assertEqual(ws["E1"].value, "=ROUND(SUM(E4:E4),0)")
+        # Verde si da 0, rojo si no (en el formato de numero).
+        self.assertEqual(ws["E1"].font.color.rgb[-6:], "375623")
+        self.assertIn("[Red]", ws["E1"].number_format)
+        # La lectura sigue encontrando los nombres.
+        self.assertEqual(list(resumen["NOMBRE"]), ["EMPRESA UNO"])
+
+    def test_los_comentarios_traen_la_formula_para_probar(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = self.escribir(carpeta)
+            ws = openpyxl.load_workbook(ruta)[nucleo.HOJA_CALCULO_ECOSTOS]
+        nombres = {c.value: c for c in ws[3] if c.value}
+        monto = nombres["Monto a compensar [CLP]"].comment.text
+        self.assertIn("Fórmula equivalente para probar (fila 4", monto)
+        # En español y con ";" (para pegar en un Excel en español).
+        self.assertIn("=MAX(0;(SUMAR.SI.CONJUNTO(", monto)
+        self.assertNotIn("SUMIFS", monto)
+        bloque = nombres["Bloque ordenado"].comment.text
+        self.assertIn("(fila 5", bloque)  # mira la fila de arriba
+        curva = nombres["Curva monotona CMg Descarga [CLP/kWh]"].comment.text
+        self.assertIn("matricial", curva)
+
     def test_el_resumen_queda_primero_y_el_calculo_detras(self):
         with tempfile.TemporaryDirectory() as carpeta:
             ruta = self.escribir(carpeta)
@@ -209,17 +327,61 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
             wb = openpyxl.load_workbook(ruta)
             ws = wb[nucleo.HOJA_CALCULO_ECOSTOS]
 
-            # nombres de columna en fila 2, en negrita y con el panel
-            # inmovilizado justo debajo
-            self.assertTrue(ws.cell(2, 1).font.bold)
-            self.assertEqual(ws.freeze_panes, "A3")
+            # Tres cuadros: fila 1 vacia, "Cuadro N°" en la 2, nombres
+            # en la 3 (en negrita), margen en A; panel fijo en C:H.
+            # Fila 1: solo los totales, sobre Total C1, Total C2 y Monto.
+            nombres = {c.value: c.column_letter for c in ws[3] if c.value}
+            totales = {c.column_letter: c.value for c in ws[1] if c.value}
+            self.assertEqual(set(totales), {
+                nombres["Total C1 [CLP]"], nombres["Total C2 [CLP]"],
+                nombres["Monto a compensar [CLP]"],
+            })
+            monto = nombres["Monto a compensar [CLP]"]
+            self.assertEqual(totales[monto], f"=SUM({monto}4:{monto}6)")
+            self.assertEqual(ws[f"{monto}1"].number_format, '"Total: "#,##0')
+            # El Monto en su propio cuadro, en verde.
+            self.assertEqual(ws[f"{monto}3"].fill.start_color.rgb[-6:], "375623")
+            self.assertTrue(str(ws[f"{monto}2"].value).startswith("Cuadro N° 4"))
+            # Lo que se calcula en la misma fila va como formula.
+            ajustada = nombres["Descarga ajustada FD-prorrata [kWh]"]
+            self.assertTrue(str(ws[f"{ajustada}4"].value).startswith(
+                f"={nombres['Descarga [kWh]']}4*("
+            ))
+            self.assertEqual(
+                ws[f"{nombres['Total C1 [CLP]']}5"].value,
+                f"={nombres['Valorización Descarga [CLP]']}5"
+                f"+{nombres['Valorización Carga [CLP]']}5",
+            )
+            # Curva monotona sin fila en ese puesto: guion, no vacio.
+            curva = nombres["Curva monotona CMg Descarga [CLP/kWh]"]
+            self.assertEqual(
+                [ws[f"{curva}{f}"].value for f in (4, 5, 6)], [1, 2, 3]
+            )
+            # B:H sin comentario; CMg con su origen.
+            self.assertTrue(all(ws.cell(3, c).comment is None for c in range(2, 9)))
+            titulos = [c.value for c in ws[2] if c.value]
+            self.assertEqual(len(titulos), 4, titulos)
+            self.assertTrue(titulos[0].startswith("Cuadro N° 1"))
+            self.assertEqual(ws["B3"].value, "Mes")
+            self.assertTrue(ws["B3"].font.bold)
+            self.assertEqual(ws["H3"].value, "Configuracion")
+            self.assertEqual(ws.freeze_panes, "I4")
+            # El origen va como comentario en el encabezado.
+            self.assertIn("Hoja origen: CMg", next(
+                c for c in ws[3] if str(c.value).startswith("CMg")
+            ).comment.text)
 
             # ancho de columna puesto (pandas no pone ninguno)
             self.assertIsNotNone(ws.column_dimensions["A"].width)
 
             # y los datos son los mismos
-            df = pd.read_excel(ruta, sheet_name=nucleo.HOJA_CALCULO_ECOSTOS,
-                               header=1)
+            # La hoja muestra la unidad entre corchetes...
+            self.assertIn("Descarga [kWh]", [c.value for c in ws[3]])
+            # ...y al leerla vuelve el nombre de siempre.
+            from Script.nucleo.unidades import sin_unidades
+            df = sin_unidades(nucleo.sin_margen_izquierdo(pd.read_excel(
+                ruta, sheet_name=nucleo.HOJA_CALCULO_ECOSTOS, header=2
+            )), nucleo.HOJA_CALCULO_ECOSTOS)
             self.assertEqual(list(df["Descarga kWh"]), [1.5, 2.5, 3.5])
             self.assertEqual(list(df["Configuracion"]), ["SAE UNO"] * 3)
 
@@ -290,12 +452,14 @@ class TestUnaSolaPlanilla(unittest.TestCase):
 
             # El calculo no se llevo puestas las entradas...
             self.assertEqual(
-                len(pd.read_excel(ruta, sheet_name=nucleo.HOJA_MEDIDORES)), 2
+                len(nucleo.leer_hoja_con_fila_vacia(
+                    ruta, nucleo.HOJA_MEDIDORES
+                )), 2
             )
 
             # ...ni las entradas se llevan puesto el calculo.
             self.entradas(ruta)
-            resumen = pd.read_excel(ruta, sheet_name=nucleo.HOJA_RESUMEN)
+            resumen = nucleo.leer_hoja_con_fila_vacia(ruta, nucleo.HOJA_RESUMEN)
             self.assertEqual(list(resumen["NOMBRE"]), ["EMPRESA UNO"])
 
     def test_el_control_va_en_su_propio_archivo(self):
@@ -307,7 +471,13 @@ class TestUnaSolaPlanilla(unittest.TestCase):
 
             self.assertNotIn(nucleo.HOJA_LOG, pd.ExcelFile(ruta).sheet_names)
 
-            log = pd.read_excel(control, sheet_name=nucleo.HOJA_LOG)
+            log = nucleo.leer_hoja_con_fila_vacia(control, nucleo.HOJA_LOG)
+            # Mismo formato que la planilla: fila 1 vacia, cuadro en B2.
+            hoja_log = openpyxl.load_workbook(control)[nucleo.HOJA_LOG]
+            self.assertIsNone(hoja_log["A1"].value)
+            self.assertEqual(
+                hoja_log["B2"].value, "Cuadro N° 1 — Avisos e incidencias"
+            )
             self.assertIn("un aviso de la corrida", list(log["detalle"]))
 
     def test_el_control_conserva_las_hojas_que_no_reescribe(self):
@@ -329,7 +499,13 @@ class TestUnaSolaPlanilla(unittest.TestCase):
 
             hojas = pd.ExcelFile(control).sheet_names
 
-            self.assertEqual(hojas, list(nucleo.ORDEN_HOJAS_CONTROL))
+            # La matriz de centrales solo sale cuando el calculo lee las
+            # entradas; las demas siempre, en su orden.
+            self.assertEqual(
+                hojas, [h for h in nucleo.ORDEN_HOJAS_CONTROL if h in hojas]
+            )
+            for hoja in (nucleo.HOJA_EJECUCION, nucleo.HOJA_ALERTAS, nucleo.HOJA_LOG):
+                self.assertIn(hoja, hojas)
 
 
 class TestFormatoNoTocaLosDatos(unittest.TestCase):

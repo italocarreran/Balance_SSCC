@@ -75,6 +75,7 @@ from .parametros import (
     COLUMNAS_VACIAS,
     EXTENSIONES_EXCEL, HOJA_ALERTAS, HOJA_CALCULO_ECOSTOS,
     HOJA_CALCULO_RE545, HOJA_CMG, HOJA_EJECUCION, HOJA_FD, HOJA_LOG,
+    HOJA_MATRIZ_CENTRALES,
     HOJA_MEDIDORES, HOJA_PRORRATA_RETIROS, HOJA_RESUMEN, HOJA_SUBASTAS,
     ORDEN_HOJAS_CONTROL, ORDEN_HOJAS_SALIDA,
     HOJA_CMG_ORIGEN, HOJA_CPF_HORARIO, HOJA_CSF_HORARIO,
@@ -124,7 +125,7 @@ from .prorrata_retiros import (
 )
 from .compensacion import (
     construir_compensacion_central, construir_compensacion_total,
-    total_por_central,
+    total_por_central, detalle_combinado, por_central_combinado,
     construir_resumen,
 )
 from .lectura import (
@@ -135,6 +136,7 @@ from .lectura import (
     _leer_resumen_bess, construir_homologacion, leer_centrales,
     leer_medidas_sae, TITULO_CENTRALES_DICCIONARIO,
     TITULO_CENTRALES_RESUMEN, leer_centrales_planilla, obtener_centrales,
+    leer_hoja_con_fila_vacia, sin_margen_izquierdo,
 )
 from .soc import (
     _extraer_nombre_desde_ruta_scada, detectar_bloques,
@@ -243,7 +245,8 @@ from .escritura import (
 )
 from .proceso import generar_consolidado, generar_pagos_bess
 from .orquestador import (
-    GRUPOS, GRUPO_POR_ID, TAREAS, formatear_duracion, TAREA_POR_ID, dependientes, ejecutar_plan,
+    GRUPOS, GRUPO_POR_ID, TAREAS, formatear_duracion, ENCABEZADO_REGISTRO,
+    FIN_REGISTRO, TAREA_POR_ID, dependientes, ejecutar_plan,
     planificar, propagar_seleccion,
 )
 from .traer import (
@@ -278,10 +281,11 @@ __all__ = [
     "COLUMNAS_SALIDA_E_COSTOS", "COLUMNAS_AUXILIARES_RE545",
     "COLUMNAS_SALIDA_RE545", "reponer_auxiliares_medidores",
     "formatear_hoja", "formatear_libro", "leer_cmg_consolidado",
-    "GRUPOS", "GRUPO_POR_ID", "formatear_duracion", "TAREAS", "TAREA_POR_ID", "dependientes",
+    "GRUPOS", "GRUPO_POR_ID", "formatear_duracion", "ENCABEZADO_REGISTRO",
+    "FIN_REGISTRO", "TAREAS", "TAREA_POR_ID", "dependientes",
     "ejecutar_plan", "planificar", "propagar_seleccion",
     "EXTENSIONES_EXCEL", "HOJA_CALCULO_ECOSTOS", "HOJA_ALERTAS",
-    "HOJA_EJECUCION", "HOJA_LOG", "HOJA_MEDIDORES", "HOJA_CMG",
+    "HOJA_EJECUCION", "HOJA_LOG", "HOJA_MATRIZ_CENTRALES", "HOJA_MEDIDORES", "HOJA_CMG",
     "HOJA_FD", "HOJA_SUBASTAS", "ORDEN_HOJAS_SALIDA",
     "ORDEN_HOJAS_CONTROL", "SECCIONES_SALIDA", "escribir_control",
     "HOJA_CALCULO_RE545", "HOJA_PRORRATA_RETIROS", "HOJA_RESUMEN",
@@ -309,6 +313,7 @@ __all__ = [
     "buscar_archivo_prorrata", "leer_prorrata_retiros",
     "construir_prorrata_retiros", "construir_compensacion_total",
     "construir_compensacion_central", "total_por_central",
+    "detalle_combinado", "por_central_combinado",
     "CambioHora", "cambios_de_hora", "cambios_del_periodo",
     "describir_periodo", "horas_del_dia", "construir_resumen",
     "_filas_de_hojas", "hojas_con_datos", "hojas_de",
@@ -319,7 +324,8 @@ __all__ = [
     "_leer_hoja_con_encabezado", "_leer_resumen_bess",
     "construir_homologacion", "leer_centrales", "leer_medidas_sae",
     "TITULO_CENTRALES_DICCIONARIO", "TITULO_CENTRALES_RESUMEN",
-    "leer_centrales_planilla", "obtener_centrales",
+    "leer_centrales_planilla", "obtener_centrales", "leer_hoja_con_fila_vacia",
+    "sin_margen_izquierdo",
     "agregar_central_ofertas", "centrales_ofertas",
     "agregar_central_fd", "dic_mapeo_desde_fd", "mapa_unidad_fd_a_central",
     "_extraer_nombre_desde_ruta_scada", "detectar_bloques",

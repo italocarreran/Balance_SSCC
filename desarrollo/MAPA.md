@@ -48,10 +48,15 @@ Script/
         re545_componentes.py   <- RE545 BI:CE
         prorrata_retiros.py    <- prorrata 15-min: quien paga, cuarto a cuarto
         compensacion.py        <- quien recibe: por central/ciclo, por central y por empresa
+        equivalencias.py       <- buscar una central con todos sus nombres del Diccionario (aviso DIC-002)
+        unidades.py            <- unidad de cada columna entre corchetes (solo en la hoja; el programa usa el nombre interno)
         cambio_hora.py         <- cambios de hora del mes (America/Santiago), detectados solos
         medidores.py           <- la hoja Medidores
         escritura.py           <- los dos libros de salida
         xlsx_rapido.py         <- pegar hojas en el .xlsx a nivel zip (sin abrir el libro)
+        relleno_rapido.py      <- filas de datos de las hojas grandes generadas directo en XML (mismo formato)
+        lector.py              <- leer Excel con calamine (si esta) donde se verifico que da lo mismo
+        matriz_centrales.py    <- matriz de control: cada central y si se encontro en cada origen (Control_corrida)
         formato.py             <- ancho/negrita/panel fijo de las hojas
         proceso.py             <- los dos procesos completos
         orquestador.py         <- el grafo de "Ejecutar todo" (plan y corrida)
@@ -152,14 +157,14 @@ importable como cualquier módulo.
   | `FD y FMA/SSCC_Desempeño_*` | **Traer** | `nucleo.traer_fd` — baja el FD del período del árbol de indicadores del DCO y descomprime el zip |
   | `FD y FMA/fma_cpf_<AAMM>.xlsx` | **Generar** | `nucleo.generar_fma` con `{"cpf"}` — desde los reportes diarios del DCO |
   | `FD y FMA/fma_csf_<AAMM>.xlsx` | **Generar** | `nucleo.generar_fma` con `{"csf"}` — trae los reportes del AGC a `agcface/` y los concatena |
-  | `FD y FMA/fma_cft_<AAMM>.xlsx` | **Generar** | `nucleo.generar_fma` con `{"ctf"}` — desde el `CTF_<AAAA><MM>.csv` del DCO |
+  | `FD y FMA/fma_cft_<AAMM>.xlsx` | **Generar** | `nucleo.generar_fma` con `{"ctf"}` — desde el `CTF_<AAAA><MM>.csv` del DCO | **Oculta** desde 2026-11-03 (`parametros.FMA_CON_CTF = False`): no aparece en la ventana ni en la hoja FMA; el código sigue.
   | `Subastas/DB subastas/` | **Traer** | `nucleo.traer_subastas` — copia los `OfertasSSCCAdj*.accdb` del período desde la unidad de red |
   | `Subastas/subastas_AAMM.xlsx` | **Consolidar** | `nucleo.consolidar_subastas` — junta los Access del período (PO + PID desde su hora) en un Excel; la hoja `Subastas` se lleva de ahí |
   | `Balance_BESS.xlsx` | **Actualizar** | las dos mitades de un viaje: `generar_consolidado` con todas las secciones y después `generar_pagos_bess` con todas |
   | `Balance_BESS.xlsx/Centrales` | **Actualizar** | copia `Resumen BESS` y `Diccionario` de `Centrales.xlsx` a la planilla: es lo único que abre ese archivo |
   | cada `hoja '...'` de entrada | **Actualizar** | `generar_consolidado` con esa sola sección |
   | cada `hoja '...'` de cálculo | **Calcular** | `generar_pagos_bess` con esa sola |
-  | `Balance_BESS.xlsx/COMPENSACION_CENTRAL` | **Resumir** | compensación por central y ciclo/ventana, total por central (E Costos y RE545) y total por empresa |
+  | `Balance_BESS.xlsx/COMPENSACION_CENTRAL` | **Resumir** | compensación por central y ciclo/ventana y total por central (E Costos y RE545 lado a lado, con total) y total por empresa |
   | `Balance_BESS.xlsx/PRORRATA_RETIROS` | **Traer** | reparte el monto de cada cuarto de hora segun `Prorrata 15min` |
   | `Balance_BESS.xlsx/Resumen` | **Asignar** | consolida `RECIBE`, `PAGA` y `NETO` por empresa |
   | `Control_corrida.xlsx` | (sin botón) | lo deja cada corrida: `Ejecucion`, `Alertas` y `Log` |

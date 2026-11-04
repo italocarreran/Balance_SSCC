@@ -26,6 +26,8 @@ COL_EMPRESA = "Empresa"
 COL_CICLO = "Ciclo / Ventana"
 COL_COMPENSACION = "Compensación [$]"
 COL_COMPENSACION_TOTAL = "Compensación Total [$]"
+COL_COMPENSACION_ECOSTOS = "Compensación Ecostos [$]"
+COL_COMPENSACION_RE545 = "Compensación RE545 [$]"
 COL_MONTO = "Monto a compensar"
 
 # De donde sale el ciclo/ventana en cada hoja de calculo. El orden es
@@ -105,6 +107,61 @@ def total_por_central(detalle):
         .sort_values(COL_CENTRAL, kind="stable")
         .loc[:, columnas].reset_index(drop=True)
     )
+
+
+def _lado_a_lado(por_ecostos, por_re545, claves):
+    """Junta E Costos y RE545 en una fila por 'claves', una columna cada uno.
+
+    Lo que esta en un solo lado queda con 0 en el otro; la tercera
+    columna es la suma de las dos.
+    """
+
+    columnas = claves + [
+        COL_COMPENSACION_ECOSTOS, COL_COMPENSACION_RE545,
+        COL_COMPENSACION_TOTAL,
+    ]
+    partes = []
+    for df, columna in ((por_ecostos, COL_COMPENSACION_ECOSTOS),
+                        (por_re545, COL_COMPENSACION_RE545)):
+        if df is None or df.empty:
+            continue
+        partes.append(
+            df.groupby(claves, as_index=False, dropna=False)[COL_COMPENSACION]
+            .sum().rename(columns={COL_COMPENSACION: columna})
+        )
+    if not partes:
+        return pd.DataFrame(columns=columnas)
+    junto = partes[0]
+    for parte in partes[1:]:
+        junto = junto.merge(parte, on=claves, how="outer")
+    for columna in (COL_COMPENSACION_ECOSTOS, COL_COMPENSACION_RE545):
+        if columna not in junto.columns:
+            junto[columna] = 0.0
+        junto[columna] = junto[columna].fillna(0.0).astype(float)
+    junto[COL_COMPENSACION_TOTAL] = (
+        junto[COL_COMPENSACION_ECOSTOS] + junto[COL_COMPENSACION_RE545]
+    )
+    return (
+        junto.sort_values(claves, kind="stable")
+        .loc[:, columnas].reset_index(drop=True)
+    )
+
+
+def detalle_combinado(por_ecostos, por_re545):
+    """Cuadros 1 y 3 juntos: central + ciclo/ventana, E Costos y RE545.
+
+    Sin la empresa (esta en el cuadro por central). Ordenado por
+    central y ciclo/ventana: las ventanas de cada central quedan
+    juntas, con o sin compensacion.
+    """
+
+    return _lado_a_lado(por_ecostos, por_re545, [COL_CENTRAL, COL_CICLO])
+
+
+def por_central_combinado(por_ecostos, por_re545):
+    """Cuadros 2 y 4 juntos: central y empresa, E Costos, RE545 y total."""
+
+    return _lado_a_lado(por_ecostos, por_re545, [COL_CENTRAL, COL_EMPRESA])
 
 
 def construir_compensacion_central(df_ecostos, df_re545, resumen_bess,

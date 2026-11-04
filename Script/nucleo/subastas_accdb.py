@@ -7,6 +7,7 @@ import pandas as pd
 
 from .cambio_hora import cambios_de_hora, hora_mes_correlativa
 from .externos import ofertas_adj
+from .lector import leer_excel
 from .hojas_entrada import (
     NOMBRES_SUBASTAS, _contiene_bess_o_sae_sin_bat,
     _ordenar_subastas_por_hora_mes,
@@ -207,9 +208,11 @@ def construir_subastas_desde_consolidado(
 
     registrar(f"Leyendo {ruta.name}...")
     try:
-        df_crudo = pd.read_excel(ruta, sheet_name=ofertas_adj.HOJA_CONSOLIDADO)
+        # subastas_AAMM.xlsx lo escribe este programa (Consolidar):
+        # numeros y textos, motor rapido (ver lector.py).
+        df_crudo = leer_excel(ruta, sheet_name=ofertas_adj.HOJA_CONSOLIDADO)
     except ValueError:
-        df_crudo = pd.read_excel(ruta)
+        df_crudo = leer_excel(ruta)
 
     faltan = [c for c in ofertas_adj.COLUMNAS_CRUDAS if c not in df_crudo]
     if faltan:

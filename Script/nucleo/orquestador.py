@@ -43,6 +43,7 @@ from .estructura import revisar_estructura
 from .externos import Homologacion
 from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, ARCHIVO_MEDIDAS_SAE, ARCHIVO_SALIDA,
+    FMA_CON_CTF,
     HOJA_COMPENSACION_CENTRAL, HOJA_DICCIONARIO, HOJA_RESUMEN_BESS,
 )
 from .proceso import generar_consolidado, generar_pagos_bess
@@ -242,7 +243,8 @@ TAREAS = (
         # pero si se generan en esta corrida tienen que ir antes.
         "consolidado:fma", "hoja 'FMA'",
         "consolidado", "fma", "consolidado:fma",
-        (), (), ("fma_cpf", "fma_csf", "fma_ctf"),
+        (), (),
+        ("fma_cpf", "fma_csf") + (("fma_ctf",) if FMA_CON_CTF else ()),
     ),
     Tarea(
         # Ya no lleva FD ni FMA (se aplican en RE545): solo los Access.
@@ -299,6 +301,11 @@ TAREAS = (
         ("pagos:prorrata_retiros",), ("consolidado:centrales",),
     ),
 )
+
+# El CTF no se usa (FMA_CON_CTF): su tarea sale de la ventana y de
+# "Ejecutar todo" (y de la dependencia opcional de la hoja FMA).
+if not FMA_CON_CTF:
+    TAREAS = tuple(tarea for tarea in TAREAS if tarea.id != "fma_ctf")
 
 TAREA_POR_ID = {tarea.id: tarea for tarea in TAREAS}
 
@@ -709,6 +716,15 @@ def formatear_duracion(segundos):
     return f"{minutos} min {seg:02d} s"
 
 
+# Marcas para la ventana: una linea que empieza con ENCABEZADO_REGISTRO
+# se muestra como encabezado destacado del paso, y una con
+# FIN_REGISTRO como su cierre con el tiempo (pedido del usuario: "cada
+# boton que aparezca como encabezado destacado y que al terminar diga el
+# tiempo"). Fuera de la ventana se leen igual: son texto.
+ENCABEZADO_REGISTRO = "▶ "
+FIN_REGISTRO = "■ "
+
+
 def ejecutar_plan(
     carpeta_base, aamm, seleccion=None, registrar=print, progreso=None,
     hilos=3, plan=None,
@@ -782,7 +798,9 @@ def ejecutar_plan(
         with candados_recurso[grupo.recurso]:
             arranque = time.time()
             arranques[id_grupo] = arranque - inicio_corrida
-            registrar_grupo(id_grupo, f"Empezando: {grupo.etiqueta}")
+            with candado_registro:
+                registrar(f"{ENCABEZADO_REGISTRO}{grupo.etiqueta}")
+            bien = False
             try:
                 grupo.ejecutar(
                     carpeta_base,
@@ -793,12 +811,15 @@ def ejecutar_plan(
                     # sola barra: la de la ventana avanza por paso hecho.
                     None,
                 )
+                bien = True
             finally:
                 duraciones[id_grupo] = time.time() - arranque
-            registrar_grupo(
-                id_grupo,
-                f"Listo ({formatear_duracion(duraciones[id_grupo])}).",
-            )
+                with candado_registro:
+                    registrar(
+                        f"{FIN_REGISTRO}{grupo.etiqueta}: "
+                        f"{'listo' if bien else 'termino con error'} en "
+                        f"{formatear_duracion(duraciones[id_grupo])}"
+                    )
 
     with ThreadPoolExecutor(max_workers=max(1, hilos)) as pool:
 

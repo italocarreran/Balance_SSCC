@@ -155,9 +155,9 @@ def consolidar_subastas(carpeta_base, aamm, registrar=print, progreso=None):
 
     destino = ofertas_adj.ruta_consolidado(rutas["subastas_dir"], aamm)
     registrar(f"Escribiendo {destino.name}...")
-    df_crudo.to_excel(
-        destino, sheet_name=ofertas_adj.HOJA_CONSOLIDADO, index=False
-    )
+    from .escritura import escribir_tabla_rapida
+
+    escribir_tabla_rapida(df_crudo, destino, ofertas_adj.HOJA_CONSOLIDADO)
 
     if progreso:
         progreso(100)
@@ -362,7 +362,9 @@ def generar_cmg(
     rutas["cmg_dir"].mkdir(parents=True, exist_ok=True)
 
     registrar(f"Escribiendo {rutas['cmg']}...")
-    df_salida.to_excel(rutas["cmg"], sheet_name=HOJA_CMG_ORIGEN, index=False)
+    from .escritura import escribir_tabla_rapida
+
+    escribir_tabla_rapida(df_salida, rutas["cmg"], HOJA_CMG_ORIGEN)
 
     avanzar(95)
 

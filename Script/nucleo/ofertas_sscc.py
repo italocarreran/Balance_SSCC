@@ -10,7 +10,9 @@ from pathlib import Path
 from .cambio_hora import cambios_de_hora, horas_del_dia
 from .lectura import (
     ROL_BALANCE_BESS, ROL_OFERTAS, ROL_SUBASTAS, filas_diccionario,
+    fila_de_titulos,
 )
+from .lector import leer_excel
 from .parametros import COLUMNA_CENTRAL, HOJA_OFERTAS_SSCC, INICIO_VENTANA
 from .utiles import (
     ErrorEntrada, _es_numero, _texto_seguro, _tiene_valor, _valor_clave,
@@ -150,7 +152,7 @@ def construir_resumen_ofertas_sscc(ruta_ofertas, registrar=print):
     Devuelve un DataFrame ordenado por Nombre, Año, Mes, Día.
     """
 
-    hojas = pd.read_excel(ruta_ofertas, sheet_name=None, header=None)
+    hojas = leer_excel(ruta_ofertas, sheet_name=None, header=None)
 
     grupos = {}
     datos_grupo = {}
@@ -161,7 +163,29 @@ def construir_resumen_ofertas_sscc(ruta_ofertas, registrar=print):
         if df_hoja.shape[0] < 2 or df_hoja.shape[1] < 9:
             continue
 
-        for _, fila in df_hoja.iloc[1:, 0:9].iterrows():
+        # El archivo trae todas las centrales del sistema: se filtra de
+        # una vez (mismas funciones que abajo, una vez por valor
+        # distinto) y se recorre fila por fila solo lo que queda. Antes
+        # se recorrian todas con iterrows.
+        datos = df_hoja.iloc[1:, 0:9]
+        memoria = {}
+
+        def pasa(valor, prueba):
+            clave = (prueba, type(valor), valor)
+            try:
+                return memoria[clave]
+            except KeyError:
+                resultado = memoria[clave] = prueba(_texto_seguro(valor))
+                return resultado
+            except TypeError:
+                return prueba(_texto_seguro(valor))
+
+        candidatas = (
+            datos.iloc[:, 0].map(lambda v: pasa(v, _contiene_bess_o_sae))
+            & datos.iloc[:, 7].map(lambda v: pasa(v, _servicio_termina_en_rs))
+        ).astype(bool)
+
+        for _, fila in datos[candidatas].iterrows():
 
             nombre = _texto_seguro(fila.iloc[0])
             anio, mes, dia = fila.iloc[1], fila.iloc[2], fila.iloc[3]
@@ -352,6 +376,13 @@ def cargar_resumen_en_medidores(
     anio, mes = next(iter(periodos))
     dias_del_mes = calendar.monthrange(anio, mes)[1]
 
+    filas_dic = filas_diccionario(diccionario)
+    if filas_dic:
+        return _ofertas_por_central(
+            df_resumen, claves_medidores, filas_dic, anio, mes, dias_del_mes,
+            registrar,
+        )
+
     # Equivalencias Diccionario!E:F:G (columnas 5,6,7 -> indices 4,5,6)
     dic_equivalencias = {}
 
@@ -436,6 +467,121 @@ def cargar_resumen_en_medidores(
     return df_wxy, (anio, mes), avisos
 
 
+def _ofertas_por_central(
+    df_resumen, claves_medidores, filas_dic, anio, mes, dias_del_mes, registrar,
+):
+    """
+    La tabla "Ofertas SSCC por dia" con el Diccionario en el formato
+    nuevo (columnas con nombre), una fila por CENTRAL y dia.
+
+    Pedido del usuario (2026-11-03): cada nombre del archivo de ofertas
+    se busca primero en la columna Ofertas del Diccionario y, si no
+    esta, en la de Subastas; si no esta en ninguna, NO se agrega (antes
+    entraba igual, sin central). Antes las equivalencias se tomaban por
+    posicion (Diccionario!E:F:G del formato viejo), que en el formato
+    nuevo son otras columnas: una central de Medidores no se reconocia
+    como ya presente con su nombre de ofertas y salia dos veces.
+
+    Las centrales de Medidores sin ofertas se agregan con oferta 0 (como
+    siempre), una vez. Trae la columna Central ya puesta (el nombre
+    Balance_BESS). Devuelve (df_wxy, (anio, mes), avisos).
+    """
+
+    por_ofertas, por_subastas = {}, {}
+    for fila in filas_dic:
+        central = _texto_seguro(fila.get(ROL_BALANCE_BESS))
+        if not central:
+            continue
+        for mapa, rol in ((por_ofertas, ROL_OFERTAS), (por_subastas, ROL_SUBASTAS)):
+            clave = _normalizar_nombre_clave(fila.get(rol))
+            if clave:
+                mapa.setdefault(clave, central)
+
+    nombre_de = {}      # central normalizada -> (nombre en ofertas, central)
+    ofertas = {}        # (central normalizada, dia) -> oferta
+    descartados = {}
+    otros_nombres = {}
+
+    for _, fila in df_resumen.iterrows():
+        nombre_mostrar = _limpiar_nombre_mostrar(fila["Nombre"])
+        if not nombre_mostrar:
+            continue
+        dia = fila["Día"]
+        if not (_es_numero(fila["Año"]) and _es_numero(fila["Mes"]) and _es_numero(dia)):
+            continue
+        clave = _normalizar_nombre_clave(nombre_mostrar)
+        central = por_ofertas.get(clave) or por_subastas.get(clave)
+        if not central:
+            descartados.setdefault(clave, nombre_mostrar)
+            continue
+        clave_central = _normalizar_nombre_clave(central)
+        nombre_de.setdefault(clave_central, (nombre_mostrar, central))
+        if nombre_de[clave_central][0] != nombre_mostrar:
+            # Dos nombres de ofertas para la misma central: manda el
+            # primero (se avisa).
+            otros_nombres.setdefault(central, set()).add(nombre_mostrar)
+            continue
+        ofertas[(clave_central, int(dia))] = _valor_oferta_binario(
+            fila["Oferta completa"]
+        )
+
+    sin_ofertas = []
+    for nombre_crudo in claves_medidores:
+        nombre_mostrar = _limpiar_nombre_mostrar(nombre_crudo)
+        if not nombre_mostrar:
+            continue
+        clave_central = _normalizar_nombre_clave(nombre_mostrar)
+        if clave_central not in nombre_de:
+            nombre_de[clave_central] = (nombre_mostrar, nombre_mostrar)
+            sin_ofertas.append(nombre_mostrar)
+
+    if not nombre_de:
+        raise ErrorEntrada(
+            "No se encontraron nombres en el resumen de Ofertas SSCC "
+            "ni en Medidores (columna clave)."
+        )
+
+    avisos = []
+    if descartados:
+        nombres = sorted(descartados.values(), key=str.upper)
+        avisos.append(
+            f"{len(nombres)} nombre(s) del archivo de ofertas no estan en "
+            "el Diccionario (ni en su columna Ofertas ni en Subastas): no "
+            "se agregan. " + ", ".join(nombres[:30])
+            + (f" ... y {len(nombres) - 30} mas." if len(nombres) > 30 else "")
+        )
+    if sin_ofertas:
+        nombres = sorted(sin_ofertas, key=str.upper)
+        avisos.append(
+            f"{len(nombres)} central(es) de Medidores sin ofertas en el "
+            "archivo: se incorporaron con oferta 0: " + ", ".join(nombres)
+        )
+    for central, nombres in sorted(otros_nombres.items()):
+        avisos.append(
+            f"La central {central} aparece en el archivo de ofertas con mas "
+            f"de un nombre; se usa '{nombre_de[_normalizar_nombre_clave(central)][0]}' "
+            f"y no {sorted(nombres)}."
+        )
+
+    filas_salida = []
+    for clave_central, (nombre, central) in sorted(
+        nombre_de.items(), key=lambda kv: kv[1][0].upper()
+    ):
+        for dia in range(1, dias_del_mes + 1):
+            filas_salida.append(
+                (nombre, central, dia, ofertas.get((clave_central, dia), 0))
+            )
+
+    df_wxy = pd.DataFrame(
+        filas_salida, columns=["Nombre", COLUMNA_CENTRAL, "Dia", "Oferta completa"]
+    )
+    registrar(
+        f"  Ofertas SSCC por dia: {len(df_wxy):,} filas ({len(nombre_de)} "
+        f"central(es) x {dias_del_mes} dias)"
+    )
+    return df_wxy, (anio, mes), avisos
+
+
 def _mapas_homologacion_fge(diccionario):
     """
     Precalcula los dos mapas "nombre de un origen -> nombre canonico"
@@ -507,7 +653,7 @@ def _homologar_fge(nombre, mapa_f, mapa_g):
     return "0"
 
 
-def agregar_central_ofertas(df_wxy, diccionario):
+def agregar_central_ofertas(df_wxy, diccionario, registrar=None):
     """
     Copia de la tabla "Ofertas SSCC por dia" con la columna
     COLUMNA_CENTRAL al lado de "Nombre": el nombre Balance_BESS de esa
@@ -516,11 +662,35 @@ def agregar_central_ofertas(df_wxy, diccionario):
     el Diccionario no la conoce.
     """
 
+    if COLUMNA_CENTRAL in df_wxy.columns:
+        # Ya viene con la central (Diccionario en el formato nuevo, ver
+        # _ofertas_por_central).
+        return df_wxy
+
     mapa_f, mapa_g = _mapas_homologacion_fge(diccionario)
 
     centrales = [
         _homologar_fge(nombre, mapa_f, mapa_g) for nombre in df_wxy["Nombre"]
     ]
+
+    # Lo que no cruza por Subastas ni por Ofertas se prueba con los
+    # demas nombres del Diccionario (Balance_BESS, FD, FMA_CPF), con
+    # aviso (DIC-002).
+    from .equivalencias import Equivalencias
+
+    equivalencias = Equivalencias(
+        diccionario, normalizar_fn=_normalizar_nombre_clave
+    )
+    if equivalencias:
+        centrales = [
+            central if central != "0" else (
+                equivalencias.central_de(
+                    nombre, ROL_OFERTAS, "el nombre de Ofertas SSCC"
+                ) or "0"
+            )
+            for nombre, central in zip(df_wxy["Nombre"], centrales)
+        ]
+        equivalencias.informar(registrar or (lambda _m: None))
 
     df = df_wxy.copy()
     df.insert(
@@ -792,12 +962,16 @@ def calcular_t(clave, ventana, resumen_ventana_oferta):
 # si alguien cambia uno, las dos puntas se mueven juntas. El nombre
 # de la hoja sale de parametros.py (ORDEN_HOJAS_SALIDA), y se
 # reexporta aca porque medio modulo la busca por este nombre.
-TITULO_OFERTAS_POR_DIA = (
-    "Ofertas SSCC por dia (equivalente a Medidores!W:Y)"
-)
-TITULO_RESUMEN_VENTANA = (
-    "Resumen ventana oferta (equivalente a Medidores!AB:AE)"
-)
+TITULO_OFERTAS_POR_DIA = "Cuadro N° 1 — Ofertas SSCC por dia"
+TITULO_RESUMEN_VENTANA = "Cuadro N° 2 — Resumen ventana oferta"
+# Los de antes (en la fila 1, con el parentesis): un libro viejo se
+# sigue leyendo.
+_TITULOS_ANTERIORES = {
+    TITULO_OFERTAS_POR_DIA:
+        "Ofertas SSCC por dia (equivalente a Medidores!W:Y)",
+    TITULO_RESUMEN_VENTANA:
+        "Resumen ventana oferta (equivalente a Medidores!AB:AE)",
+}
 
 
 def leer_ofertas_sscc_consolidado(ruta_consolidado, registrar=print, libro=None):
@@ -821,7 +995,7 @@ def leer_ofertas_sscc_consolidado(ruta_consolidado, registrar=print, libro=None)
     fuente = ruta_consolidado if libro is None else libro
 
     try:
-        crudo = pd.read_excel(
+        crudo = leer_excel(
             fuente, sheet_name=HOJA_OFERTAS_SSCC, header=None
         )
     except ValueError as error:
@@ -838,12 +1012,16 @@ def leer_ofertas_sscc_consolidado(ruta_consolidado, registrar=print, libro=None)
             f"esta vacia. Actualizala con su boton en la ventana."
         )
 
+    # Titulos en la fila 2 (la 1 vacia); en un libro de antes, en la 1.
+    fila = fila_de_titulos(crudo)
+
     def _tabla(titulo):
 
         columna = None
+        buscados = (titulo, _TITULOS_ANTERIORES[titulo])
 
         for col in range(crudo.shape[1]):
-            if _texto_seguro(crudo.iloc[0, col]) == titulo:
+            if _texto_seguro(crudo.iloc[fila, col]) in buscados:
                 columna = col
                 break
 
@@ -859,15 +1037,18 @@ def leer_ofertas_sscc_consolidado(ruta_consolidado, registrar=print, libro=None)
         ancho = 0
         while (
             columna + ancho < crudo.shape[1]
-            and _texto_seguro(crudo.iloc[1, columna + ancho])
+            and _texto_seguro(crudo.iloc[fila + 1, columna + ancho])
         ):
             ancho += 1
 
         encabezados = [
-            _texto_seguro(crudo.iloc[1, columna + i]) for i in range(ancho)
+            _texto_seguro(crudo.iloc[fila + 1, columna + i])
+            for i in range(ancho)
         ]
 
-        datos = crudo.iloc[2:, columna:columna + ancho].reset_index(drop=True)
+        datos = crudo.iloc[fila + 2:, columna:columna + ancho].reset_index(
+            drop=True
+        )
         datos = datos.set_axis(encabezados, axis=1)
 
         # La tabla mas corta viene con filas de relleno vacias abajo

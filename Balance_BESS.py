@@ -40,7 +40,7 @@ Script/nucleo/orquestador.py; esta ventana solo los dibuja.
             SSCC_Desempeño_<algo>.xlsx     [Traer]
             fma_cpf_<AAMM>.xlsx            [Generar]
             fma_csf_<AAMM>.xlsx            [Generar]
-            fma_cft_<AAMM>.xlsx            [Generar]
+            (fma_cft_<AAMM>.xlsx: oculto, FMA_CON_CTF = False)
         Subastas/
             DB subastas/                   [Traer]
         Balance_BESS.xlsx                  [Actualizar]
@@ -96,6 +96,7 @@ en donde se guarda config.json.
 """
 
 import os
+import queue
 import re
 import socket
 import subprocess
@@ -500,7 +501,7 @@ def main():
         evento se redondea a 0 y no se mueve nada.
         """
 
-        resto = resto_rueda[clave]
+        resto = resto_rueda.setdefault(clave, 0.0)
         # Al cambiar de sentido el resto pendiente ya no sirve: seguirlo
         # sumando frenaria medio pixel el primer evento del otro lado.
         if resto and (resto > 0) != (cantidad > 0):
@@ -551,12 +552,24 @@ def main():
         # El puntero puede estar sobre un hijo (la barra del registro,
         # por ejemplo): se sube por los padres hasta encontrar a alguien
         # que se haya anotado para recibir la rueda.
+        inicio = widget
         while widget is not None:
             desplazar = desplazables.get(str(widget))
             if desplazar is not None:
                 desplazar(muescas)
                 return "break"
             widget = getattr(widget, "master", None)
+        # Sobre otra ventana (un dialogo como "Ejecutar todo") la rueda
+        # no mueve la principal que esta detras (pedido del usuario: "al
+        # mover la ruedita se mueve la ventana principal").
+        try:
+            otra_ventana = (
+                inicio is not None and inicio.winfo_toplevel() is not root
+            )
+        except (tk.TclError, AttributeError):
+            otra_ventana = False
+        if otra_ventana:
+            return "break"
         _desplazar_ventana(muescas)
         return "break"
 
@@ -571,17 +584,21 @@ def main():
     frame_carpeta = tk.LabelFrame(
         contenedor, text="Carpeta base del caso", padx=10, pady=8
     )
-    frame_carpeta.pack(fill="x", padx=20, pady=(14, 6))
+    frame_carpeta.pack(fill="x", padx=14, pady=(10, 4))
 
+    # Diseño de esta parte tomado del Revisor_Relq_15min (repo abby),
+    # pedido del usuario: ruta alineada a la izquierda y botones debajo,
+    # marcos mas juntos.
     lbl_base = tk.Label(
         frame_carpeta,
         textvariable=var_base,
-        wraplength=940,
-        justify="center",
+        wraplength=980,
+        justify="left",
+        anchor="w",
         cursor="hand2",
         font=("Segoe UI", 9),
     )
-    lbl_base.pack()
+    lbl_base.pack(anchor="w")
 
     lbl_base.bind(
         "<Button-1>",
@@ -598,9 +615,9 @@ def main():
     # --------------------------------------------------------
 
     frame_periodo = tk.LabelFrame(
-        contenedor, text="Periodo del caso (AAMM)", padx=10, pady=8
+        contenedor, text="Periodo del caso (AAMM)", padx=10, pady=6
     )
-    frame_periodo.pack(fill="x", padx=20, pady=6)
+    frame_periodo.pack(fill="x", padx=14, pady=4)
 
     fila_aamm = tk.Frame(frame_periodo)
     fila_aamm.pack(fill="x")
@@ -613,13 +630,21 @@ def main():
     entry_aamm = tk.Entry(
         fila_aamm,
         textvariable=var_aamm,
-        width=10,
+        width=8,
         justify="center",
-        font=("Segoe UI", 10, "bold"),
+        font=("Consolas", 11, "bold"),
         validate="key",
         validatecommand=validador_aamm,
     )
     entry_aamm.pack(side="left")
+
+    # Como en el Revisor_Relq_15min: un boton explicito para aplicar el
+    # mes (ademas de Enter y de salir del campo).
+    boton_ir_mes = tk.Button(
+        fila_aamm, text="Ir a este mes", bg="#1f5fa8", fg="white",
+        font=("Segoe UI", 9, "bold"),
+    )
+    boton_ir_mes.pack(side="left", padx=8)
 
     tk.Label(
         fila_aamm,
@@ -628,11 +653,12 @@ def main():
             "2026. Con el se buscan el archivo de SoC dentro de "
             "Medidas/ y el CSV 15-minutal dentro de Cmg/."
         ),
-        fg=COLOR_NEUTRO,
+        fg="#444444",
         font=("Segoe UI", 8),
-        wraplength=820,
+        wraplength=760,
         justify="left",
-    ).pack(side="left", padx=(10, 0))
+        anchor="w",
+    ).pack(side="left", padx=6)
 
     # Cambio de hora del mes: se detecta solo con el AAMM (ver
     # nucleo.cambio_hora) y queda a la vista mientras se trabaja.
@@ -1040,8 +1066,9 @@ def main():
         font=("Consolas", 10, "bold"), fg="#2d7a2d",
     ).pack(side="right")
 
-    barra = ttk.Progressbar(contenedor, mode="determinate", maximum=100)
-    barra.pack(fill="x", padx=20, pady=(0, 8))
+    # Sin barra de progreso (pedido del usuario: "saca la barra de
+    # progreso, deja solo el tiempo"): el tiempo va arriba a la derecha y
+    # cada paso dice el suyo en el registro.
 
     frame_log = tk.LabelFrame(contenedor, text="Registro", padx=6, pady=6)
     frame_log.pack(fill="both", expand=True, padx=20, pady=6)
@@ -1067,24 +1094,67 @@ def main():
     for nivel, color in COLOR_REGISTRO.items():
         txt_log.tag_configure(nivel, foreground=color)
     txt_log.tag_configure("hora", foreground=COLOR_NEUTRO)
+    # Cada paso (boton) como encabezado destacado, y su cierre con el
+    # tiempo (pedido del usuario).
+    txt_log.tag_configure(
+        "encabezado", background="#244062", foreground="white",
+        font=("Segoe UI", 9, "bold"), spacing1=6, spacing3=2,
+    )
+    txt_log.tag_configure(
+        "encabezado_fin", foreground="#375623",
+        font=("Segoe UI", 9, "bold"), spacing3=4,
+    )
 
     # Inicio del proceso en curso: cada linea lleva la hora y el tiempo
     # transcurrido desde ahi ("control de tiempo", pedido del usuario).
     inicio_log = {"t": None}
 
-    def log(mensaje):
+    def _insertar_log(mensaje, ahora=None):
         texto = str(mensaje)
         nivel = nivel_del_mensaje(texto)
-        ahora = time.time()
+        ahora = time.time() if ahora is None else ahora
         for linea in texto.split("\n"):
+            if linea.startswith(nucleo.ENCABEZADO_REGISTRO):
+                txt_log.insert("end", f" {linea} \n", ("encabezado",))
+                continue
+            if linea.startswith(nucleo.FIN_REGISTRO):
+                txt_log.insert("end", f"{linea}\n", ("encabezado_fin",))
+                continue
             if linea.strip():
                 marca = time.strftime("%H:%M:%S", time.localtime(ahora))
                 if inicio_log["t"] is not None:
                     marca += f" +{formatear_reloj(ahora - inicio_log['t'])}"
                 txt_log.insert("end", f"[{marca}] ", ("hora",))
             txt_log.insert("end", linea + "\n", (nivel,) if nivel else ())
+
+    def log(mensaje):
+        # Sin update_idletasks: forzar el redibujo en cada linea, durante
+        # una corrida con cientos de mensajes, es lo que hacia que el
+        # panel "Estructura del caso" se viera con filas repetidas al
+        # desplazarlo (pedido del usuario).
+        _insertar_log(mensaje)
         txt_log.see("end")
-        root.update_idletasks()
+
+    # Los mensajes del hilo de trabajo llegan a esta cola y se escriben de
+    # a tandas cada 100 ms (antes, un root.after por mensaje).
+    cola_log = queue.Queue()
+
+    def vaciar_cola_log():
+        hubo = False
+        while True:
+            try:
+                ahora, mensaje = cola_log.get_nowait()
+            except queue.Empty:
+                break
+            _insertar_log(mensaje, ahora)
+            hubo = True
+        if hubo:
+            txt_log.see("end")
+        if corriendo["activo"] or not cola_log.empty():
+            root.after(100, vaciar_cola_log)
+
+    def registrar_desde_hilo(mensaje):
+        cola_log.put((time.time(), mensaje))
 
     def guardar_registro():
         """Deja el registro en <caso>/Registro_ultima_corrida.txt."""
@@ -1479,7 +1549,34 @@ def main():
             crear_carpetas_en(var_base.get())
 
     entry_aamm.bind("<FocusOut>", aamm_cambiado)
-    entry_aamm.bind("<Return>", aamm_cambiado)
+    entry_aamm.bind("<Return>", lambda e: root.focus_set())
+    boton_ir_mes.config(command=lambda: (root.focus_set(), aamm_cambiado()))
+
+    # --------------------------------------------------------
+    # CURSOR DE TEXTO
+    #
+    # Pedido del usuario: "el cursor de texto se queda parpadeando
+    # siempre en el cuadro de AAMM... que se quite cuando se hace clic
+    # en otra parte". En Tk un clic en un boton, etiqueta o fondo NO
+    # le quita el foco al campo; aca se lo quita cualquier clic fuera
+    # de un campo de texto (el foco pasa a la ventana, el cursor deja
+    # de parpadear y <FocusOut> aplica el AAMM escrito, como antes).
+    # --------------------------------------------------------
+
+    CAMPOS_DE_TEXTO = (tk.Entry, tk.Text, tk.Spinbox, ttk.Entry)
+
+    def soltar_foco(evento):
+        widget = evento.widget
+        if isinstance(widget, str) or isinstance(widget, CAMPOS_DE_TEXTO):
+            return
+        try:
+            enfocado = widget.focus_get()
+        except (KeyError, tk.TclError):
+            return
+        if isinstance(enfocado, (tk.Entry, tk.Spinbox, ttk.Entry)):
+            widget.winfo_toplevel().focus_set()
+
+    root.bind_all("<Button-1>", soltar_foco, add="+")
 
     # --------------------------------------------------------
     # LANZADOR GENERICO (hilo aparte; log, barra y timer de la
@@ -1500,6 +1597,29 @@ def main():
 
         return ruta
 
+    TITULO_DE_FUNCION = {
+        "traer_csv_cmg": "Traer cmg_15min",
+        "traer_fd": "Traer FD (SSCC_Desempeño)",
+        "generar_fma": "Generar FMA",
+        "traer_subastas": "Traer subastas",
+        "consolidar_subastas": "Consolidar subastas",
+        "generar_cmg": "Generar cmg.xlsx",
+        "generar_medidas_sae": "Actualizar Medidas_SAE",
+        "generar_consolidado": "Balance_BESS.xlsx (entradas)",
+        "generar_pagos_bess": "Balance_BESS.xlsx (calculo)",
+        "ejecutar_plan": "Ejecutar todo",
+        "correr": "Balance_BESS.xlsx (entradas y calculo)",
+    }
+
+    def titulo_de(funcion, kwargs):
+        titulo = TITULO_DE_FUNCION.get(
+            getattr(funcion, "__name__", ""), getattr(funcion, "__name__", "proceso")
+        )
+        secciones = kwargs.get("secciones_activas") or kwargs.get("tipos")
+        if secciones:
+            titulo += ": " + ", ".join(sorted(str(s) for s in secciones))
+        return titulo
+
     def lanzar(funcion, kwargs, etiqueta_salida):
         """
         Corre funcion(**kwargs, registrar=..., progreso=...) en un
@@ -1514,39 +1634,35 @@ def main():
 
         corriendo["activo"] = True
         habilitar_botones(False)
-        barra["value"] = 0
         txt_log.delete("1.0", "end")
 
+        titulo = titulo_de(funcion, kwargs)
         timer["corriendo"] = True
         timer["inicio"] = time.time()
         inicio_log["t"] = timer["inicio"]
-        log(
-            f"Inicio: {time.strftime('%d-%m-%Y %H:%M:%S')} - "
-            f"{getattr(funcion, '__name__', 'proceso')}"
-        )
+        log(f"{nucleo.ENCABEZADO_REGISTRO}{titulo}")
+        log(f"Inicio: {time.strftime('%d-%m-%Y %H:%M:%S')}")
+        var_estado.set("Procesando...")
         tick()
+        vaciar_cola_log()
 
         resultado = {"ok": False}
 
         def trabajo():
             try:
-                var_estado.set("Procesando...")
                 funcion(
                     **kwargs,
-                    registrar=lambda m: root.after(0, log, m),
-                    progreso=lambda v: root.after(
-                        0, barra.configure, {"value": v}
-                    ),
+                    registrar=registrar_desde_hilo,
+                    progreso=lambda _v: None,
                 )
                 resultado["ok"] = True
 
             except nucleo.ErrorEntrada as error:
-                root.after(0, log, f"\nERROR DE ENTRADA:\n{error}")
+                registrar_desde_hilo(f"\nERROR DE ENTRADA:\n{error}")
                 resultado["error"] = str(error)
 
             except Exception as error:
-                root.after(
-                    0, log,
+                registrar_desde_hilo(
                     f"\nERROR INESPERADO:\n{error}\n\n{traceback.format_exc()}",
                 )
                 resultado["error"] = str(error)
@@ -1557,12 +1673,14 @@ def main():
         def terminar(res):
             timer["corriendo"] = False
             corriendo["activo"] = False
+            vaciar_cola_log()
 
             duracion = time.time() - timer["inicio"]
             log("")
             log(
-                f"{'Terminado' if res['ok'] else 'ERROR: termino con problemas'}"
-                f" - tiempo total {nucleo.formatear_duracion(duracion)}"
+                f"{nucleo.FIN_REGISTRO}{titulo}: "
+                f"{'listo' if res['ok'] else 'termino con problemas'} en "
+                f"{nucleo.formatear_duracion(duracion)}"
             )
             guardado = guardar_registro()
             if guardado:
@@ -1575,7 +1693,6 @@ def main():
 
             if res["ok"]:
                 var_estado.set("Terminado correctamente.")
-                barra["value"] = 100
                 messagebox.showinfo(
                     "Listo", f"Se genero/actualizo:\n{etiqueta_salida}"
                 )
@@ -2075,7 +2192,10 @@ def main():
         frame_pasos = tk.LabelFrame(top, text="Pasos", padx=8, pady=6)
         frame_pasos.pack(fill="both", expand=True, padx=14, pady=4)
 
-        lienzo = tk.Canvas(frame_pasos, borderwidth=0, highlightthickness=0)
+        lienzo = tk.Canvas(
+            frame_pasos, borderwidth=0, highlightthickness=0,
+            yscrollincrement=1,
+        )
         barra_pasos = tk.Scrollbar(
             frame_pasos, orient="vertical", command=lienzo.yview
         )
@@ -2103,6 +2223,34 @@ def main():
         )
         txt_avisos.pack(fill="x")
 
+        # La rueda sobre la lista desplaza la lista, y sobre los avisos
+        # los avisos: nunca la ventana principal que esta detras.
+        def desplazar_lista(muescas):
+            region = lienzo.bbox("all")
+            if not region or region[3] - region[1] <= lienzo.winfo_height():
+                return
+            pixeles = _acumular("ejecutar_todo", muescas * PIXELES_POR_MUESCA)
+            if pixeles:
+                lienzo.yview_scroll(pixeles, "units")
+
+        def desplazar_avisos(muescas):
+            lineas = _acumular("ejecutar_todo_avisos", muescas * LINEAS_POR_MUESCA)
+            if lineas:
+                txt_avisos.yview_scroll(lineas, "units")
+
+        anotados = (frame_pasos, lienzo, lista, barra_pasos)
+        for widget in anotados:
+            registrar_desplazable(widget, desplazar_lista)
+        for widget in (frame_avisos, txt_avisos):
+            registrar_desplazable(widget, desplazar_avisos)
+
+        def olvidar_desplazables(event):
+            if event.widget is top:
+                for widget in anotados + (frame_avisos, txt_avisos):
+                    desplazables.pop(str(widget), None)
+
+        top.bind("<Destroy>", olvidar_desplazables, add="+")
+
         frame_pie = tk.Frame(top)
         frame_pie.pack(fill="x", padx=14, pady=(4, 12))
 
@@ -2113,42 +2261,49 @@ def main():
 
         estado_plan = {"plan": None}
 
-        def repintar():
+        # La lista se arma UNA vez y despues solo se actualizan sus
+        # valores (pedido del usuario: "cuando selecciono una casilla hace
+        # un parpadeo"). Antes cada tilde borraba y volvia a crear todas
+        # las filas -y volvia a revisar la carpeta entera-, y la lista
+        # quedaba en blanco un instante. La estructura de la carpeta no
+        # cambia mientras la ventana esta abierta: se revisa al abrirla.
+        _, filas_arbol = nucleo.revisar_estructura(ruta, aamm)
+        vista = {
+            "armada": False,
+            "seleccionadas": set(),
+            "tareas": {},     # id -> (var, cuadro, etiqueta de estado, motivo)
+            "libro": None,    # (var, cuadro, contador, ids)
+        }
 
+        COLOR_ESTADO = {
+            "al dia": COLOR_OK,
+            "se genera": COLOR_BASE_OK,
+            "se rehace": COLOR_PENDIENTE,
+            "bloqueada": COLOR_FALTA,
+            "sin tildar": COLOR_NEUTRO,
+        }
+
+        def cambiar(ids, tildar):
+            actual = set(vista["seleccionadas"])
+            if tildar:
+                # Tildar algo arrastra lo que sale de ahi: si no, queda
+                # mezclado con la corrida anterior.
+                actual |= nucleo.propagar_seleccion(set(ids))
+            else:
+                actual -= set(ids)
+            seleccion["ids"] = actual
+            repintar()
+
+        def armar(plan):
             # La lista se arma con el mismo orden y la misma sangria que
             # el arbol de la ventana principal (pedido del usuario): cada
             # cosa con boton bajo su carpeta, y las hojas del libro
             # adentro de Balance_BESS.xlsx, que tiene su propio cuadro
             # para tildarlas o destildarlas todas juntas.
-            _, filas_arbol = nucleo.revisar_estructura(ruta, aamm)
-            plan = nucleo.planificar(
-                ruta, aamm, seleccion["ids"], filas=filas_arbol
-            )
-            estado_plan["plan"] = plan
-
-            for hijo in lista.winfo_children():
-                hijo.destroy()
-
             tarea_de_fila = {}
             for tarea in plan["tareas"]:
                 fila_estado = nucleo.TAREA_POR_ID[tarea["id"]].fila_estado
                 tarea_de_fila.setdefault(fila_estado, tarea)
-
-            seleccionadas = {
-                t["id"] for t in plan["tareas"] if t["seleccionada"]
-            }
-            deshabilitado = "disabled" if corriendo["activo"] else "normal"
-
-            def cambiar(ids, tildar):
-                actual = set(seleccionadas)
-                if tildar:
-                    # Tildar algo arrastra lo que sale de ahi: si no,
-                    # queda mezclado con la corrida anterior.
-                    actual |= nucleo.propagar_seleccion(set(ids))
-                else:
-                    actual -= set(ids)
-                seleccion["ids"] = actual
-                repintar()
 
             def pintar_tarea(tarea, sangria):
 
@@ -2156,38 +2311,28 @@ def main():
                 fila.pack(fill="x", pady=1)
 
                 var = tk.BooleanVar(value=tarea["seleccionada"])
-                tk.Checkbutton(
-                    fila, variable=var, state=deshabilitado,
+                cuadro = tk.Checkbutton(
+                    fila, variable=var,
                     command=lambda i=tarea["id"], v=var: cambiar({i}, v.get()),
-                ).pack(side="left", padx=(sangria, 0))
+                )
+                cuadro.pack(side="left", padx=(sangria, 0))
 
                 tk.Label(
                     fila, text=tarea["etiqueta"], width=44 - sangria // 8,
                     anchor="w", font=("Consolas", 9),
                 ).pack(side="left")
 
-                color = {
-                    "al dia": COLOR_OK,
-                    "se genera": COLOR_BASE_OK,
-                    "se rehace": COLOR_PENDIENTE,
-                    "bloqueada": COLOR_FALTA,
-                    "sin tildar": COLOR_NEUTRO,
-                }[tarea["estado"]]
-
-                tk.Label(
-                    fila, text=tarea["estado"], width=12, anchor="w",
-                    fg=color, font=("Segoe UI", 9, "bold"),
-                ).pack(side="left")
-
-                motivo = ", ".join(
-                    tarea["faltan_requisitos"] + tarea["faltan_dependencias"]
+                estado = tk.Label(
+                    fila, width=12, anchor="w", font=("Segoe UI", 9, "bold"),
                 )
+                estado.pack(side="left")
 
-                tk.Label(
-                    fila,
-                    text=(f"falta: {motivo}" if motivo else ""),
-                    anchor="w", fg=COLOR_NEUTRO, font=("Segoe UI", 8),
-                ).pack(side="left", fill="x", expand=True)
+                motivo = tk.Label(
+                    fila, anchor="w", fg=COLOR_NEUTRO, font=("Segoe UI", 8),
+                )
+                motivo.pack(side="left", fill="x", expand=True)
+
+                vista["tareas"][tarea["id"]] = (var, cuadro, estado, motivo)
 
             def pintar_titulo(texto, sangria):
                 tk.Label(
@@ -2199,22 +2344,21 @@ def main():
                 fila = tk.Frame(lista)
                 fila.pack(fill="x", pady=(6, 1))
                 ids = {t["id"] for t in hojas}
-                todas = ids <= seleccionadas
-                var = tk.BooleanVar(value=todas)
-                tk.Checkbutton(
-                    fila, variable=var, state=deshabilitado,
+                var = tk.BooleanVar()
+                cuadro = tk.Checkbutton(
+                    fila, variable=var,
                     command=lambda v=var: cambiar(ids, v.get()),
-                ).pack(side="left")
-                tildadas = len(ids & seleccionadas)
+                )
+                cuadro.pack(side="left")
                 tk.Label(
                     fila, text=etiqueta, anchor="w",
                     font=("Segoe UI", 9, "bold"),
                 ).pack(side="left")
-                tk.Label(
-                    fila,
-                    text=f"  {tildadas} de {len(ids)} hoja(s) tildada(s)",
-                    anchor="w", fg=COLOR_NEUTRO, font=("Segoe UI", 8),
-                ).pack(side="left")
+                contador = tk.Label(
+                    fila, anchor="w", fg=COLOR_NEUTRO, font=("Segoe UI", 8),
+                )
+                contador.pack(side="left")
+                vista["libro"] = (var, cuadro, contador, ids)
 
             pintadas = set()
             titulo_pendiente = None
@@ -2255,6 +2399,50 @@ def main():
             for tarea in plan["tareas"]:
                 if tarea["id"] not in pintadas:
                     pintar_tarea(tarea, 0)
+
+            vista["armada"] = True
+
+        def repintar():
+
+            plan = nucleo.planificar(
+                ruta, aamm, seleccion["ids"], filas=filas_arbol
+            )
+            estado_plan["plan"] = plan
+
+            if not vista["armada"]:
+                armar(plan)
+
+            seleccionadas = {
+                t["id"] for t in plan["tareas"] if t["seleccionada"]
+            }
+            vista["seleccionadas"] = seleccionadas
+            deshabilitado = "disabled" if corriendo["activo"] else "normal"
+
+            for tarea in plan["tareas"]:
+                widgets = vista["tareas"].get(tarea["id"])
+                if widgets is None:
+                    continue
+                var, cuadro, estado, motivo = widgets
+                var.set(tarea["seleccionada"])
+                cuadro.config(state=deshabilitado)
+                estado.config(
+                    text=tarea["estado"], fg=COLOR_ESTADO[tarea["estado"]]
+                )
+                faltan = ", ".join(
+                    tarea["faltan_requisitos"] + tarea["faltan_dependencias"]
+                )
+                motivo.config(text=f"falta: {faltan}" if faltan else "")
+
+            if vista["libro"] is not None:
+                var, cuadro, contador, ids = vista["libro"]
+                var.set(ids <= seleccionadas)
+                cuadro.config(state=deshabilitado)
+                contador.config(
+                    text=(
+                        f"  {len(ids & seleccionadas)} de {len(ids)} "
+                        "hoja(s) tildada(s)"
+                    )
+                )
 
             txt_avisos.delete("1.0", "end")
 

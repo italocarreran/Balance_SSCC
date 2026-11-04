@@ -275,8 +275,10 @@ def generar_medidas_sae(
     rutas["medidas_dir"].mkdir(parents=True, exist_ok=True)
 
     registrar(f"Escribiendo {rutas['medidas_sae']}...")
-    df_sae[COLUMNAS_AI].to_excel(
-        rutas["medidas_sae"], sheet_name=HOJA_MEDIDAS_SAE, index=False
+    from .escritura import escribir_tabla_rapida
+
+    escribir_tabla_rapida(
+        df_sae[COLUMNAS_AI], rutas["medidas_sae"], HOJA_MEDIDAS_SAE
     )
 
     registrar(f"  filas: {len(df_sae):,}")

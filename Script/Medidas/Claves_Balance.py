@@ -23,6 +23,7 @@ en el cambio de hora y desordenaria la numeracion), el signo sale de
 import re
 import warnings
 
+import numpy as np
 import pandas as pd
 
 from .comun import ErrorMedidas
@@ -46,6 +47,8 @@ COLUMNAS_SAE = [
 ]
 
 
+_PATRON_ISO_UTC = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
+_PATRON_ISO_SIMPLE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
 _PATRON_ISO_CON_DESFASE = re.compile(
     r"^\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d(\.\d+)?([+-]\d\d:?\d\d|Z)$"
 )
@@ -53,6 +56,23 @@ _PATRON_DESFASE_CERO = re.compile(r"(?:Z|[+-]00:?00)$")
 
 
 def parse_fecha_mixta(serie):
+    """
+    Ver _parse_fecha_mixta. Un mes trae unos 3 mil instantes distintos
+    repetidos en cientos de miles de filas: se convierte cada valor
+    distinto una vez y se reparte (valor por valor da lo mismo).
+    """
+
+    codigos, unicos = pd.factorize(serie, use_na_sentinel=True)
+    if len(serie) < 1000 or not len(unicos) or len(unicos) * 2 > len(serie):
+        return _parse_fecha_mixta(serie)
+    fechas = _parse_fecha_mixta(pd.Series(unicos, dtype=serie.dtype))
+    valores = fechas.to_numpy()
+    resultado = valores.take(np.where(codigos < 0, 0, codigos))
+    resultado[codigos < 0] = np.datetime64("NaT")
+    return pd.Series(resultado, index=serie.index, name=serie.name)
+
+
+def _parse_fecha_mixta(serie):
     """
     Fechas que pueden venir en formatos distintos en el mismo lote.
     Siempre devuelve datetime64 sin zona horaria: si el texto trae
@@ -78,6 +98,20 @@ def parse_fecha_mixta(serie):
             serie.astype("string").str.strip().str[:19],
             format="%Y-%m-%dT%H:%M:%S", errors="coerce",
         )
+
+    # Camino rapido: todo 'aaaa-mm-dd hh:mm:ss' sin desfase (el
+    # 'intervalo' de la API): format="mixed" lo lee igual, valor por valor.
+    if len(textos) and textos.str.match(_PATRON_ISO_SIMPLE).all():
+        return pd.to_datetime(
+            serie.astype("string").str.strip(),
+            format="%Y-%m-%d %H:%M:%S", errors="coerce",
+        )
+
+    # Y todo UTC 'aaaa-mm-ddThh:mm:ss.000Z' (el 'intervaloUtc').
+    if len(textos) and textos.str.match(_PATRON_ISO_UTC).all():
+        return pd.to_datetime(
+            serie, utc=True, format="ISO8601", errors="coerce"
+        ).dt.tz_localize(None)
 
     dayfirst = not (
         len(textos) > 0 and textos.str.match(r"^\d{4}-").all()
@@ -327,8 +361,13 @@ def detallar_huecos(df):
     principal = df[df["principal"] == True]  # noqa: E712
     filas = []
 
+    # Cada punto con un groupby (antes se filtraba la tabla entera una vez
+    # por punto: 4 s de 10 en un mes de 120 puntos).
+    por_punto = dict(tuple(principal.groupby("idPuntoMedida", sort=False)))
+    vacio = principal.iloc[:0]
+
     for punto in sorted(df["idPuntoMedida"].dropna().unique(), key=str):
-        del_punto = principal[principal["idPuntoMedida"] == punto]
+        del_punto = por_punto.get(punto, vacio)
 
         for canal, columna in ((1, "canalVal1"), (3, "canalVal3")):
             if columna in del_punto:

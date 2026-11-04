@@ -194,15 +194,18 @@ def construir_cmg_desde_csv(ruta_csv, barras, registrar=print,
             f"Columnas encontradas: {list(df.columns)}"
         )
 
-    df["FECHA_DT"] = pd.to_datetime(df["FECHA"].astype(str), format="%Y%m%d")
+    # Pedido del usuario: "mucho más rápido... mismos resultados". El CSV
+    # trae TODAS las barras del sistema (millones de filas) y se usan unas
+    # pocas: lo que es por fila (coma decimal, cruce con el Cuarto de Hora)
+    # se hace despues de filtrar, y lo que se repite (fechas, nombres de
+    # barra) se convierte una vez por valor distinto. Fila por fila da lo
+    # mismo que antes.
+    df["FECHA_DT"] = _por_valor_distinto(
+        df["FECHA"],
+        lambda u: pd.to_datetime(u.astype(str), format="%Y%m%d"),
+    )
     df["HORA"] = pd.to_numeric(df["HORA"], errors="coerce").astype("Int64")
     df["MINUTO"] = pd.to_numeric(df["MINUTO"], errors="coerce").astype("Int64")
-
-    # El CSV viene con coma decimal (es-CL).
-    df[COLUMNA_VALOR] = pd.to_numeric(
-        df[COLUMNA_VALOR].astype(str).str.replace(",", ".", regex=False),
-        errors="coerce",
-    )
 
     df = _sacar_horas_inexistentes(df, horas_inexistentes, registrar)
 
@@ -231,18 +234,30 @@ def construir_cmg_desde_csv(ruta_csv, barras, registrar=print,
     bloques = bloques.merge(resumen_dias, on="FECHA_DT", how="left")
     bloques[COLUMNA_CUARTO] = bloques["OFFSET_DIA"] + bloques["QH_DIA"]
 
-    df = df.merge(
-        bloques[["FECHA_DT", "HORA", "MINUTO", COLUMNA_CUARTO]],
-        on=["FECHA_DT", "HORA", "MINUTO"],
-        how="left",
+    barra_limpia = _por_valor_distinto(
+        df["BARRA"], lambda u: u.astype(str).str.strip()
     )
-
-    df["BARRA"] = df["BARRA"].astype(str).str.strip()
 
     # Se compara en mayusculas (mismo criterio que nucleo._buscar_cmg),
     # pero se conserva el texto tal cual viene del CSV.
     buscadas = {str(barra).strip().upper() for barra in barras}
-    df_filtrado = df[df["BARRA"].str.upper().isin(buscadas)].copy()
+    se_usa = _por_valor_distinto(
+        barra_limpia, lambda u: u.str.upper()
+    ).isin(buscadas)
+
+    df_filtrado = df[se_usa.to_numpy()].copy()
+    df_filtrado["BARRA"] = barra_limpia[se_usa.to_numpy()]
+
+    # El CSV viene con coma decimal (es-CL).
+    df_filtrado[COLUMNA_VALOR] = _a_numero(df_filtrado[COLUMNA_VALOR])
+
+    # Merge 'left': mantiene el orden de las filas (y sus columnas quedan
+    # igual que antes: el Cuarto de Hora al final).
+    df_filtrado = df_filtrado.reset_index(drop=True).merge(
+        bloques[["FECHA_DT", "HORA", "MINUTO", COLUMNA_CUARTO]],
+        on=["FECHA_DT", "HORA", "MINUTO"],
+        how="left",
+    )
 
     encontradas = set(df_filtrado["BARRA"].str.upper().unique())
     sin_datos = [
@@ -280,6 +295,31 @@ def construir_cmg_desde_csv(ruta_csv, barras, registrar=print,
     return df_filtrado, resumen_dias
 
 
+def _a_numero(serie):
+    """CMg con coma decimal -> numero (NaN si no se puede leer)."""
+
+    return pd.to_numeric(
+        serie.astype(str).str.replace(",", ".", regex=False),
+        errors="coerce",
+    )
+
+
+def _por_valor_distinto(serie, convertir):
+    """
+    convertir(serie), pero aplicado una vez a cada valor distinto y
+    repartido a las filas. Con algun vacio se convierte la serie entera
+    (asi un vacio hace lo mismo que antes, incluido fallar).
+    """
+
+    codigos, distintos = pd.factorize(serie, use_na_sentinel=True)
+    if (codigos < 0).any() or len(distintos) * 2 > len(serie):
+        return convertir(serie)
+    convertidos = convertir(pd.Series(distintos, dtype=serie.dtype))
+    return pd.Series(
+        convertidos.array.take(codigos), index=serie.index, name=serie.name,
+    )
+
+
 def _sacar_horas_inexistentes(df, horas_inexistentes, registrar):
     """Saca las filas de las horas que no existieron (ver arriba)."""
 
@@ -294,17 +334,17 @@ def _sacar_horas_inexistentes(df, horas_inexistentes, registrar):
     # 0..23 se corre en uno para comparar.
     desfase = 1 if df["HORA"].min() == 0 else 0
     periodo = df["HORA"].astype("float") + desfase
-    sobra = pd.Series(
-        [
-            (fecha, int(p)) in pares if pd.notna(p) else False
-            for fecha, p in zip(df["FECHA_DT"], periodo)
-        ],
-        index=df.index,
-    )
+    # Las horas que sobran son pocas (una por cambio de hora): se marcan
+    # con una comparacion por hora en vez de fila por fila.
+    sobra = pd.Series(False, index=df.index)
+    for fecha, p in pares:
+        sobra |= (df["FECHA_DT"] == fecha) & (periodo == p)
     if not sobra.any():
         return df
 
     valores = df.loc[sobra, COLUMNA_VALOR]
+    if not pd.api.types.is_numeric_dtype(valores):
+        valores = _a_numero(valores)
     con_valor = int(valores.fillna(0).ne(0).sum())
     detalle = ", ".join(
         f"{fecha:%d-%m} hora {p}" for fecha, p in sorted(pares)

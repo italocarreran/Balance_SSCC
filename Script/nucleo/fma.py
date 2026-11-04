@@ -17,7 +17,7 @@ from .lectura import (
     _bloques_columnas_diccionario, _clave_titulo, mapa_diccionario,
 )
 from .parametros import (
-    ARCHIVO_CENTRALES, CARPETA_FD_FMA, HOJA_DICCIONARIO,
+    ARCHIVO_CENTRALES, CARPETA_FD_FMA, FMA_CON_CTF, HOJA_DICCIONARIO,
 )
 from .utiles import (
     ErrorEntrada, _texto_seguro, _tiene_valor, normalizar,
@@ -170,7 +170,7 @@ def cargar_tablas_fma(carpeta_fd_fma, aamm, registrar=print):
                 archivos["csf"], registrar=registrar
             )
 
-        if archivos["ctf"]:
+        if archivos["ctf"] and FMA_CON_CTF:
             (
                 tablas["ctf_unidad"],
                 tablas["ctf_configuracion"],
@@ -181,7 +181,7 @@ def cargar_tablas_fma(carpeta_fd_fma, aamm, registrar=print):
     except fma_subastas.ErrorFma as error:
         raise ErrorEntrada(str(error)) from error
 
-    for tipo in ("cpf", "csf", "ctf"):
+    for tipo in ("cpf", "csf", "ctf") if FMA_CON_CTF else ("cpf", "csf"):
         if not archivos[tipo]:
             registrar(
                 f"  [AVISO] no se encontro fma_{tipo}_{aamm} en "

@@ -23,6 +23,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from .lector import abrir_excel, leer_excel
 from .utiles import ErrorEntrada, normalizar
 
 
@@ -81,7 +82,7 @@ def leer_prorrata_retiros(ruta, registrar=None):
     registrar = registrar or (lambda _mensaje: None)
     ruta = Path(ruta)
     try:
-        with pd.ExcelFile(ruta) as excel:
+        with abrir_excel(ruta) as excel:
             hojas = list(excel.sheet_names)
     except Exception as error:
         raise ErrorEntrada(f"No se pudo abrir la prorrata {ruta}: {error}") from error
@@ -92,7 +93,7 @@ def leer_prorrata_retiros(ruta, registrar=None):
     # header=0: la primera fila es encabezado. usecols/names: se toman
     # las tres primeras columnas por posicion y se les pone el nombre
     # interno, sin depender del texto del encabezado real.
-    df = pd.read_excel(
+    df = leer_excel(
         ruta, sheet_name=HOJA_ORIGEN, header=0, usecols=[0, 1, 2],
         names=list(COLUMNAS_ORIGEN),
     )

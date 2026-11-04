@@ -25,6 +25,13 @@ RE545**, y el cierre económico mediante **COMPENSACION_CENTRAL**,
 pip install -r requirements.txt
 ```
 
+`python-calamine` (incluido en requirements.txt) lee los Excel varias veces
+más rápido. Si no está instalado el programa funciona igual, más lento:
+
+```bash
+pip install python-calamine
+```
+
 ## Uso
 
 ```bash

@@ -10,6 +10,8 @@ from .cambio_hora import hora_mes_correlativa
 from .parametros import (
     COLUMNA_CENTRAL, HOJA_CMG_ORIGEN, HOJA_CPF_HORARIO, HOJA_CSF_HORARIO,
 )
+from .lector import abrir_excel, leer_excel
+from .lectura import fila_de_encabezado, leer_hoja_con_fila_vacia
 from .utiles import ErrorEntrada, _entero_a_texto, _texto_seguro
 
 
@@ -132,7 +134,9 @@ def leer_cmg(ruta_cmg, registrar=print):
     archivo (fila 1), igual que hace la macro al no tocarlo.
     """
 
-    with pd.ExcelFile(ruta_cmg) as excel:
+    # cmg.xlsx lo escribe este programa (generar_cmg): numeros y textos,
+    # se lee con el motor rapido (ver lector.py).
+    with abrir_excel(ruta_cmg) as excel:
         hojas = list(excel.sheet_names)
 
     if not hojas:
@@ -146,7 +150,7 @@ def leer_cmg(ruta_cmg, registrar=print):
         else hojas[0]
     )
 
-    df = pd.read_excel(ruta_cmg, sheet_name=nombre_hoja)
+    df = leer_excel(ruta_cmg, sheet_name=nombre_hoja)
 
     if df.shape[1] < 9:
         raise ErrorEntrada(
@@ -314,21 +318,23 @@ def construir_fd(ruta_sscc, registrar=print):
 
     ruta_sscc = Path(ruta_sscc)
 
+    # Las dos hojas desde UN libro abierto (antes se abria tres veces).
+    # Sigue con openpyxl: es un archivo de otro sistema, con fechas.
     with pd.ExcelFile(ruta_sscc) as excel:
         hojas = list(excel.sheet_names)
 
-    for hoja in (HOJA_CPF_HORARIO, HOJA_CSF_HORARIO):
-        if hoja not in hojas:
-            raise ErrorEntrada(
-                f"No existe la hoja '{hoja}' en {ruta_sscc.name}."
-            )
+        for hoja in (HOJA_CPF_HORARIO, HOJA_CSF_HORARIO):
+            if hoja not in hojas:
+                raise ErrorEntrada(
+                    f"No existe la hoja '{hoja}' en {ruta_sscc.name}."
+                )
 
-    df_cpf_crudo = pd.read_excel(
-        ruta_sscc, sheet_name=HOJA_CPF_HORARIO, header=None
-    )
-    df_csf_crudo = pd.read_excel(
-        ruta_sscc, sheet_name=HOJA_CSF_HORARIO, header=None
-    )
+        df_cpf_crudo = pd.read_excel(
+            excel, sheet_name=HOJA_CPF_HORARIO, header=None
+        )
+        df_csf_crudo = pd.read_excel(
+            excel, sheet_name=HOJA_CSF_HORARIO, header=None
+        )
 
     # Fila 12 de Excel (1-indexada) = indice 11 (0-indexado).
     # CPF: columnas B:J (9); CSF: columnas B:H (7).
@@ -456,7 +462,7 @@ def leer_cmg_consolidado(ruta_consolidado, registrar=print, libro=None):
     fuente = ruta_consolidado if libro is None else libro
 
     try:
-        df = pd.read_excel(fuente, sheet_name=HOJA_CMG_CONSOLIDADO)
+        df = leer_hoja_con_fila_vacia(fuente, HOJA_CMG_CONSOLIDADO)
     except ValueError as error:
         raise ErrorEntrada(
             f"{ruta_consolidado.name} no tiene la hoja "
@@ -636,7 +642,7 @@ def leer_fd_consolidado(ruta_consolidado, registrar=print, libro=None):
     fuente = ruta_consolidado if libro is None else libro
 
     try:
-        crudo = pd.read_excel(
+        crudo = leer_excel(
             fuente, sheet_name=HOJA_FD_CONSOLIDADO, header=None
         )
     except ValueError as error:
@@ -645,6 +651,11 @@ def leer_fd_consolidado(ruta_consolidado, registrar=print, libro=None):
             f"'{HOJA_FD_CONSOLIDADO}' todavia. Genera "
             f"esa hoja primero (tildando 'FD')."
         ) from error
+
+    # Fila 1 vacia y "Cuadro N° ..." en la 2 (encabezados en la 3); un
+    # libro de antes los tiene en la 1. Se deja 'crudo' empezando en el
+    # encabezado, como antes.
+    crudo = crudo.iloc[fila_de_encabezado(crudo):].reset_index(drop=True)
 
     bloques = [
         columnas for columnas in _bloques_de_columnas(crudo)
@@ -665,6 +676,12 @@ def leer_fd_consolidado(ruta_consolidado, registrar=print, libro=None):
     encontrados = {}
 
     for columnas in bloques:
+
+        # La hoja trae 'Central' como PRIMERA columna de cada bloque;
+        # el resto del programa la espera al final (como venia antes):
+        # se la pasa al final y sigue todo igual.
+        if _texto_seguro(crudo.iloc[0, columnas[0]]) == COLUMNA_CENTRAL:
+            columnas = columnas[1:] + columnas[:1]
 
         # Desde que se importa con la columna 'Central' (el nombre
         # Balance_BESS de la unidad, ver agregar_central_fd), cada

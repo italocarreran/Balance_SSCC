@@ -114,8 +114,8 @@ class TestHojaCentrales(unittest.TestCase):
             ):
                 self.assertIn(nombre, hojas)
 
-            # COMPENSACION_CENTRAL: detalle y total por central de cada
-            # hoja de calculo, y al final el total por empresa.
+            # COMPENSACION_CENTRAL: detalle y total por central (E Costos
+            # y RE545 lado a lado), y al final el total por empresa.
             import openpyxl
             libro = openpyxl.load_workbook(
                 base / nucleo.ARCHIVO_SALIDA, read_only=True
@@ -125,9 +125,9 @@ class TestHojaCentrales(unittest.TestCase):
             ))
             libro.close()
             titulos = [t for t in fila_titulos if t]
-            self.assertEqual(len(titulos), 5, titulos)
-            self.assertIn("E Costos: total por central", titulos[1])
-            self.assertIn("RE545: total por central", titulos[3])
+            self.assertEqual(len(titulos), 3, titulos)
+            self.assertIn("ciclo/ventana", titulos[0])
+            self.assertIn("total por central", titulos[1])
 
     def test_da_lo_mismo_que_leyendo_centrales_xlsx(self):
         with tempfile.TemporaryDirectory() as uno, \
@@ -599,6 +599,62 @@ class TestFdYFmaSeAplicanEnRe545(unittest.TestCase):
                 tablas[clave], leidas[clave], check_dtype=False
             )
         self.assertIsNone(leidas["ctf_unidad"])
+
+    def test_la_hoja_fma_sale_con_cuadros_y_sin_ctf(self):
+        import openpyxl
+
+        tablas = {
+            "cpf": pd.DataFrame({"Central": ["A"], "FMA_CPF_mas": [0.5]}),
+            "csf": pd.DataFrame({"Año": [2026], "FMA_CSF_mas_base": [0.3]}),
+            # Aunque venga, el CTF no se escribe (FMA_CON_CTF apagado).
+            "ctf_unidad": pd.DataFrame({"x": [1]}),
+            "ctf_configuracion": None,
+        }
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            nucleo.escribir_salida(
+                None, ruta, [], [], hojas_regenerar={nucleo.HOJA_FMA},
+                tablas_fma=tablas, registrar=lambda *a: None,
+            )
+            hoja = openpyxl.load_workbook(ruta)[nucleo.HOJA_FMA]
+            leidas = nucleo.leer_fma_consolidado(
+                ruta, registrar=lambda *a: None
+            )
+
+        self.assertTrue(all(c.value is None for c in hoja[1]))
+        titulos = [c.value for c in hoja[2] if c.value]
+        self.assertEqual(titulos, [
+            "Cuadro N° 1 — FMA CPF (fma_cpf)",
+            "Cuadro N° 2 — FMA CSF (fma_csf)",
+        ])
+        self.assertEqual(hoja["B3"].value, "Central")
+        self.assertEqual(hoja["B2"].font.color.rgb[-6:], "244062")
+        self.assertIsNone(hoja["B2"].fill.fill_type)
+        # Margen en A y una columna de separacion entre cuadros.
+        self.assertEqual(
+            {str(r) for r in hoja.merged_cells.ranges}, {"B2:C2", "E2:F2"}
+        )
+        self.assertIsNone(leidas["ctf_unidad"])
+        self.assertEqual(leidas["cpf"]["FMA_CPF_mas"].tolist(), [0.5])
+
+    def test_una_hoja_fma_de_antes_se_sigue_leyendo(self):
+        # Titulos en la fila 1, sin "Cuadro N°" (como se escribia antes).
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = Path(carpeta) / nucleo.ARCHIVO_SALIDA
+            with pd.ExcelWriter(ruta) as writer:
+                pd.DataFrame([["FMA CPF (fma_cpf)"]]).to_excel(
+                    writer, sheet_name=nucleo.HOJA_FMA, index=False,
+                    header=False,
+                )
+                pd.DataFrame({"Central": ["A"], "FMA_CPF_mas": [0.5]}).to_excel(
+                    writer, sheet_name=nucleo.HOJA_FMA, index=False,
+                    startrow=1,
+                )
+            leidas = nucleo.leer_fma_consolidado(
+                ruta, registrar=lambda *a: None
+            )
+        self.assertEqual(leidas["cpf"]["Central"].tolist(), ["A"])
+        self.assertIsNone(leidas["csf"])
 
     def test_re545_sin_hoja_fma_dice_que_hay_que_generarla(self):
         with tempfile.TemporaryDirectory() as carpeta:

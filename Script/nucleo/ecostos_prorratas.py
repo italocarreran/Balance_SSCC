@@ -3,6 +3,7 @@
 E Costos, etapa 3: prorrata (AG:AL), FD (AM:AR) y energia ajustada (AS, AT).
 """
 
+import numpy as np
 import pandas as pd
 
 from .lectura import (
@@ -402,10 +403,24 @@ def _nombres_unidades(unidades):
     return list(unidades)
 
 
+def _numero_de(valor):
+    """
+    pd.to_numeric(pd.Series([valor]), errors="coerce").iloc[0], sin armar
+    una Series por valor cuando ya es un numero (lo normal: miles de
+    veces por corrida). Texto, bool u otra cosa: el camino de siempre.
+    """
+
+    if isinstance(valor, (int, float, np.integer, np.floating)) and not isinstance(
+        valor, (bool, np.bool_)
+    ):
+        return valor
+    return pd.to_numeric(pd.Series([valor]), errors="coerce").iloc[0]
+
+
 def _fd_numero(valor):
     """El FD como numero; None si viene vacio o no es numerico."""
 
-    numero = pd.to_numeric(pd.Series([valor]), errors="coerce").iloc[0]
+    numero = _numero_de(valor)
     return None if pd.isna(numero) else float(numero)
 
 
@@ -468,6 +483,13 @@ def calcular_fd_prorrateado(
     ausentes_cpf = {}
     ausentes_csf = {}
 
+    # Listas en vez de .iloc por fila (rendimiento; mismos valores).
+    pide_cpf_menos = (pr_cpf_menos != 0).tolist()
+    pide_csf_menos = (pr_csf_menos != 0).tolist()
+    pide_cpf_mas = (pr_cpf_mas != 0).tolist()
+    pide_csf_mas = (pr_csf_mas != 0).tolist()
+    con_sscc_lista = con_sscc.tolist()
+
     for posicion, (central, hora) in enumerate(
         zip(df_ecostos["clave"], df_ecostos["Hora Mes"])
     ):
@@ -476,13 +498,13 @@ def calcular_fd_prorrateado(
         filas.append(fila)
 
         pide = (
-            pr_cpf_menos.iloc[posicion] != 0,
-            pr_csf_menos.iloc[posicion] != 0,
-            pr_cpf_mas.iloc[posicion] != 0,
-            pr_csf_mas.iloc[posicion] != 0,
+            pide_cpf_menos[posicion],
+            pide_csf_menos[posicion],
+            pide_cpf_mas[posicion],
+            pide_csf_mas[posicion],
         )
 
-        if not con_sscc.iloc[posicion] or not any(pide):
+        if not con_sscc_lista[posicion] or not any(pide):
             continue
 
         mapeo = dic_mapeo.get(normalizar(central))
@@ -491,7 +513,7 @@ def calcular_fd_prorrateado(
             sin_diccionario.add(_texto_seguro(central))
             continue
 
-        hora_num = pd.to_numeric(pd.Series([hora]), errors="coerce").iloc[0]
+        hora_num = _numero_de(hora)
         if pd.isna(hora_num):
             continue
 

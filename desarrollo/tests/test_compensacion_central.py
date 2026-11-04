@@ -172,3 +172,145 @@ class TestResumen(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCuadrosCombinados(unittest.TestCase):
+    """E Costos y RE545 lado a lado (antes cuadros 1+3 y 2+4 separados)."""
+
+    def setUp(self):
+        ecostos = pd.DataFrame({
+            "Configuracion": ["BESS UNO", "BESS UNO", "BESS DOS"],
+            "Ciclo de Carga del mes": [1, 2, 1],
+            "Monto a compensar": [100.0, 0.0, 90.0],
+        })
+        re545 = pd.DataFrame({
+            "Configuracion": ["BESS UNO", "BESS UNO"],
+            "Ventana de valorizacion": [1, 3],
+            "Monto a compensar": [20.0, 5.0],
+        })
+        self.por_ecostos, self.por_re545, self.total = (
+            nucleo.construir_compensacion_central(ecostos, re545, RESUMEN_BESS)
+        )
+
+    def test_detalle_sin_empresa_y_ordenado_por_central(self):
+        detalle = nucleo.detalle_combinado(self.por_ecostos, self.por_re545)
+        self.assertEqual(list(detalle.columns), [
+            "Central", "Ciclo / Ventana", "Compensación Ecostos [$]",
+            "Compensación RE545 [$]", "Compensación Total [$]",
+        ])
+        filas = {
+            (c, v): (e, r) for c, v, e, r, _ in detalle.itertuples(index=False)
+        }
+        self.assertEqual(filas[("BESS UNO", 1)], (100.0, 20.0))
+        self.assertEqual(filas[("BESS UNO", 3)], (0.0, 5.0))
+        # Las ventanas de cada central juntas, con o sin compensacion.
+        self.assertEqual(
+            list(zip(detalle["Central"], detalle["Ciclo / Ventana"])),
+            [("BESS DOS", 1), ("BESS UNO", 1), ("BESS UNO", 2),
+             ("BESS UNO", 3)],
+        )
+        self.assertEqual(filas[("BESS UNO", 2)], (0.0, 0.0))
+
+    def test_por_central_con_empresa_y_total_que_cierra(self):
+        central = nucleo.por_central_combinado(self.por_ecostos, self.por_re545)
+        self.assertEqual(list(central.columns), [
+            "Central", "Empresa", "Compensación Ecostos [$]",
+            "Compensación RE545 [$]", "Compensación Total [$]",
+        ])
+        uno = central.set_index("Central").loc["BESS UNO"]
+        self.assertEqual(uno["Empresa"], "COLBUN S.A.")
+        self.assertAlmostEqual(uno["Compensación Total [$]"], 125.0)
+        self.assertAlmostEqual(
+            central["Compensación Total [$]"].sum(),
+            self.total["Compensación Total [$]"].sum(),
+        )
+
+    def test_un_lado_vacio_queda_en_cero(self):
+        central = nucleo.por_central_combinado(self.por_ecostos, pd.DataFrame())
+        self.assertTrue(central["Compensación RE545 [$]"].eq(0.0).all())
+        vacio = nucleo.detalle_combinado(pd.DataFrame(), None)
+        self.assertTrue(vacio.empty)
+        self.assertIn("Compensación Total [$]", vacio.columns)
+
+
+class TestFormatoDeLasHojas(unittest.TestCase):
+    """Titulos de cuadro, filtro y comentarios en el libro escrito."""
+
+    def _escribir(self, ruta, detalle, central, empresa):
+        cuarto = pd.DataFrame({
+            "Cuarto de Hora": [1, 2], "Monto a compensar [$]": [10.0, 20.0],
+        })
+        reparto = pd.DataFrame({
+            "Cuarto de Hora": [1, 2], "Suministrador": ["A", "A"],
+            "Prorrata": [1.0, 1.0], "Monto a pagar [$]": [10.0, 20.0],
+        })
+        pagos = pd.DataFrame({"Suministrador": ["A"], "Total a pagar [$]": [30.0]})
+        nucleo.escribir_pagos_bess(
+            ruta, df_compensacion_detalle=detalle,
+            df_compensacion_central=central, df_compensacion_empresa=empresa,
+            df_compensacion_cuarto=cuarto, df_prorrata_retiros=reparto,
+            df_pagos_suministrador=pagos,
+            hojas_regenerar={"COMPENSACION_CENTRAL", "PRORRATA_RETIROS"},
+            registrar=lambda _m: None,
+        )
+
+    def test_titulos_y_comentarios_sin_filtro(self):
+        import tempfile
+        import zipfile
+        from pathlib import Path
+
+        import openpyxl
+
+        ecostos = pd.DataFrame({
+            "Configuracion": ["BESS UNO"] * 4 + ["BESS DOS"] * 2,
+            "Ciclo de Carga del mes": [1, 2, 3, 4, 1, 2],
+            "Monto a compensar": [10.0, 20.0, 0.0, 0.0, 5.0, 0.0],
+        })
+        por_ecostos, por_re545, empresa = nucleo.construir_compensacion_central(
+            ecostos, pd.DataFrame(), RESUMEN_BESS
+        )
+        detalle = nucleo.detalle_combinado(por_ecostos, por_re545)
+        central = nucleo.por_central_combinado(por_ecostos, por_re545)
+
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = Path(carpeta) / "salida.xlsx"
+            # Dos veces: la segunda reemplaza las hojas (y sus
+            # comentarios) en un libro que ya existe.
+            self._escribir(ruta, detalle, central, empresa)
+            self._escribir(ruta, detalle, central, empresa)
+
+            with zipfile.ZipFile(ruta) as z:
+                comentarios = [n for n in z.namelist() if "comments" in n]
+            self.assertEqual(len(comentarios), 1, comentarios)
+
+            libro = openpyxl.load_workbook(ruta)
+            prorrata = libro["PRORRATA_RETIROS"]
+            self.assertIsNone(prorrata["B1"].value)
+            self.assertEqual(prorrata.row_dimensions[1].height, 14.5)
+            self.assertEqual(prorrata.row_dimensions[2].height, 14.5)
+            combinadas = {str(r) for r in prorrata.merged_cells.ranges}
+            # Una columna de separacion entre cuadros.
+            self.assertEqual(combinadas, {"B2:C2", "E2:H2", "J2:K2"})
+            titulo = prorrata["B2"]
+            self.assertEqual(titulo.font.color.rgb[-6:], "244062")
+            self.assertIsNone(titulo.fill.fill_type)
+            self.assertEqual(prorrata["B3"].fill.fill_type, "solid")
+            self.assertIn("Pago(e,q)", prorrata["H3"].comment.text)
+            self.assertIn("Total(e)", prorrata["K3"].comment.text)
+            # La columna del cuarto de hora queda al ancho de su nombre.
+            self.assertLess(prorrata.column_dimensions["B"].width, 20)
+
+            compensacion = libro["COMPENSACION_CENTRAL"]
+            self.assertIsNone(compensacion["B1"].value)
+            self.assertEqual(compensacion["B3"].value, "Central")
+            self.assertEqual(compensacion["B3"].fill.fill_type, "solid")
+            self.assertEqual(compensacion["H3"].value, "Central")
+            self.assertEqual(compensacion["I3"].value, "Empresa")
+            self.assertEqual(compensacion["N3"].value, "Empresa")
+            self.assertEqual(compensacion["F3"].value, "Compensación Total [CLP]")
+            self.assertEqual(prorrata["H3"].value, "Monto a pagar [CLP]")
+            self.assertIsNone(compensacion.auto_filter.ref)
+            self.assertFalse(any(
+                d.hidden for d in compensacion.row_dimensions.values()
+            ))
+            self.assertEqual(compensacion["B2"].alignment.horizontal, "left")

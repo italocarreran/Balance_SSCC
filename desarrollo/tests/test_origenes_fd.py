@@ -290,7 +290,9 @@ class FilasConRutaTest(unittest.TestCase):
             self.assertEqual(filas["cmg_csv"]["origen"]["id"], "cmg_csv")
             self.assertEqual(filas["db_subastas"]["origen"]["id"], "subastas")
 
-            for tipo in ("cpf", "csf", "ctf"):
+            # El CTF esta apagado (FMA_CON_CTF): sin fila en la ventana.
+            self.assertNotIn("fma_ctf", filas)
+            for tipo in ("cpf", "csf"):
                 self.assertEqual(
                     filas[f"fma_{tipo}"]["origen"]["titulo"], "Origen inputs"
                 )

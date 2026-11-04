@@ -27,6 +27,7 @@ from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, HOJA_CALCULO_ECOSTOS,
     HOJA_RESUMEN_BESS,
 )
+from .lectura import ROL_FD
 from .utiles import normalizar
 
 
@@ -178,22 +179,24 @@ NOMBRES_CALCULO_E_COSTOS = {
     "AD": "Curva monotona CMg Carga",
     "AE": "Energía descargada",
     "AF": "Energía cargada",
-    "AG": "CPF(-)",
-    "AH": "CSF(-)",
+    # Prorratas y FD llevan el prefijo en el nombre (antes se
+    # distinguian por un encabezado de grupo).
+    "AG": "Prorrata CPF(-)",
+    "AH": "Prorrata CSF(-)",
     "AI": "CTF(-)",
-    "AJ": "CPF(+)",
-    "AK": "CSF(+)",
+    "AJ": "Prorrata CPF(+)",
+    "AK": "Prorrata CSF(+)",
     "AL": "CTF(+)",
-    "AM": "CPF(-)",
-    "AN": "CSF(-)",
+    "AM": "FD CPF(-)",
+    "AN": "FD CSF(-)",
     "AO": "CTF(-)",
-    "AP": "CPF(+)",
-    "AQ": "CSF(+)",
+    "AP": "FD CPF(+)",
+    "AQ": "FD CSF(+)",
     "AR": "CTF(+)",
     "AS": "Descarga ajustada FD-prorrata kWh",
     "AT": "Carga ajustada FD-prorrata kWh",
-    "AU": "Energía SSCC (descargada con FD-Prorrata) por remunerar",
-    "AV": "Energía SSCC (cargada con FD-Prorrata) por remunerar",
+    "AU": "Energía descargada por remunerar",
+    "AV": "Energía cargada por remunerar",
     "AW": "Asignación Descarga kWh",
     "AX": "Asignación Carga kWh",
     "AY": "Valorización Descarga [$]",
@@ -215,16 +218,248 @@ NOMBRES_CALCULO_E_COSTOS = {
 # paso a paso con el que un coordinado sigue de donde sale cada peso.
 # Tampoco las CTF en 0 (AI, AL, AO, AR): que el CTF sea 0 es un dato,
 # no una columna de relleno.
-COLUMNAS_AUXILIARES_E_COSTOS = ("X",)
+#
+# Pedido del usuario (2026-11-03, "ordenar la hoja de Ecostos") salen
+# tambien, sin dejar de calcularse:
+#   - las CTF (AI, AL, AO, AR): siempre 0, no se usan;
+#   - las del metodo anterior que no llegan al monto: M "SoC sobre el
+#     minimo", N / O "Energía SSCC (-)/(+) por remunerar" (sin FD) y
+#     AE / AF "Energía descargada / cargada" (su reparto en Pmax).
+COLUMNAS_AUXILIARES_E_COSTOS = (
+    "X", "AI", "AL", "AO", "AR", "M", "N", "O", "AE", "AF",
+)
 
-# Orden final de columnas internas de la hoja (el de
-# NOMBRES_CALCULO_E_COSTOS sin los auxiliares). Lo usan
-# renombrar_calculo_e_costos() y, para ubicar los encabezados de
-# grupo, escribir_pagos_bess().
+# La hoja en tres cuadros, en el orden del calculo: lo que se trae de
+# otras hojas y la energia ajustada por FD-prorrata; el Componente 1
+# (curva de CMg, energia ajustada acumulada, asignacion y su
+# valorizacion); el Componente 2 (energia medida a su CMg) y el monto
+# = C1 - C2. (titulo, [claves internas]).
+CUADROS_CALCULO_E_COSTOS = (
+    ("Información y energía con FD-prorrata", [
+        "Mes", "Dia", "Hora", "Hora Mes", "Minutos", "Cuarto de Hora",
+        "clave", "Barra", "Energia_Positiva", "Energia_Negativa", "SoC",
+        "Copia_Ventana", "CMg", "L",
+        "AG", "AH", "AJ", "AK", "AM", "AN", "AP", "AQ", "AS", "AT",
+    ]),
+    ("Componente 1", [
+        "R", "W", "Y", "AB", "AC", "AD", "AU", "AV", "AW", "AX",
+        "AY", "AZ", "BA",
+    ]),
+    ("Componente 2", ["S", "T", "U"]),
+    # Aparte y destacado (pedido del usuario): es el pago.
+    ("Monto a compensar", ["BC"]),
+)
+
+# Columnas que se calculan con datos de la MISMA fila: van a la hoja
+# como formula de Excel (pedido del usuario: "prefiero la formula"), con
+# los nombres internos entre llaves; la escritura los cambia por la
+# letra de la columna y el numero de la fila. Dan exactamente lo mismo
+# que el calculo en Python (ver calcular_energia_ajustada,
+# calcular_s_t_u y calcular_valorizacion), que sigue siendo el que
+# alimenta el monto: una celda vacia vale 0 en los dos.
+FORMULAS_E_COSTOS = {
+    "AS": "={Energia_Positiva}*({AG}*{AM}+{AH}*{AN}+{AJ}*{AP}+{AK}*{AQ})",
+    "AT": "={Energia_Negativa}*({AG}*{AM}+{AH}*{AN}+{AJ}*{AP}+{AK}*{AQ})",
+    "S": "={Energia_Positiva}*{CMg}",
+    "T": "={Energia_Negativa}*{CMg}",
+    "U": "={L}*({S}+{T})",
+    "BA": "={AY}+{AZ}",
+}
+
+# Columnas con su total en la fila 1, sobre el nombre de la columna.
+TOTALES_E_COSTOS = ("BA", "U", "BC")
+
+# Curvas monotonas de CMg: el puesto que ya no tiene una fila que cumpla
+# (Adj SSCC = 1 y energia distinta de 0) se ve con un guion, no vacio
+# (pedido del usuario). Solo en la hoja: el calculo usa el valor vacio y
+# ninguna formula mira estas columnas.
+SIN_PUESTO_E_COSTOS = ("AB", "AD")
+
+# Formula de Excel EQUIVALENTE para el comentario de las columnas que se
+# calculan mirando otras filas (pedido del usuario: "como para que los
+# coordinados puedan probar"). No se escribe en las celdas: el valor lo
+# calcula el programa. Plantillas: {clave} = la celda de la fila de
+# ejemplo, {clave:r} = el rango entero de la columna ($X$4:$X$n),
+# {clave:a} = desde la primera fila hasta la de ejemplo, {clave@-1} = la
+# fila de arriba. Las que necesitan otra hoja (Pmax, Subastas) no van.
+_GRUPO_EC = "{clave:r},{clave},{Copia_Ventana:r},{Copia_Ventana}"
+FORMULAS_PRUEBA_E_COSTOS = {
+    "R": (
+        f"=COUNTIFS({_GRUPO_EC},{{CMg:r}},\">\"&{{CMg}})"
+        f"+COUNTIFS({_GRUPO_EC},{{CMg:r}},{{CMg}},"
+        "{Cuarto de Hora:r},\">\"&{Cuarto de Hora})+1"
+    ),
+    "W": "=IF({Copia_Ventana}={Copia_Ventana@-1},{W@-1}+1,1)",
+    "AB": (
+        "=IFERROR(LARGE(IF(({clave:r}={clave})*({Copia_Ventana:r}="
+        "{Copia_Ventana})*({L:r}=1)*({Energia_Positiva:r}<>0),{CMg:r}),"
+        "COUNTIFS({clave:a},{clave},{Copia_Ventana:a},{Copia_Ventana})),"
+        "\"–\")"
+    ),
+    "AD": (
+        "=IFERROR(SMALL(IF(({clave:r}={clave})*({Copia_Ventana:r}="
+        "{Copia_Ventana})*({L:r}=1)*({Energia_Negativa:r}<>0),{CMg:r}),"
+        "COUNTIFS({clave:a},{clave},{Copia_Ventana:a},{Copia_Ventana})),"
+        "\"–\")"
+    ),
+    "AU": (
+        f"=SUMIFS({{AS:r}},{_GRUPO_EC},{{L:r}},1,"
+        "{Cuarto de Hora:r},\">=\"&{Cuarto de Hora})"
+    ),
+    "AV": (
+        f"=-SUMIFS({{AT:r}},{_GRUPO_EC},{{L:r}},1,"
+        "{Cuarto de Hora:r},\">=\"&{Cuarto de Hora})"
+    ),
+    "AY": (
+        "=IF(SUMIFS({Energia_Positiva:r},{Copia_Ventana:r},{Copia_Ventana})"
+        f">10,IFERROR({{AW}}*AVERAGEIFS({{AB:r}},{_GRUPO_EC},{{AW:r}},"
+        "\"<>0\"),0),0)"
+    ),
+    "AZ": (
+        "=IF(SUMIFS({Energia_Negativa:r},{Copia_Ventana:r},{Copia_Ventana})"
+        f"<-10,IFERROR({{AX}}*AVERAGEIFS({{AD:r}},{_GRUPO_EC},{{AX:r}},"
+        "\"<>0\"),0),0)"
+    ),
+    "BC": (
+        f"=MAX(0,(SUMIFS({{BA:r}},{_GRUPO_EC})-SUMIFS({{U:r}},{_GRUPO_EC}))"
+        f"/COUNTIFS({_GRUPO_EC}))"
+    ),
+}
+# Las de esta lista son matriciales (Ctrl+Shift+Enter en Excel 2019 o
+# anterior; en Excel 365 se escriben normal).
+MATRICIALES_E_COSTOS = ("AB", "AD")
+GUION_SIN_PUESTO = "–"
+
+# Orden final de columnas internas de la hoja: los tres cuadros
+# seguidos. Lo usan renombrar_calculo_e_costos() y escribir_pagos_bess()
+# (que la parte en sus cuadros).
 COLUMNAS_SALIDA_E_COSTOS = [
-    clave for clave in NOMBRES_CALCULO_E_COSTOS
-    if clave not in COLUMNAS_AUXILIARES_E_COSTOS
+    clave for _, claves in CUADROS_CALCULO_E_COSTOS for clave in claves
 ]
+
+# Comentario del encabezado de las columnas que vienen de otra hoja (o
+# que usan un dato de otra hoja que no esta como columna): de donde sale
+# y con que condicion.
+_MEDIDORES = "Hoja origen: Medidores, Cuadro 1"
+_GRUPO = "central + ciclo (Configuracion + Ciclo de Carga del mes)"
+ORIGEN_COLUMNAS_E_COSTOS = {
+    # B:H (Mes ... Configuracion) sin comentario: pedido del usuario.
+    "Barra": (
+        "Hoja origen: Centrales, Cuadro 1 Resumen BESS (Barra inyección). "
+        "Se busca por Configuracion."
+    ),
+    "Energia_Positiva": (
+        f"{_MEDIDORES} (Gen_Unidad). Solo la parte positiva y solo en las "
+        "filas que van a E Costos (Ventana_No_Completa = 1); en las demás, 0."
+    ),
+    "Energia_Negativa": (
+        f"{_MEDIDORES} (Gen_Unidad). Solo la parte negativa y solo en las "
+        "filas que van a E Costos (Ventana_No_Completa = 1); en las demás, 0."
+    ),
+    "SoC": f"{_MEDIDORES} (SoC). Copia directa.",
+    "Copia_Ventana": f"{_MEDIDORES} (Copia_Ventana). Copia directa.",
+    "CMg": (
+        "Hoja origen: CMg, Cuadro 1 (F_CMg). Se busca por Barra + Bloque "
+        "horario."
+    ),
+    "L": (
+        "Hoja origen: Subastas, Cuadro 1. 1 si la central tiene subasta "
+        "adjudicada (BAJADA o SUBIDA) en ese mes, día y hora; si no, 0."
+    ),
+    **{
+        clave: (
+            "Se calcula desde Subastas, Cuadro 1: por central y Hora mes, "
+            f"filas de {servicio} / total de filas de esa central y hora "
+            "(la fila suma 1)."
+        )
+        for clave, servicio in (
+            ("AG", "CPF(-)"), ("AH", "CSF(-)"),
+            ("AJ", "CPF(+)"), ("AK", "CSF(+)"),
+        )
+    },
+    **{
+        clave: (
+            f"Hoja origen: FD, {cuadro} (columna {servicio}). Se busca por "
+            "Hora mes + unidad de la central (columna Central de la hoja FD "
+            "o Diccionario). Solo si Adj SSCC = 1 y la prorrata del servicio "
+            "es distinta de 0; si no, 0."
+        )
+        for clave, cuadro, servicio in (
+            ("AM", "Cuadro 2 FD CPF", "CPF(-)"),
+            ("AN", "Cuadro 1 FD CSF", "CSF(-)"),
+            ("AP", "Cuadro 2 FD CPF", "CPF(+)"),
+            ("AQ", "Cuadro 1 FD CSF", "CSF(+)"),
+        )
+    },
+    **{
+        clave: (
+            "Usa Pmax (MW) de Centrales, Cuadro 1 Resumen BESS (se busca por "
+            "Configuracion): el máximo del acumulado de la energía ajustada "
+            "del ciclo se reparte en bloques de Pmax/4 × 1000 kWh según el "
+            "Bloque ordenado. Sin Pmax queda vacía."
+        )
+        for clave in ("AW", "AX")
+    },
+    # Cuadro 2: lo que se calcula mirando otras filas (no va formula).
+    "R": (
+        f"Puesto del CMg dentro de su {_GRUPO}: de mayor a menor CMg (en "
+        "empate, Bloque horario de mayor a menor); los empates comparten "
+        "el puesto."
+    ),
+    "W": (
+        "Contador de bloques: sube de 1 en 1 y vuelve a 1 cada vez que "
+        "cambia el Ciclo de Carga del mes respecto de la fila de arriba. Es "
+        "la posición del bloque en la curva monótona (Asignación)."
+    ),
+    "Y": (
+        f"Curva monótona de descarga de su {_GRUPO}: las filas con Adj "
+        "SSCC = 1 y Descarga distinta de 0, ordenadas por CMg de mayor a "
+        "menor; acá va el Bloque horario de la fila que cae en este puesto."
+    ),
+    "AB": (
+        "El CMg de esa fila de la curva monótona de descarga (vacío si el "
+        "puesto ya no tiene una fila con descarga)."
+    ),
+    "AC": (
+        f"Curva monótona de carga de su {_GRUPO}: las filas con Adj SSCC = "
+        "1 y Carga distinta de 0, ordenadas por CMg de menor a mayor; acá va "
+        "el Bloque horario de la fila que cae en este puesto."
+    ),
+    "AD": (
+        "El CMg de esa fila de la curva monótona de carga (vacío si el "
+        "puesto ya no tiene una fila con carga)."
+    ),
+    "AU": (
+        "Energía con FD-prorrata por remunerar: acumulado de la Descarga "
+        f"ajustada FD-prorrata de su {_GRUPO}, desde el último Bloque "
+        "horario hacia el primero, contando solo filas con Adj SSCC = 1. "
+        "Las filas del mismo Bloque horario llevan el mismo valor."
+    ),
+    "AV": (
+        "Energía con FD-prorrata por remunerar: acumulado de la Carga "
+        f"ajustada FD-prorrata (con el signo cambiado) de su {_GRUPO}, "
+        "desde el último Bloque horario hacia el primero, contando solo "
+        "filas con Adj SSCC = 1. Las filas del mismo Bloque horario llevan "
+        "el mismo valor."
+    ),
+    "AY": (
+        "Asignación Descarga × promedio del CMg de la curva monótona de "
+        f"descarga en las filas de su {_GRUPO} con asignación distinta de "
+        "0. Solo si la Descarga medida total del ciclo (todas las "
+        "centrales) supera 10 kWh; si no, 0."
+    ),
+    "AZ": (
+        "Asignación Carga × promedio del CMg de la curva monótona de carga "
+        f"en las filas de su {_GRUPO} con asignación distinta de 0. Solo si "
+        "la Carga medida total del ciclo (todas las centrales) es menor que "
+        "−10 kWh; si no, 0."
+    ),
+    "BC": (
+        f"Por {_GRUPO}: (Σ Total C1 − Σ Total C2) / número de filas del "
+        "grupo, nunca negativo; el mismo valor en todas las filas del "
+        "grupo. Arriba, el total del mes."
+    ),
+}
 
 
 # Encabezados de grupo de "Calculo E Costos", confirmados contra
@@ -239,17 +474,45 @@ COLUMNAS_SALIDA_E_COSTOS = [
 # direccion) que las Prorratas -- por eso los grupos se arman con las
 # claves internas (unicas), nunca buscando por nombre de columna
 # (duplicado a proposito, como el resto de la hoja).
-GRUPOS_CALCULO_E_COSTOS = (
-    ("Dia", ["Mes", "Dia", "Hora"]),
-    ("Nombre", ["clave", "Barra"]),
-    ("BESS", ["Energia_Positiva", "Energia_Negativa", "SoC"]),
-    ("Componente 2", ["S", "T", "U"]),
-    ("Prorratas (-)", ["AG", "AH", "AI"]),
-    ("Prorratas (+)", ["AJ", "AK", "AL"]),
-    ("FD", ["AM", "AN", "AO", "AP", "AQ", "AR"]),
-    ("Energía con FD-Prorrata", ["AS", "AT", "AU", "AV", "AW", "AX"]),
-    ("Componente 1", ["AY", "AZ", "BA"]),
-)
+# Desde que la hoja va en tres cuadros (CUADROS_CALCULO_E_COSTOS) no
+# lleva encabezados de grupo: el titulo de cada cuadro hace ese papel y
+# prorratas y FD llevan el prefijo en el nombre de la columna.
+GRUPOS_CALCULO_E_COSTOS = ()
+
+
+def _completar_mapeo_con_otros_nombres(
+    df, dic_mapeo, diccionario, df_fd_csf, df_fd_cpf, registrar
+):
+    """
+    Central -> unidad del FD: si la unidad del Diccionario (o la de la
+    columna 'Central' de la hoja FD) no esta en la hoja FD, se prueba
+    con los demas nombres de la central en el Diccionario (Subastas,
+    Ofertas, ...). Si alguno esta, se usa y se avisa (DIC-002).
+    """
+
+    from .equivalencias import Equivalencias
+
+    equivalencias = Equivalencias(diccionario)
+    if not equivalencias:
+        return
+    disponibles = set(unidades_bloque_fd(df_fd_csf)) | set(
+        unidades_bloque_fd(df_fd_cpf)
+    )
+    if not disponibles:
+        return
+
+    for central in pd.unique(df["clave"]):
+        clave = normalizar(central)
+        actual = dic_mapeo.get(clave)
+        if actual is not None and normalizar(actual) in disponibles:
+            continue
+        unidad = equivalencias.buscar(
+            central, ROL_FD, disponibles, "las unidades de la hoja FD"
+        )
+        if unidad is not None:
+            dic_mapeo[clave] = unidad
+
+    equivalencias.informar(registrar)
 
 
 def completar_calculo_e_costos_grupos(
@@ -349,6 +612,9 @@ def completar_calculo_e_costos_grupos(
         if diccionario is not None else {}
     )
     dic_mapeo.update(dic_mapeo_desde_fd(df_fd_csf, df_fd_cpf))
+    _completar_mapeo_con_otros_nombres(
+        df, dic_mapeo, diccionario, df_fd_csf, df_fd_cpf, registrar
+    )
     dic_fd_csf = construir_dic_fd_bloque(df_fd_csf, "id", "CSF(+)", "CSF(-)")
     dic_fd_cpf = construir_dic_fd_bloque(df_fd_cpf, "id", "CPF(+)", "CPF(-)")
 

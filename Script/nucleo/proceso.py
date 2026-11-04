@@ -31,13 +31,19 @@ from .hojas_entrada import (
 )
 from .lectura import (
     construir_homologacion, leer_centrales, leer_centrales_planilla,
-    leer_medidas_sae, obtener_centrales,
+    leer_hoja_con_fila_vacia, leer_medidas_sae, obtener_centrales,
+    fila_de_encabezado, sin_margen_izquierdo,
 )
+from .lector import abrir_excel, leer_excel
+from .matriz_centrales import construir_matriz_centrales
+from .unidades import sin_unidades
 from .medidores import (
     completar_ofertas_en_medidores, construir_medidores,
     construir_ofertas_sscc, reponer_auxiliares_medidores,
 )
-from .ofertas_sscc import leer_ofertas_sscc_consolidado
+from .ofertas_sscc import (
+    construir_resumen_ofertas_sscc, leer_ofertas_sscc_consolidado,
+)
 from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, ARCHIVO_MEDIDAS_SAE,
     CARPETA_DB_SUBASTAS, CARPETA_FD_FMA, COLUMNA_CENTRAL, HOJA_CENTRALES,
@@ -49,7 +55,8 @@ from .prorrata_retiros import (
     leer_prorrata_retiros,
 )
 from .compensacion import (
-    construir_compensacion_central, construir_resumen, total_por_central,
+    construir_compensacion_central, construir_resumen, detalle_combinado,
+    por_central_combinado,
 )
 from .re545 import (
     completar_calculo_re545, completar_checks_resumen_re545,
@@ -163,6 +170,22 @@ def generar_consolidado(
     quiere_medidores = "medidores" in secciones_activas
     quiere_ofertas = "ofertas_sscc" in secciones_activas
 
+    # Los dos archivos de entrada mas pesados de leer (SSCC_Desempeño y
+    # Ofertas) no dependen de nada: se leen en otros procesos mientras
+    # aca se leen el SoC y Medidas_SAE (pedido del usuario: "si es
+    # posible hacer cosas en paralelo que se hagan").
+    lectura_fd = None
+    if "fd" in secciones_activas:
+        archivo_sscc_temprano = buscar_archivo_sscc_desempeno(
+            rutas["sscc_desempeno_dir"]
+        )
+        if archivo_sscc_temprano:
+            lectura_fd = (
+                archivo_sscc_temprano,
+                _lectura_aparte(construir_fd, archivo_sscc_temprano),
+            )
+    lectura_ofertas = None
+
     if quiere_medidores or quiere_ofertas:
 
         aamm_val = validar_aamm(aamm)
@@ -180,6 +203,9 @@ def generar_consolidado(
                     f"No se encontro ningun archivo *OfertasSSCC* en "
                     f"{rutas['ofertas_dir']}"
                 )
+            lectura_ofertas = _lectura_aparte(
+                construir_resumen_ofertas_sscc, archivo_ofertas
+            )
 
         registrar(f"Periodo indicado: {anio}-{mes:02d} ({aamm_val})")
 
@@ -234,6 +260,9 @@ def generar_consolidado(
             construir_ofertas_sscc(
                 df_medidores, archivo_ofertas, diccionario, anio, mes,
                 registrar=registrar,
+                **({"resumen_ofertas": (
+                    lambda: _resultado_aparte(lectura_ofertas, registrar)
+                )} if lectura_ofertas is not None else {}),
             )
         )
         avisos.extend(avisos_ofertas)
@@ -262,9 +291,14 @@ def generar_consolidado(
                 f"{rutas['sscc_desempeno_dir']}"
             )
         registrar(f"Leyendo {archivo_sscc.name}...")
-        df_fd_csf, df_fd_cpf = construir_fd(
-            archivo_sscc, registrar=registrar
-        )
+        if lectura_fd is not None and lectura_fd[1] is not None and (
+            lectura_fd[0] == archivo_sscc
+        ):
+            df_fd_csf, df_fd_cpf = _resultado_aparte(lectura_fd[1], registrar)
+        else:
+            df_fd_csf, df_fd_cpf = construir_fd(
+                archivo_sscc, registrar=registrar
+            )
 
         # La columna 'Central' (el nombre Balance_BESS de cada unidad):
         # se homologa aca, una vez, y E Costos la usa tal cual. Si no
@@ -281,6 +315,24 @@ def generar_consolidado(
             df_fd_csf = agregar_central_fd(df_fd_csf, mapa_central)
             df_fd_cpf = agregar_central_fd(df_fd_cpf, mapa_central)
 
+            # Una unidad que no esta en la columna FD del Diccionario
+            # pero si en otra de sus columnas (Subastas, Balance_BESS...)
+            # se reconoce igual, avisando (DIC-002).
+            from .equivalencias import Equivalencias
+            from .lectura import ROL_FD
+
+            equivalencias = Equivalencias(diccionario_fd)
+            if equivalencias:
+                for df_fd in (df_fd_csf, df_fd_cpf):
+                    vacias = df_fd[COLUMNA_CENTRAL].eq("")
+                    df_fd.loc[vacias, COLUMNA_CENTRAL] = [
+                        equivalencias.central_de(
+                            unidad, ROL_FD, "la unidad del archivo de FD"
+                        ) or ""
+                        for unidad in df_fd.loc[vacias, "Unidad"]
+                    ]
+                equivalencias.informar(registrar)
+
             sin_central = sorted({
                 unidad
                 for df_fd in (df_fd_csf, df_fd_cpf)
@@ -289,12 +341,16 @@ def generar_consolidado(
                 )
                 if not central and _texto_seguro(unidad)
             })
+            # Solo las unidades de las centrales de la hoja 'Centrales'
+            # (pedido del usuario): las demas no se traen a la hoja.
             if sin_central:
+                df_fd_csf = df_fd_csf[df_fd_csf[COLUMNA_CENTRAL].ne("")]
+                df_fd_cpf = df_fd_cpf[df_fd_cpf[COLUMNA_CENTRAL].ne("")]
                 registrar(
-                    f"  [AVISO] {len(sin_central)} unidad(es) de la hoja "
-                    f"FD sin central en el Diccionario (columna "
-                    f"'{COLUMNA_CENTRAL}' vacia): "
-                    f"{', '.join(sin_central)}"
+                    f"  FD: {len(sin_central)} unidad(es) sin central en "
+                    f"el Diccionario quedan fuera de la hoja: "
+                    f"{', '.join(sin_central[:10])}"
+                    + (" ..." if len(sin_central) > 10 else "")
                 )
 
     avanzar(80)
@@ -396,7 +452,7 @@ def _leer_medidores_del_libro(ruta_salida, registrar):
     registrar(f"Leyendo hoja 'Medidores' de {ruta_salida.name}...")
 
     try:
-        df_medidores = pd.read_excel(ruta_salida, sheet_name=HOJA_MEDIDORES)
+        df_medidores = leer_hoja_con_fila_vacia(ruta_salida, HOJA_MEDIDORES)
     except ValueError as error:
         raise ErrorEntrada(
             f"{ruta_salida.name} no tiene la hoja 'Medidores' todavia: "
@@ -439,12 +495,12 @@ def _leer_entradas_del_consolidado(
 
     ruta_salida = Path(ruta_salida)
 
-    with pd.ExcelFile(ruta_salida) as libro:
+    with abrir_excel(ruta_salida) as libro:
 
         registrar(f"Leyendo hoja 'Medidores' de {ruta_salida.name}...")
 
         try:
-            df_medidores = pd.read_excel(libro, sheet_name="Medidores")
+            df_medidores = leer_hoja_con_fila_vacia(libro, "Medidores")
         except ValueError as error:
             raise ErrorEntrada(
                 f"{ruta_salida.name} no tiene la hoja 'Medidores' "
@@ -484,7 +540,7 @@ def _leer_entradas_del_consolidado(
         registrar(f"Leyendo hoja 'Subastas' de {ruta_salida.name}...")
 
         try:
-            df_subastas = pd.read_excel(libro, sheet_name="Subastas")
+            df_subastas = leer_hoja_con_fila_vacia(libro, "Subastas")
         except ValueError as error:
             raise ErrorEntrada(
                 f"{ruta_salida.name} no tiene la hoja 'Subastas' "
@@ -534,6 +590,185 @@ def _leer_entradas_del_consolidado(
         df_medidores, df_wxy, df_resumen_ventana, df_cmg, df_subastas,
         df_fd_csf, df_fd_cpf, centrales, tablas_fma,
     )
+
+
+
+class Bitacora:
+    """
+    Un registrar que se puede mandar a otro proceso: guarda lo que se
+    escribe (y las alertas) en orden, para repetirlo despues en el
+    registrar de verdad (ver Bitacora.repetir).
+    """
+
+    def __init__(self):
+        self.eventos = []
+
+    def __call__(self, mensaje):
+        self.eventos.append(("linea", mensaje))
+
+    def anotar(self, alerta):
+        self.eventos.append(("alerta", alerta))
+
+    @staticmethod
+    def repetir(eventos, registrar):
+        for tipo, contenido in eventos:
+            if tipo == "alerta":
+                if hasattr(registrar, "anotar"):
+                    registrar.anotar(contenido)
+            else:
+                registrar(contenido)
+
+
+def calcular_hoja_re545(
+    df_medidores, mapa_barra, dic_cmg, df_subastas, df_fd_csf, df_fd_cpf,
+    tablas_fma, diccionario, umbral_soc_minimo, dic_capacidad,
+    dic_eficiencia, df_resumen_ventana, dic_factor, registrar=print,
+):
+    """
+    Calculo RE545 entero, de las entradas ya leidas: (hoja renombrada,
+    hoja con nombres internos, tabla resumen por central + ventana).
+    Funcion de modulo para poder correrla en otro proceso, en paralelo
+    con E Costos (ver _re545_en_otro_proceso).
+    """
+
+    registrar(
+        "Construyendo Calculo RE545 (etapa base: traspaso de "
+        "Medidores + L, M, N, O, S, U, V)..."
+    )
+    df_re545 = construir_calculo_re545(
+        df_medidores, mapa_barra, dic_cmg, registrar=registrar
+    )
+    # El FD y el FMA de cada fila de Subastas se calculan aca, que
+    # es el unico lugar donde se aplican (AI:AT y AU). La hoja
+    # Subastas ya no los trae: asi no hay un FD aplicado dos veces.
+    df_subastas_re545 = subastas_con_fd_y_fma(
+        df_subastas, df_fd_csf, df_fd_cpf, tablas_fma, diccionario,
+        registrar=registrar,
+    )
+    df_re545_base = completar_calculo_re545(
+        df_re545, df_subastas_re545, umbral_soc_minimo, dic_capacidad,
+        dic_eficiencia, registrar=registrar,
+    )
+
+    # AY ("Oferta Completa") del resumen por central+ventana sale
+    # de la misma tabla que alimenta Medidores!T: la tabla
+    # "Resumen ventana oferta" de la hoja 'Ofertas SSCC' del
+    # consolidado, leida arriba. Antes se recalculaba aca a partir
+    # de la hoja Medidores; ahora se usa directamente la generada,
+    # que es el mismo dato y una cuenta menos.
+    df_resumen_re545 = construir_resumen_ventanas_re545(
+        df_re545_base, df_resumen_ventana, dic_capacidad,
+        registrar=registrar,
+    )
+
+    registrar("  Calculo RE545: Componente 1 y Componente 2 (BI:CE)...")
+    for interno, serie in calcular_componentes_re545(
+        df_re545_base, df_resumen_re545, dic_factor,
+        registrar=registrar,
+    ).items():
+        df_re545_base[interno] = serie
+
+    df_resumen_re545 = completar_checks_resumen_re545(
+        df_resumen_re545, df_re545_base
+    )
+
+    df_re545 = renombrar_calculo_re545(df_re545_base)
+
+    return df_re545, df_re545_base, df_resumen_re545
+
+
+def _con_bitacora(funcion, argumentos):
+    """Lo que corre otro proceso: funcion(*argumentos) con una Bitacora."""
+
+    bitacora = Bitacora()
+    return funcion(*argumentos, registrar=bitacora), bitacora.eventos
+
+
+# Desde este tamaño un archivo de entrada se lee en otro proceso: mas
+# chico, arrancarlo cuesta mas de lo que se gana.
+BYTES_PARA_LECTURA_APARTE = 500_000
+
+
+class _Aparte:
+    """Un trabajo lanzado en otro proceso, con lo necesario para rehacerlo aca."""
+
+    def __init__(self, futuro, funcion, argumentos):
+        self.futuro = futuro
+        self.funcion = funcion
+        self.argumentos = argumentos
+
+
+def _lanzar_aparte(funcion, argumentos):
+    """_Aparte con funcion(*argumentos) corriendo en otro proceso, o None."""
+
+    try:
+        from concurrent.futures import ProcessPoolExecutor
+
+        ejecutor = ProcessPoolExecutor(max_workers=1)
+        futuro = ejecutor.submit(_con_bitacora, funcion, argumentos)
+        ejecutor.shutdown(wait=False)
+        return _Aparte(futuro, funcion, argumentos)
+    except Exception:  # noqa: BLE001 - se hace aca, en serie
+        return None
+
+
+def _lectura_aparte(funcion, ruta):
+    """
+    Lanza funcion(ruta, registrar=...) en otro proceso, o None si no
+    corresponde (archivo chico) o no se pudo: entonces quien llama la
+    corre aca, como siempre.
+    """
+
+    try:
+        if not CALCULO_EN_PARALELO or Path(ruta).stat().st_size < BYTES_PARA_LECTURA_APARTE:
+            return None
+    except OSError:
+        return None
+    return _lanzar_aparte(funcion, (ruta,))
+
+
+def _resultado_aparte(aparte, registrar):
+    """
+    El resultado del trabajo lanzado aparte, repitiendo su registro aca.
+    Si el otro proceso no pudo correr (no arranco, se cayo, no se pudo
+    pasar algo entre procesos), se hace aca, en serie, como antes: el
+    paralelo nunca puede ser la razon de que una corrida falle. Un error
+    de los datos (ErrorEntrada, etc.) se levanta igual que en serie.
+    """
+
+    from concurrent.futures.process import BrokenProcessPool
+    import pickle
+
+    try:
+        resultado, eventos = aparte.futuro.result()
+    except (BrokenProcessPool, pickle.PicklingError, EOFError, OSError):
+        return aparte.funcion(*aparte.argumentos, registrar=registrar)
+    Bitacora.repetir(eventos, registrar)
+    return resultado
+
+
+def _calcular_re545_desde(entradas, registrar=print):
+    """calcular_hoja_re545 con las entradas en un dict (para _lanzar_aparte)."""
+
+    return calcular_hoja_re545(registrar=registrar, **entradas)
+
+
+# RE545 en paralelo con E Costos (pedido del usuario: "si se corren hojas
+# independientes que se puedan hacer en paralelo que se haga"). Solo
+# desde este tamaño: arrancar el otro proceso cuesta un par de segundos.
+FILAS_PARA_PARALELO = 5000
+CALCULO_EN_PARALELO = True
+
+
+def _re545_en_otro_proceso(entradas, registrar):
+    """
+    Lanza RE545 en otro proceso y devuelve su _Aparte, o None si no
+    corresponde (caso chico) o no se pudo (entonces se calcula aca).
+    """
+
+    if not CALCULO_EN_PARALELO or len(entradas["df_medidores"]) < FILAS_PARA_PARALELO:
+        return None
+    return _lanzar_aparte(_calcular_re545_desde, (entradas,))
 
 
 def generar_pagos_bess(
@@ -616,6 +851,7 @@ def generar_pagos_bess(
 
     df_medidores = None
     df_wxy = df_resumen_ventana = None
+    df_matriz_centrales = None
     df_cmg = df_subastas = None
     df_fd_csf = df_fd_cpf = None
     centrales_del_libro = tablas_fma = None
@@ -702,6 +938,18 @@ def generar_pagos_bess(
 
         dic_cmg = construir_dic_cmg(df_cmg)
 
+        # Control: cada central y si se encontro en cada origen (va a
+        # Control_corrida.xlsx). Con lo ya leido: no abre nada.
+        try:
+            df_matriz_centrales = construir_matriz_centrales(
+                resumen=resumen, diccionario=diccionario,
+                df_medidores=df_medidores, df_wxy=df_wxy, df_cmg=df_cmg,
+                df_subastas=df_subastas, df_fd_csf=df_fd_csf,
+                df_fd_cpf=df_fd_cpf, tablas_fma=tablas_fma,
+            )
+        except Exception as error:  # noqa: BLE001 - es solo un control
+            registrar(f"  [AVISO] no se pudo armar la matriz de centrales: {error}")
+
     avanzar(40)
 
     df_ecostos = None
@@ -712,8 +960,8 @@ def generar_pagos_bess(
     df_pagos_suministrador = None
     df_compensacion_ecostos = None
     df_compensacion_re545 = None
-    df_compensacion_ecostos_central = None
-    df_compensacion_re545_central = None
+    df_compensacion_detalle = None
+    df_compensacion_central = None
     df_compensacion_empresa = None
     df_resumen = None
 
@@ -723,6 +971,21 @@ def generar_pagos_bess(
     # tiene que mirar estas, no aquellas.
     df_ecostos_base = None
     df_re545_base = None
+
+    # RE545 no depende de E Costos: si van las dos, RE545 arranca en otro
+    # proceso y corre mientras se calcula E Costos aca.
+    en_paralelo = None
+    if quiere_re545:
+        entradas_re545 = dict(
+            df_medidores=df_medidores, mapa_barra=mapa_barra,
+            dic_cmg=dic_cmg, df_subastas=df_subastas, df_fd_csf=df_fd_csf,
+            df_fd_cpf=df_fd_cpf, tablas_fma=tablas_fma,
+            diccionario=diccionario, umbral_soc_minimo=umbral_soc_minimo,
+            dic_capacidad=dic_capacidad, dic_eficiencia=dic_eficiencia,
+            df_resumen_ventana=df_resumen_ventana, dic_factor=dic_factor,
+        )
+        if quiere_ecostos:
+            en_paralelo = _re545_en_otro_proceso(entradas_re545, registrar)
 
     if quiere_ecostos:
 
@@ -757,49 +1020,17 @@ def generar_pagos_bess(
     avanzar(70)
 
     if quiere_re545:
-
-        registrar(
-            "Construyendo Calculo RE545 (etapa base: traspaso de "
-            "Medidores + L, M, N, O, S, U, V)..."
-        )
-        df_re545 = construir_calculo_re545(
-            df_medidores, mapa_barra, dic_cmg, registrar=registrar
-        )
-        # El FD y el FMA de cada fila de Subastas se calculan aca, que
-        # es el unico lugar donde se aplican (AI:AT y AU). La hoja
-        # Subastas ya no los trae: asi no hay un FD aplicado dos veces.
-        df_subastas_re545 = subastas_con_fd_y_fma(
-            df_subastas, df_fd_csf, df_fd_cpf, tablas_fma, diccionario,
-            registrar=registrar,
-        )
-        df_re545_base = completar_calculo_re545(
-            df_re545, df_subastas_re545, umbral_soc_minimo, dic_capacidad,
-            dic_eficiencia, registrar=registrar,
-        )
-
-        # AY ("Oferta Completa") del resumen por central+ventana sale
-        # de la misma tabla que alimenta Medidores!T: la tabla
-        # "Resumen ventana oferta" de la hoja 'Ofertas SSCC' del
-        # consolidado, leida arriba. Antes se recalculaba aca a partir
-        # de la hoja Medidores; ahora se usa directamente la generada,
-        # que es el mismo dato y una cuenta menos.
-        df_resumen_re545 = construir_resumen_ventanas_re545(
-            df_re545_base, df_resumen_ventana, dic_capacidad,
-            registrar=registrar,
-        )
-
-        registrar("  Calculo RE545: Componente 1 y Componente 2 (BI:CE)...")
-        for interno, serie in calcular_componentes_re545(
-            df_re545_base, df_resumen_re545, dic_factor,
-            registrar=registrar,
-        ).items():
-            df_re545_base[interno] = serie
-
-        df_resumen_re545 = completar_checks_resumen_re545(
-            df_resumen_re545, df_re545_base
-        )
-
-        df_re545 = renombrar_calculo_re545(df_re545_base)
+        if en_paralelo is not None:
+            # Se calculo en otro proceso mientras corria E Costos: se
+            # repite su registro (mensajes y alertas) en el mismo orden
+            # en que habria salido aqui.
+            df_re545, df_re545_base, df_resumen_re545 = _resultado_aparte(
+                en_paralelo, registrar
+            )
+        else:
+            df_re545, df_re545_base, df_resumen_re545 = calcular_hoja_re545(
+                registrar=registrar, **entradas_re545
+            )
 
     avanzar(90)
 
@@ -810,9 +1041,16 @@ def generar_pagos_bess(
         # ya guardadas en la planilla.
         def calculo_existente(nombre):
             try:
-                return pd.read_excel(
-                    rutas["salida"], sheet_name=nombre, header=1
+                # Calculo E Costos: fila 1 vacia, "Cuadro N°" en la 2 y
+                # nombres en la 3. Calculo RE545 (y un E Costos de
+                # antes): grupos en la 1 y nombres en la 2.
+                arriba = leer_excel(
+                    rutas["salida"], sheet_name=nombre, header=None, nrows=4
                 )
+                fila = fila_de_encabezado(arriba) or 1
+                return sin_unidades(sin_margen_izquierdo(leer_excel(
+                    rutas["salida"], sheet_name=nombre, header=fila
+                )), nombre)
             except (FileNotFoundError, ValueError) as error:
                 raise ErrorEntrada(
                     f"Primero calcula la hoja '{nombre}' de "
@@ -839,11 +1077,13 @@ def generar_pagos_bess(
                 df_ecostos_asignacion, df_re545_asignacion, resumen,
                 registrar=registrar,
             )
-            df_compensacion_ecostos_central = total_por_central(
-                df_compensacion_ecostos
+            # En la hoja van lado a lado: una columna E Costos y otra
+            # RE545 (cuadros 1+3 y 2+4 de antes, juntos).
+            df_compensacion_detalle = detalle_combinado(
+                df_compensacion_ecostos, df_compensacion_re545
             )
-            df_compensacion_re545_central = total_por_central(
-                df_compensacion_re545
+            df_compensacion_central = por_central_combinado(
+                df_compensacion_ecostos, df_compensacion_re545
             )
             registrar(
                 f"  E Costos: {len(df_compensacion_ecostos):,} grupos; "
@@ -938,15 +1178,14 @@ def generar_pagos_bess(
         df_ecostos=df_ecostos,
         df_re545=df_re545,
         df_resumen_re545=df_resumen_re545,
-        df_compensacion_ecostos=df_compensacion_ecostos,
-        df_compensacion_re545=df_compensacion_re545,
-        df_compensacion_ecostos_central=df_compensacion_ecostos_central,
-        df_compensacion_re545_central=df_compensacion_re545_central,
+        df_compensacion_detalle=df_compensacion_detalle,
+        df_compensacion_central=df_compensacion_central,
         df_compensacion_empresa=df_compensacion_empresa,
         df_prorrata_retiros=df_prorrata_retiros,
         df_compensacion_cuarto=df_compensacion_cuarto,
         df_pagos_suministrador=df_pagos_suministrador,
         df_resumen=df_resumen,
+        df_matriz_centrales=df_matriz_centrales,
         ruta_existente=rutas["salida"],
         hojas_regenerar=hojas_regenerar,
         registrar=registrar,

@@ -112,5 +112,66 @@ class TestVentanaEjecutarTodo(base.TestVentanaActualizar):
             dialogo.destroy()
 
 
+    def _principal(self):
+        """El Canvas de la ventana principal (el que mueve la rueda)."""
+        return next(
+            w for w in self.root.winfo_children()
+            if w.winfo_class() == "Canvas"
+        )
+
+    def test_la_rueda_sobre_el_dialogo_no_mueve_la_ventana_principal(self):
+        """Pedido del usuario: "al mover la ruedita del mouse se mueve la
+        ventana principal"."""
+
+        principal = self._principal()
+        self.root.geometry("1000x300")  # que la principal tenga que bajar
+        self.root.update()
+        principal.yview_moveto(0.0)
+        dialogo = self._dialogo()
+        try:
+            dialogo.geometry("900x300")
+            dialogo.update()
+            lienzo = next(
+                w for w in self._todos(dialogo) if w.winfo_class() == "Canvas"
+            )
+            for widget in (lienzo, next(
+                w for w in self._todos(dialogo) if w.winfo_class() == "Button"
+            )):
+                x = widget.winfo_rootx() + widget.winfo_width() // 2
+                y = widget.winfo_rooty() + widget.winfo_height() // 2
+                for _ in range(3):
+                    widget.event_generate(
+                        "<MouseWheel>", delta=-120, rootx=x, rooty=y,
+                        x=widget.winfo_width() // 2,
+                        y=widget.winfo_height() // 2,
+                    )
+                self.root.update()
+            self.assertEqual(principal.yview()[0], 0.0)
+            # ...y sobre la lista, se mueve la lista.
+            self.assertGreater(lienzo.yview()[0], 0.0)
+        finally:
+            dialogo.destroy()
+
+    def test_tildar_no_vuelve_a_armar_la_lista(self):
+        """Pedido del usuario: "cuando selecciono una casilla hace un
+        parpadeo". La lista se arma una vez: tildar solo cambia valores."""
+
+        dialogo = self._dialogo()
+        try:
+            antes = [str(w) for w in self._todos(dialogo)]
+            cuadro = next(
+                w for w in self._todos(dialogo)
+                if w.winfo_class() == "Checkbutton"
+                and w.master.winfo_children()[1].cget("text")
+                != "Balance_BESS.xlsx"
+            )
+            cuadro.invoke()
+            self.root.update()
+            despues = [str(w) for w in self._todos(dialogo)]
+            self.assertEqual(antes, despues)
+        finally:
+            dialogo.destroy()
+
+
 if __name__ == "__main__":
     unittest.main()

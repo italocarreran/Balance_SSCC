@@ -38,9 +38,11 @@ from .fma import (
     calcular_fma_subastas, construir_dic_bloque_diccionario,
 )
 from .ecostos_prorratas import construir_dic_mapeo_diccionario
-from .parametros import HOJA_FMA
-from .lectura import leer_tabla_bajo_titulo
-from .utiles import ErrorEntrada, _texto_seguro, _tiene_valor
+from .lector import leer_excel
+from .parametros import FMA_CON_CTF, HOJA_FMA
+from .lectura import fila_de_titulos, leer_tabla_bajo_titulo
+from .hojas_entrada import NOMBRES_SUBASTAS
+from .utiles import ErrorEntrada, _texto_seguro, _tiene_valor, normalizar
 
 # Los nombres con que quedan las dos columnas en la copia EN MEMORIA de
 # Subastas que usa RE545 (la hoja ya no las tiene).
@@ -138,11 +140,27 @@ def tablas_fd_desde_hoja(df_fd_csf, df_fd_cpf, registrar=print):
 # Una tabla por salida de FMA, una al lado de la otra con su titulo
 # (mismo formato que 'Ofertas SSCC' y 'Centrales'). La clave es la que
 # usa cargar_tablas_fma().
-TITULOS_FMA = {
+_NOMBRES_FMA = {
     "cpf": "FMA CPF (fma_cpf)",
     "csf": "FMA CSF (fma_csf)",
     "ctf_unidad": "FMA CTF por unidad (fma_cft)",
     "ctf_configuracion": "FMA CTF por configuracion (fma_cft)",
+}
+# Todas las tablas que puede tener la hoja (las claves que devuelve
+# leer_fma_consolidado, aunque el CTF este apagado).
+CLAVES_FMA = tuple(_NOMBRES_FMA)
+# Las que se escriben, con su titulo de cuadro ("Cuadro N° 1 — ...",
+# mismo formato que PRORRATA_RETIROS). Sin el CTF (FMA_CON_CTF) quedan
+# solo CPF y CSF.
+TITULOS_FMA = {
+    clave: f"Cuadro N° {numero} — {nombre}"
+    for numero, (clave, nombre) in enumerate(
+        (
+            (clave, nombre) for clave, nombre in _NOMBRES_FMA.items()
+            if FMA_CON_CTF or not clave.startswith("ctf")
+        ),
+        start=1,
+    )
 }
 
 
@@ -158,7 +176,7 @@ def leer_fma_consolidado(ruta_salida, registrar=print, libro=None):
     fuente = ruta_salida if libro is None else libro
 
     try:
-        crudo = pd.read_excel(fuente, sheet_name=HOJA_FMA, header=None)
+        crudo = leer_excel(fuente, sheet_name=HOJA_FMA, header=None)
     except ValueError as error:
         raise ErrorEntrada(
             f"{ruta_salida.name} no tiene la hoja '{HOJA_FMA}' todavia: "
@@ -166,27 +184,32 @@ def leer_fma_consolidado(ruta_salida, registrar=print, libro=None):
             f"sale de ahi)."
         ) from error
 
-    tablas = {clave: None for clave in TITULOS_FMA}
+    tablas = {clave: None for clave in CLAVES_FMA}
 
     if crudo.empty:
         return tablas
 
+    # Los titulos van en la fila 2 (la 1 queda vacia); un libro de
+    # antes los tiene en la 1.
+    fila = fila_de_titulos(crudo)
     titulos = {
-        _texto_seguro(crudo.iloc[0, col]): col
+        _texto_seguro(crudo.iloc[fila, col]): col
         for col in range(crudo.shape[1])
-        if _tiene_valor(crudo.iloc[0, col])
+        if _tiene_valor(crudo.iloc[fila, col])
     }
 
     for clave, titulo in TITULOS_FMA.items():
 
-        columna = titulos.get(titulo)
+        # El titulo de ahora o el de antes de los "Cuadro N°".
+        columna = titulos.get(titulo, titulos.get(_NOMBRES_FMA[clave]))
         if columna is None:
             continue
 
         ancho = 0
         while (
             columna + ancho < crudo.shape[1]
-            and _tiene_valor(crudo.iloc[1, columna + ancho])
+            and fila + 1 < crudo.shape[0]
+            and _tiene_valor(crudo.iloc[fila + 1, columna + ancho])
         ):
             ancho += 1
 
@@ -194,7 +217,7 @@ def leer_fma_consolidado(ruta_salida, registrar=print, libro=None):
             continue
 
         tablas[clave] = leer_tabla_bajo_titulo(
-            fuente, HOJA_FMA, crudo, columna, ancho
+            fuente, HOJA_FMA, crudo, columna, ancho, fila_titulo=fila
         )
 
     registrar(
@@ -213,6 +236,67 @@ def leer_fma_consolidado(ruta_salida, registrar=print, libro=None):
 # ============================================================
 # EL CALCULO
 # ============================================================
+
+def _completar_con_otros_nombres(
+    df_subastas, diccionario, tablas_fd, tablas_fma, dic_unidad_fd, dic_cpf,
+    registrar,
+):
+    """
+    Configuración de Subastas -> unidad del FD y -> central de FMA CPF:
+    si el nombre que da el Diccionario (o el nombre tal cual) no esta en
+    la tabla, se prueba con los demas nombres de la central en el
+    Diccionario; si alguno esta, se usa y se avisa (DIC-002). Completa
+    dic_unidad_fd y dic_cpf en el lugar.
+    """
+
+    from .equivalencias import Equivalencias
+    from .lectura import ROL_FD, ROL_FMA_CPF
+
+    columna_config = NOMBRES_SUBASTAS["K"]
+    if diccionario is None or columna_config not in df_subastas.columns:
+        return
+
+    norm_fd = desempeno_fd._normalizar
+    unidades_fd = {
+        unidad
+        for clave in ("cpf", "csf", "participacion_csf")
+        for unidad, _hora in (tablas_fd or {}).get(clave, {})
+    }
+    tabla_cpf = (tablas_fma or {}).get("cpf")
+    centrales_cpf = (
+        {normalizar(c) for c in tabla_cpf["Central"]}
+        if tabla_cpf is not None and "Central" in tabla_cpf.columns
+        else set()
+    )
+
+    eq_fd = Equivalencias(diccionario, normalizar_fn=norm_fd)
+    eq_cpf = Equivalencias(diccionario)
+    if not eq_fd:
+        return
+
+    for config in pd.unique(df_subastas[columna_config].dropna()):
+        clave = normalizar(config)
+        if unidades_fd:
+            actual = dic_unidad_fd.get(clave, config)
+            if norm_fd(actual) not in unidades_fd:
+                unidad = eq_fd.buscar(
+                    config, ROL_FD, unidades_fd, "las unidades de la hoja FD"
+                )
+                if unidad is not None:
+                    dic_unidad_fd[clave] = unidad
+        if centrales_cpf:
+            actual = dic_cpf.get(clave, config)
+            if normalizar(actual) not in centrales_cpf:
+                central = eq_cpf.buscar(
+                    config, ROL_FMA_CPF, centrales_cpf,
+                    "las centrales de FMA CPF",
+                )
+                if central is not None:
+                    dic_cpf[clave] = central
+
+    eq_fd.informar(registrar)
+    eq_cpf.informar(registrar)
+
 
 def subastas_con_fd_y_fma(
     df_subastas, df_fd_csf, df_fd_cpf, tablas_fma, diccionario,
@@ -242,6 +326,11 @@ def subastas_con_fd_y_fma(
     registrar("  Calculo RE545: FD y FMA de cada fila de Subastas...")
 
     tablas_fd = tablas_fd_desde_hoja(df_fd_csf, df_fd_cpf, registrar=registrar)
+
+    _completar_con_otros_nombres(
+        df_subastas, diccionario, tablas_fd, tablas_fma, dic_unidad_fd,
+        dic_cpf, registrar,
+    )
 
     df = df_subastas.copy()
     df[COLUMNA_FD_SUBASTAS] = calcular_fd_subastas(
