@@ -5836,3 +5836,10 @@ ventana con xvfb. 332 pruebas.
   dias a la vez respondio HTTP 504 a los 30 dias (6,5 min perdidos y la
   corrida fallo). `Generacion_Real.HILOS_DESCARGA = 1`: uno por uno, como
   antes. Descarga_PRMTE sigue con 8.
+
+## 2026-11-04 (21) — Generacion_Real.py vuelve al codigo original
+
+- Pedido: "Opreal me da errores, puedes hacer que vuelva al formato
+  original, para probar". `Script/Medidas/Generacion_Real.py` queda
+  exactamente como antes de la optimizacion (commit 2e257d9): un dia a la
+  vez, una sola sesion, sin hilos. Se saco su prueba de paralelo.
