@@ -5828,3 +5828,11 @@ ventana con xvfb. 332 pruebas.
 - FMA CPF y CSF: los reportes diarios se leen en varios procesos, en
   orden y con sus avisos en orden; si los procesos no corren, en serie
   (`LEER_EN_PARALELO`; test_fma_paralelo).
+
+## 2026-11-04 (20) — Operacion real vuelve a pedir un dia a la vez
+
+- Corrida real del usuario: la descarga de medidas en paralelo bajo 62
+  puntos en 20 s, pero la API de operacion real (hoja 'Gen real') con 8
+  dias a la vez respondio HTTP 504 a los 30 dias (6,5 min perdidos y la
+  corrida fallo). `Generacion_Real.HILOS_DESCARGA = 1`: uno por uno, como
+  antes. Descarga_PRMTE sigue con 8.

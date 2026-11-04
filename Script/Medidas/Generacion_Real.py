@@ -56,7 +56,11 @@ REINTENTOS = 3
 ESPERA_REINTENTO = 1.0
 
 # Dias que se piden a la vez a la API (1 = uno por uno, como antes).
-HILOS_DESCARGA = 8
+# Queda en 1: con 8 a la vez (2026-11-04) la API de operacion real
+# respondio HTTP 504 a todos los dias -- cada dia es una consulta pesada
+# y el servidor no aguanta varias juntas. La de medidas (Descarga_PRMTE)
+# si aguanta y sigue en paralelo.
+HILOS_DESCARGA = 1
 
 COLUMNA_TOPOLOGY = "topologyName"
 COLUMNA_HORA = "topologyTimeHour"
