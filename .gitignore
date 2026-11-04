@@ -1,5 +1,8 @@
-# Configuracion local por PC/usuario (ver METODOLOGIA.md #5)
+# Configuracion: vive en __config__/ (hermana de esta carpeta), nunca
+# aca. config.json es el de antes, por si queda alguno.
 config.json
+tks.json
+__config__/
 
 # Python
 __pycache__/
@@ -10,6 +13,8 @@ venv/
 
 # Salidas y archivos de debug generados por caso (no son parte del repo)
 Balance_BESS.xlsx
+11_PAGOS_BESS_*.xlsx
+SAE_*.csv
 Control_corrida.xlsx
 Balance_CRA.xlsx
 # nombres anteriores de la salida, por si quedo alguno dando vueltas

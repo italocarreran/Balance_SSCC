@@ -94,9 +94,9 @@ entrada ni una salida del caso, son andamios del proceso.
 
 El calculo vive en Script/ (ver Script/__init__.py). Las dos claves de
 las APIs del Coordinador que usa Medidas NO estan en el codigo: salen
-de la seccion "claves_api" de config.json (ver Script/config.py y
-config.ejemplo.json). La ubicacion de este .py no influye en nada salvo
-en donde se guarda config.json.
+de __config__/tks.json, y lo que recuerda la ventana de
+__config__/config.json ("modo_bess"); __config__ es la carpeta hermana
+de la de este programa (ver Script/config.py y config.ejemplo.json).
 """
 
 import os
@@ -242,18 +242,24 @@ def get_usuario():
 
 
 def leer_config():
-    """Lo que dejo guardado ESTE PC/usuario (carpeta base, AAMM)."""
+    """
+    Lo que dejo guardado ESTE PC/usuario (carpeta base, AAMM), en
+    __config__/config.json -> "modo_bess" -> <equipo>_<usuario> (ver
+    Script/config.py). La primera vez se copia del config.json de antes.
+    """
 
-    return config.seccion(get_usuario())
+    return config.seccion_usuario(
+        config.MODO_BESS, get_usuario(), clave_antigua=get_usuario()
+    )
 
 
 def guardar_config(data):
     """
-    Guarda en la seccion de este PC/usuario, sin tocar el resto del
-    archivo -- ni las secciones de otros, ni "claves_api".
+    Guarda en el bloque de este PC/usuario dentro de "modo_bess", sin
+    tocar el resto del archivo (es compartido con los otros programas).
     """
 
-    config.actualizar_seccion(get_usuario(), data)
+    config.actualizar_seccion_usuario(config.MODO_BESS, get_usuario(), data)
 
 
 # La carpeta que uso este PC/usuario para cada periodo:
@@ -416,6 +422,9 @@ def formato_tiempo(segundos):
 
 def main():
 
+    # Los tokens de las APIs pasan solos a __config__/tks.json la primera
+    # vez (antes estaban en "claves_api" del config.json local).
+    config.migrar_tokens()
     cfg = leer_config()
 
     root = tk.Tk()

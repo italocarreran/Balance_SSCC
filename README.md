@@ -38,28 +38,42 @@ pip install python-calamine
 python Balance_BESS.py
 ```
 
-0. **Solo la primera vez:** copiar `config.ejemplo.json` como `config.json`
-   (junto a `Balance_BESS.py`) y pegar adentro las dos claves de las APIs del
-   Coordinador. Son **distintas** entre sí y el valor es el mismo para todo
-   el equipo; `config.json` no se versiona, así que cada uno lo pega una vez
-   en su copia. Solo hace falta para el botón que baja `Medidas_SAE.xlsx`:
-   el resto del programa anda sin claves.
+0. **La configuración vive en `__config__/`**, la carpeta hermana de la de
+   este programa (la misma del Revisor y los comparadores), nunca en las
+   carpetas de trabajo:
+
+   ```
+   <raíz>/
+   ├── Balance_SSCC/        <- este programa
+   ├── Revisor_Relq/ ...
+   └── __config__/
+       ├── config.json      <- compartido: "modo_bess", "modo_cra", "modo_15min"...
+       ├── tks.json         <- los tokens de las APIs del Coordinador
+       └── 2026/09 Septiembre/Balance BESS/<caso>/sellos_11_PAGOS_BESS_2609.json
+   ```
+
+   **Solo la primera vez:** copiar `tks.ejemplo.json` como
+   `__config__/tks.json` y pegar los dos tokens. Son **distintos** entre sí y
+   los mismos para todo el equipo. Solo hacen falta para el botón que baja
+   `Medidas_SAE.xlsx`. Si ya estaban en el `config.json` de antes (junto a
+   `Balance_BESS.py`, sección `claves_api`), se copian solos.
 
    ```json
    {
-     "claves_api": {
+     "coordinador": {
        "prmte": "PEGAR_AQUI_LA_CLAVE",
        "generacion_real": "PEGAR_AQUI_LA_CLAVE"
      }
    }
    ```
 
-   `prmte` es la de `medidas.coordinador.cl` y `generacion_real` la de
-   `operacion.coordinador.cl`. Si falta alguna, el programa lo dice con el
+   `prmte` es el de `medidas.coordinador.cl` y `generacion_real` el de
+   `operacion.coordinador.cl`. Si falta alguno, el programa lo dice con el
    formato exacto para pegar.
 1. Elegir la **carpeta base** del caso (ver estructura abajo). El programa
-   recuerda, por PC/usuario y en el mismo `config.json` (en su propia
-   sección: guardar la carpeta no pisa las claves), la última carpeta usada
+   recuerda, por PC/usuario en `__config__/config.json` (sección
+   `"modo_bess"`; el CRA usa `"modo_cra"` y nunca se toca lo de los otros
+   programas), la última carpeta usada
    **y qué carpeta usó cada período** (`carpetas_por_periodo`), que es lo
    que le permite volver sola a la del mes que elijas.
 2. Ingresar el **período (AAMM)** en el recuadro de la ventana: 4 dígitos,
@@ -84,7 +98,7 @@ python Balance_BESS.py
      comparten una.** Al cambiar el AAMM:
      - Si ese período ya tuvo carpeta, la ventana **vuelve sola a ella**
        (se acuerda de qué carpeta usó cada mes, por PC/usuario, en
-       `config.json`).
+       `__config__/config.json`).
      - Si no, y la carpeta abierta es la de otro mes (lo dice su nombre, o
        que ya quedó anotada como la de ese otro mes), **pregunta**:
        **Examinar…** para elegir la carpeta de este período, **Crear la
@@ -282,15 +296,14 @@ Ver `desarrollo/MAPA.md` para qué hace cada módulo.
     ├── Control_corrida.xlsx     <- Ejecucion, Alertas, Log y la matriz
     │                               de centrales
     ├── Registro_ultima_corrida.txt
-    └── sellos_11_PAGOS_BESS_AAMM.json  <- cuándo se escribió cada hoja
-                                    (la ventana lo usa para marcar lo
-                                    que quedó desactualizado)
+    (los sellos de cuándo se escribió cada hoja, que la ventana usa para
+     marcar lo desactualizado, van a __config__/AAAA/MM Mes/Balance BESS/)
 ```
 
 Un caso de antes (con `Balance_BESS.xlsx` y el control al lado) se ordena
 solo la primera vez que se abre: la planilla se renombra a
-`11_PAGOS_BESS_AAMM.xlsx` y el control, el registro y los sellos pasan a
-`Log/`. Si la planilla está abierta en Excel, se reintenta la vez siguiente.
+`11_PAGOS_BESS_AAMM.xlsx`, el control y el registro pasan a `Log/` y los
+sellos a `__config__`. Si la planilla está abierta en Excel, se reintenta la vez siguiente.
 
 Ningún archivo (salvo `cmg.xlsx`) sigue un nombre fijo:
 

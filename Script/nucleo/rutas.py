@@ -83,21 +83,21 @@ def _migrar_archivos_antiguos(base, salida):
     """
     Un caso de antes del cambio de nombres (pedido del usuario
     2026-11-04): Balance_BESS.xlsx pasa a 11_PAGOS_BESS_AAMM.xlsx y el
-    control, el registro y los sellos, a la carpeta Log/. Nunca pisa un
+    control y el registro, a la carpeta Log/, y los sellos (json), a
+    __config__ (ver sellos.ruta_sellos). Nunca pisa un
     archivo que ya este. Devuelve la ruta de la planilla a usar: la
     nueva, o la vieja si no se pudo renombrar (estaba abierta).
     """
 
     log = base / CARPETA_LOG
-    from .sellos import ruta_sellos, ruta_sellos_antigua
+    from .sellos import mover_sellos_antiguos
 
     vieja = base / ARCHIVO_SALIDA_ANTIGUO
     if vieja.is_file() and not salida.exists():
-        if _mover(vieja, salida):
-            _mover(ruta_sellos_antigua(vieja), ruta_sellos(salida))
-        else:
+        if not _mover(vieja, salida):
             salida = vieja
-    _mover(ruta_sellos_antigua(salida), ruta_sellos(salida))
+    # Los sellos (json) van a __config__, nunca a la carpeta del caso.
+    mover_sellos_antiguos(salida, vieja)
     for nombre in (ARCHIVO_CONTROL, ARCHIVO_REGISTRO):
         if (base / nombre).is_file():
             _mover(base / nombre, log / nombre)

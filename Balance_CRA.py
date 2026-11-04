@@ -70,8 +70,8 @@ ALTO_FILA = 26
 # ============================================================
 # CONFIG POR PC/USUARIO
 #
-# Seccion propia ("<host>_<usuario>_CRA"): la carpeta del CRA no pisa
-# la que recuerda Balance_BESS.py para el mismo usuario.
+# Seccion propia ("modo_cra" en __config__/config.json): la carpeta del
+# CRA no pisa la que recuerda Balance_BESS.py ("modo_bess").
 # ============================================================
 
 def get_usuario():
@@ -80,15 +80,19 @@ def get_usuario():
         or os.environ.get("USER")
         or "desconocido"
     )
-    return f"{socket.gethostname()}_{usuario}_CRA"
+    return f"{socket.gethostname()}_{usuario}"
 
 
 def leer_config():
-    return config.seccion(get_usuario())
+    # __config__/config.json -> "modo_cra" -> <equipo>_<usuario>; la
+    # primera vez se copia la seccion "<equipo>_<usuario>_CRA" de antes.
+    return config.seccion_usuario(
+        config.MODO_CRA, get_usuario(), clave_antigua=f"{get_usuario()}_CRA"
+    )
 
 
 def guardar_config(data):
-    config.actualizar_seccion(get_usuario(), data)
+    config.actualizar_seccion_usuario(config.MODO_CRA, get_usuario(), data)
 
 
 def abrir_en_explorador(ruta, es_carpeta=False):

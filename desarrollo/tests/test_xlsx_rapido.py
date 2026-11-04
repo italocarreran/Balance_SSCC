@@ -191,9 +191,9 @@ class TestEscrituraDeLaPlanilla(unittest.TestCase):
             self.assertIn(nucleo.HOJA_CENTRALES, despues)
             # sin restos del libro temporal
             self.assertEqual(
-                # y los sellos de cuando se escribio cada hoja, en Log/
+                # (los sellos de cada hoja van a __config__, no aca)
                 sorted(p.name for p in Path(carpeta).iterdir()),
-                [nucleo.nombre_salida("2607"), nucleo.CARPETA_LOG],
+                [nucleo.nombre_salida("2607")],
             )
 
 

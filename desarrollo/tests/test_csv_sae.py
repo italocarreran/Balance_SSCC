@@ -14,6 +14,7 @@ import pandas as pd
 
 from Script import nucleo
 from Script.nucleo.csv_sae import construir_csv_sae
+from Script.nucleo.sellos import leer_sellos, ruta_sellos
 from desarrollo.tests.test_pasos_sueltos import armar_caso, correr_pagos, dejar_prorrata
 
 
@@ -111,10 +112,11 @@ class TestCasoCompleto(unittest.TestCase):
             dejar_prorrata(base)
             correr_pagos(base, {"ecostos", "re545"}, [])
             self.assertTrue((base / "Log" / nucleo.ARCHIVO_CONTROL).is_file())
-            self.assertTrue(
-                (base / "Log" / "sellos_11_PAGOS_BESS_2607.json").is_file()
-            )
-            self.assertFalse(list(base.glob(".sellos_*")))
+            # Los sellos (json) van a __config__/2026/07 Julio/Balance BESS/
+            sellos = ruta_sellos(base / nucleo.nombre_salida("2607"))
+            self.assertTrue(sellos.is_file())
+            self.assertEqual(sellos.parent.parent.parent.name, "07 Julio")
+            self.assertFalse(list(base.rglob("*.json")))
             self.assertFalse((base / nucleo.ARCHIVO_CONTROL).exists())
             # Este caso chico no tiene pagos: no se escribe un CSV vacio.
             with self.assertRaisesRegex(nucleo.ErrorEntrada, "en cero"):
@@ -142,8 +144,19 @@ class TestCasoDeAntes(unittest.TestCase):
             )
             self.assertEqual(sorted(p.name for p in (base / "Log").iterdir()), [
                 "Control_corrida.xlsx", "Registro_ultima_corrida.txt",
-                "sellos_11_PAGOS_BESS_2609.json",
             ])
+            self.assertTrue(ruta_sellos(rutas["salida"]).is_file())
+
+    def test_los_sellos_que_quedaron_en_log_pasan_a_config(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            base = Path(carpeta)
+            (base / "11_PAGOS_BESS_2609.xlsx").write_bytes(b"x")
+            (base / "Log").mkdir()
+            (base / "Log" / "sellos_11_PAGOS_BESS_2609.json").write_text(
+                '{"Resumen": 1.0}', encoding="utf-8")
+            rutas = nucleo.resolver_rutas(base, "2609")
+            self.assertFalse((base / "Log").exists())  # quedo vacia
+            self.assertEqual(leer_sellos(rutas["salida"]), {"Resumen": 1.0})
 
     def test_sin_periodo_usa_la_planilla_que_hay(self):
         with tempfile.TemporaryDirectory() as carpeta:

@@ -5874,3 +5874,23 @@ ventana con xvfb. 332 pruebas.
   configuracion al registro (era la hoja Verificacion_CSV). Fila
   "SAE_AAMM.csv" con boton "Generar" y tarea `sae_csv`, el ultimo paso de
   "Ejecutar todo". Mes de 13 centrales: 6 s.
+
+## 2026-11-04 (24) — Configuracion en __config__ (modo_bess, modo_cra, tks.json)
+
+- Regla del usuario: "ese tipo de documentos json deben quedar en la
+  carpeta __config__ > AAAA > MM mes, si es especifico de un mes, no en las
+  carpetas de trabajo". __config__ es la carpeta hermana de la del programa
+  (la misma del Revisor; repo abby, __comun__/salidas.py).
+- `Script/config.py`: __config__/config.json compartido, seccion
+  "modo_bess" (Balance_BESS.py) y "modo_cra" (Balance_CRA.py) con un bloque
+  por <equipo>_<usuario>, como "modo_15min". Reglas de abby: nunca borra lo
+  ajeno, no escribe sobre un archivo roto, escritura atomica. La primera
+  vez copia el bloque del config.json de antes.
+- Tokens: __config__/tks.json {"coordinador": {"prmte", "generacion_real"}}
+  (`migrar_tokens` copia los de "claves_api"; tks.ejemplo.json reemplaza a
+  config.ejemplo.json).
+- Sellos: __config__/AAAA/MM Mes/Balance BESS/<caso>_<marca>/ (marca = 8
+  caracteres del sha1 de la ruta del caso: un mes puede tener mas de un
+  caso con el mismo nombre de carpeta). Los que quedaron en el caso (.sellos
+  o Log/) se mueven solos. Control y registro siguen en <caso>/Log/.
+- Pruebas: desarrollo/tests/__init__.py usa BESS_CARPETA_CONFIG temporal.
