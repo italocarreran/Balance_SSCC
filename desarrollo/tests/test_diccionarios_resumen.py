@@ -51,15 +51,29 @@ class DiccionariosResumenTest(unittest.TestCase):
         self.assertEqual(eficiencia["sae tres"], 0.95)
         self.assertTrue(pd.isna(eficiencia["sae dos"]))
 
-    def test_factor_devuelve_pmax_y_el_umbral_de_la_primera_fila(self):
-        factor, umbral = nucleo.construir_dic_resumen_factor(
-            resumen_de_prueba()
-        )
+    def test_factor_devuelve_pmax(self):
+        factor = nucleo.construir_dic_resumen_factor(resumen_de_prueba())
 
         self.assertEqual(factor["sae uno"], 10.0)
         self.assertTrue(pd.isna(factor["sae dos"]))
         self.assertEqual(factor["sae tres"], 3.0)
-        self.assertEqual(umbral, 0.06)
+
+    def test_sin_columnas_que_no_se_usan_no_falla(self):
+        """Pedido del usuario: se quitan de Centrales.xlsx '% Energía
+        sobre mínima', 'Energía mínima', 'Ciclos max diarios' y 'Horas para
+        descarga forzada'."""
+
+        sin = resumen_de_prueba().drop(columns=[
+            c for c in resumen_de_prueba().columns
+            if c.startswith(("% Energía sobre", "Energía mínima", "Ciclos max", "Horas"))
+        ])
+        self.assertEqual(
+            nucleo.construir_dic_resumen_factor(sin),
+            nucleo.construir_dic_resumen_factor(resumen_de_prueba()),
+        )
+        nucleo.construir_dic_resumen_capacidad(sin)
+        nucleo.construir_dic_resumen_eficiencia(sin)
+        nucleo.construir_mapa_barra(sin)
 
     def test_no_depende_del_orden_de_las_columnas(self):
         derecho = nucleo.construir_mapa_barra(resumen_de_prueba())
@@ -74,12 +88,6 @@ class DiccionariosResumenTest(unittest.TestCase):
             nucleo.construir_mapa_barra(sin_barra)
 
         self.assertIn("Barra inyección", str(caja.exception))
-
-    def test_sin_filas_no_hay_umbral(self):
-        vacio = resumen_de_prueba().iloc[0:0]
-
-        with self.assertRaises(nucleo.ErrorEntrada):
-            nucleo.construir_dic_resumen_factor(vacio)
 
 
 class FachadaTest(unittest.TestCase):

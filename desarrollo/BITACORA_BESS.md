@@ -5894,3 +5894,15 @@ ventana con xvfb. 332 pruebas.
   caso con el mismo nombre de carpeta). Los que quedaron en el caso (.sellos
   o Log/) se mueven solos. Control y registro siguen en <caso>/Log/.
 - Pruebas: desarrollo/tests/__init__.py usa BESS_CARPETA_CONFIG temporal.
+
+## 2026-11-05 (25) — Fuera "SoC sobre el minimo" y las columnas de Centrales que no se usan
+
+- Pedido: el usuario quita de Centrales.xlsx '% Energía sobre mínima
+  (indicador nuevo ciclo)', 'Energía mínima', 'Ciclos max diarios' y 'Horas
+  para descarga forzada'; "si no se usa modifica el código para que no
+  falle. si soc sobre el mínimo no se usa hay que sacarlo igual del calculo".
+- `construir_dic_resumen_factor` devuelve solo Pmax (ya no exige ni lee el %
+  de energia sobre minima). Se saco la columna M "SoC sobre el minimo" de E
+  Costos y RE545 (`calcular_m`): no llegaba a ningun monto.
+- Comprobado: caso grande sin esas columnas -> SAE_2609.csv identico byte a
+  byte al del codigo anterior.

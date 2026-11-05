@@ -196,7 +196,7 @@ from .ecostos import (
     renombrar_calculo_e_costos,
 )
 from .columnas_compartidas import (
-    _construir_set_subastas_tipo, calcular_l, calcular_m, calcular_n_o,
+    _construir_set_subastas_tipo, calcular_l, calcular_n_o,
 )
 from .ecostos_columnas import (
     _calcular_asignacion_energia, calcular_ae_af, calcular_r_ecostos,
@@ -362,7 +362,7 @@ __all__ = [
     "NOMBRES_CALCULO_E_COSTOS", "completar_calculo_e_costos_grupos",
     "renombrar_calculo_e_costos",
     "construir_calculo_e_costos", "_construir_set_subastas_tipo",
-    "calcular_l", "calcular_m", "calcular_n_o",
+    "calcular_l", "calcular_n_o",
     "_calcular_asignacion_energia", "calcular_ae_af",
     "calcular_r_ecostos", "calcular_s_t_u", "calcular_w_x",
     "calcular_y_ab_ac_ad", "SERVICIOS_PRORRATA",

@@ -7,7 +7,7 @@ import pandas as pd
 
 from .alertas import ALTA, Alerta, anotar
 from .avisos import _avisar_claves_sin_mapeo
-from .columnas_compartidas import calcular_l, calcular_m, calcular_n_o
+from .columnas_compartidas import calcular_l, calcular_n_o
 from .diccionarios import _buscar_cmg
 from .ecostos_valorizacion import (
     calcular_acumulados_ajustados, calcular_asignacion_ajustada,
@@ -164,7 +164,6 @@ NOMBRES_CALCULO_E_COSTOS = {
     "Copia_Ventana": "Ciclo de Carga del mes",
     "CMg": "CMg",
     "L": "Adj SSCC",
-    "M": "SoC sobre el minimo",
     "N": "Energía SSCC (-) por remunerar",
     "O": "Energía SSCC (+) por remunerar",
     "R": "ranking cmg",
@@ -226,7 +225,7 @@ NOMBRES_CALCULO_E_COSTOS = {
 #     minimo", N / O "Energía SSCC (-)/(+) por remunerar" (sin FD) y
 #     AE / AF "Energía descargada / cargada" (su reparto en Pmax).
 COLUMNAS_AUXILIARES_E_COSTOS = (
-    "X", "AI", "AL", "AO", "AR", "M", "N", "O", "AE", "AF",
+    "X", "AI", "AL", "AO", "AR", "N", "O", "AE", "AF",
 )
 
 # La hoja en tres cuadros, en el orden del calculo: lo que se trae de
@@ -519,14 +518,13 @@ def completar_calculo_e_costos_grupos(
     df_ecostos,
     df_subastas,
     dic_factor,
-    umbral_soc_minimo,
     diccionario,
     df_fd_csf,
     df_fd_cpf,
     registrar=print,
 ):
     """
-    Etapas 2, 3 y 4 de "Calculo E Costos": agrega L, M, N, O, R, S,
+    Etapas 2, 3 y 4 de "Calculo E Costos": agrega L, N, O, R, S,
     T, U, W, X, Y, AB, AC, AD, AE, AF, AG, AH, AI, AJ, AK, AL, AM,
     AN, AO, AP, AQ, AR, AS, AT, AU, AV, AW, AX, AY, AZ, BA y BC a
     df_ecostos (que ya viene con la etapa base
@@ -538,7 +536,8 @@ def completar_calculo_e_costos_grupos(
     Ver los comentarios de seccion mas arriba para el detalle y las
     advertencias de cada columna.
 
-    dic_factor, umbral_soc_minimo: de construir_dic_resumen_factor().
+    dic_factor: de construir_dic_resumen_factor() (Pmax).
+    (M "SoC sobre el minimo" se saco: no llegaba a ningun monto.)
     diccionario: hoja Diccionario (header=None), de la hoja
     "Centrales" de la planilla. Solo hace falta para las centrales que
     la columna 'Central' de la hoja FD no cubre; puede ser None.
@@ -553,7 +552,6 @@ def completar_calculo_e_costos_grupos(
     df = df_ecostos.reset_index(drop=True).copy()
 
     df["L"] = calcular_l(df, df_subastas)
-    df["M"] = calcular_m(df, umbral_soc_minimo)
 
     n, o = calcular_n_o(df)
     df["N"] = n.reset_index(drop=True)

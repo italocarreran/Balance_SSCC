@@ -38,7 +38,7 @@ def _edisp(ventana):
          "Configuración": CENTRAL, "Energía SSCC": 3.0, "FD": 1.0, "FMA": 1.0}
         for h in (10, 11)
     ])
-    re = completar_calculo_re545(re, subastas, 0.1, {k: 40.0}, {k: 0.85}, registrar=silencio)
+    re = completar_calculo_re545(re, subastas, {k: 40.0}, {k: 0.85}, registrar=silencio)
     oferta = pd.DataFrame([{"Central": CENTRAL, "Ventana T": ventana, "Oferta": 8, "Completa": 1}])
     res = construir_resumen_ventanas_re545(re, oferta, {k: 40.0}, registrar=silencio)
     return float(pd.to_numeric(res.iloc[0]["Edisp_T"]))

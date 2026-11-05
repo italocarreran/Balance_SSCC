@@ -140,48 +140,19 @@ def construir_mapa_barra(resumen_bess):
 
 def construir_dic_resumen_factor(resumen_bess):
     """
-    Arma nombre_central -> factor (columna "Pmax (MW)") y el umbral
-    global de SoC minimo, a partir de la MISMA hoja "Resumen BESS" de
-    Centrales.xlsx que ya usa construir_mapa_barra().
+    nombre_central -> factor (columna "Pmax (MW)" de "Resumen BESS"),
+    usado en AE/AF de E Costos.
 
-    Replica Resumen!B:C (factor, usado en AE/AF) y Resumen!H8
-    (umbral, usado en M) de Actualizar_Calculos_Columnas. El usuario
-    confirmo con un archivo real que la hoja "Resumen" del libro
-    original es la MISMA tabla que "Resumen BESS" (los mismos 9
-    encabezados: Nombre activo...Eficiencia) -- no hace falta una
-    hoja nueva ni un archivo aparte.
-
-    El umbral (celda fija H8 en el original) es, en la practica, el
-    valor de "% Energia sobre minima" de la PRIMERA fila de datos de
-    la tabla -- aca se toma igual (primera fila con nombre de
-    central, no una fila fija: el encabezado de Centrales.xlsx no
-    esta siempre en la misma posicion, ver _leer_resumen_bess()).
+    Antes devolvia tambien el umbral de "% Energía sobre mínima"
+    (Resumen!H8 del original), que solo alimentaba la columna M "SoC
+    sobre el minimo". M no llegaba a ningun monto y se saco del calculo
+    (pedido del usuario 2026-11-05, que tambien quito esa columna de
+    Centrales.xlsx): la columna ya no se lee.
     """
 
-    dic_factor = _mapa_resumen_bess_por_nombre(
+    return _mapa_resumen_bess_por_nombre(
         resumen_bess, "pmax", "Pmax (MW)"
     )
-
-    columna_nombre = _exigir_columna(
-        resumen_bess, "Nombre activo", "nombre", "activ"
-    )
-    columna_umbral = _exigir_columna(
-        resumen_bess, "% Energía sobre mínima (indicador nuevo ciclo)",
-        "energia sobre",
-    )
-
-    filas_con_nombre = resumen_bess[columna_nombre].notna()
-
-    if not filas_con_nombre.any():
-        raise ErrorEntrada(
-            f"La hoja '{HOJA_RESUMEN_BESS}' de {ARCHIVO_CENTRALES} no "
-            f"tiene filas de datos para sacar el umbral de SoC minimo."
-        )
-
-    primer_indice = resumen_bess.index[filas_con_nombre][0]
-    umbral_soc_minimo = float(resumen_bess.loc[primer_indice, columna_umbral])
-
-    return dic_factor, umbral_soc_minimo
 
 
 def _buscar_cmg(dic_cmg, barra, cuarto_hora):
