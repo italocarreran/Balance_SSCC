@@ -5906,3 +5906,15 @@ ventana con xvfb. 332 pruebas.
   Costos y RE545 (`calcular_m`): no llegaba a ningun monto.
 - Comprobado: caso grande sin esas columnas -> SAE_2609.csv identico byte a
   byte al del codigo anterior.
+
+## 2026-11-05 (26) — Buscar_Barras_CMg.py
+
+- Pedido: "un código para buscar las barras en los cmg ... una ventana
+  selecciono el archivo csv y indico el nombre de la barra aproximado".
+- Ventana aparte en la raiz. Lee solo la columna BARRA del CSV (pyarrow si
+  esta: 2,9 M filas en ~1 s; sin pyarrow ~4 s) y busca mientras se escribe:
+  nombres limpios (sin tildes ni guiones bajos), palabras en cualquier
+  orden, numeros por valor (12 = 0012) y parecido para lo mal escrito.
+  Doble clic / Enter / "Copiar nombre" copia el nombre exacto.
+- Prueba: desarrollo/tests/test_buscar_barras.py (barras reales de
+  Centrales.xlsx entre 1.000 de relleno).

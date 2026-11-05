@@ -38,6 +38,15 @@ pip install python-calamine
 python Balance_BESS.py
 ```
 
+Para encontrar el nombre exacto de una barra en el CSV de CMg (el que va en
+`Barra inyección` de Centrales.xlsx), hay una ventana aparte: se elige el
+CSV, se escribe el nombre aproximado (`arena 220`, `tocopila`, `victor jara`)
+y doble clic copia el nombre exacto.
+
+```bash
+python Buscar_Barras_CMg.py
+```
+
 0. **La configuración vive en `__config__/`**, la carpeta hermana de la de
    este programa (la misma del Revisor y los comparadores), nunca en las
    carpetas de trabajo:
