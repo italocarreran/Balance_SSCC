@@ -179,3 +179,54 @@ class TestSubastasConsolidadas(unittest.TestCase):
                     Path(carpeta), "2609", registrar=lambda *_: None
                 )
         self.assertIn("Consolidar", str(caso.exception))
+
+
+class TestConsolidadoConTodasLasCentrales(unittest.TestCase):
+    """subastas_AAMM.xlsx trae TODAS las centrales del Access; el filtro
+    BESS/SAE se aplica recien al llevar la hoja a 11_PAGOS_BESS
+    (pedido del usuario 2026-11-05)."""
+
+    def test_consolidar_no_filtra_y_la_hoja_si(self):
+        from unittest import mock
+        from Script.Subastas import Ofertas_Adjudicadas as ofertas_adj
+
+        un_access = pd.DataFrame({
+            "CONFIGURACIÓN": ["BESS UNO", "TERMICA X", "HIDRO Y", "SAE DOS"],
+            "SERVICIO": ["CSF(+)", "CSF(+)", "CPF(-)", "CTF(+)"],
+            "AÑO": [2026] * 4, "MES": [10] * 4, "DIA": [1] * 4,
+            "HORA": [1, 1, 2, 3], "BANDA": [1] * 4,
+            "CANTIDAD MW": [5.0, 9.0, 4.0, 2.0],
+            "PRECIO USD/MW": [1.0] * 4,
+            "CANTIDAD PONDERADA MW": [5.0, 9.0, 4.0, 2.0],
+        })
+
+        with tempfile.TemporaryDirectory() as carpeta:
+            base = Path(carpeta)
+            for sub in nucleo.SUBCARPETAS_CASO:
+                (base / sub).mkdir(parents=True, exist_ok=True)
+            db = ofertas_adj.asegurar_carpeta_db(base / "Subastas")
+            (db / ofertas_adj.nombre_accdb("2610", 1)).write_bytes(b"")
+
+            with mock.patch.object(
+                ofertas_adj, "leer_accdb", lambda ruta: un_access.copy()
+            ):
+                destino = nucleo.consolidar_subastas(
+                    base, "2610", registrar=lambda *_: None
+                )
+
+            consolidado = pd.read_excel(destino)
+            self.assertEqual(
+                sorted(consolidado["CONFIGURACIÓN"]),
+                ["BESS UNO", "HIDRO Y", "SAE DOS", "TERMICA X"],
+            )
+
+            mensajes = []
+            hoja = nucleo.construir_subastas_desde_consolidado(
+                base / "Subastas", "2610", registrar=mensajes.append
+            )
+            self.assertEqual(
+                sorted(hoja["Configuración"]), ["BESS UNO", "SAE DOS"]
+            )
+            self.assertTrue(
+                any("2 de 4 central(es)" in m for m in mensajes), mensajes
+            )

@@ -5894,3 +5894,23 @@ ventana con xvfb. 332 pruebas.
   caso con el mismo nombre de carpeta). Los que quedaron en el caso (.sellos
   o Log/) se mueven solos. Control y registro siguen en <caso>/Log/.
 - Pruebas: desarrollo/tests/__init__.py usa BESS_CARPETA_CONFIG temporal.
+
+## 2026-11-05 (1) — Consolidado de subastas con todas las centrales
+
+- Pedido del usuario: "El consolidado de subastas de balance bess debe
+  tener todas las centrales, se debe filtrar al importarlo al archivo final
+  11_bess".
+- Revisado: ya era así en el código (`Ofertas_Adjudicadas.construir_crudo`
+  no filtra por configuración; el filtro BESS/SAE vive solo en
+  `construir_subastas_desde_crudo`, al armar la hoja `Subastas` de
+  11_PAGOS_BESS). Se deja explícito y blindado:
+  - `consolidar_subastas` registra cuántas centrales escribió ("todas, sin
+    filtrar") y el docstring dice que no filtra.
+  - `construir_subastas_desde_crudo` registra el filtro: "N de M fila(s);
+    X de Y central(es)".
+  - Prueba nueva `TestConsolidadoConTodasLasCentrales` con el
+    `construir_crudo` real (solo `leer_accdb` simulado): el consolidado
+    trae BESS, SAE, TERMICA e HIDRO y la hoja solo BESS/SAE.
+- Si un `subastas_AAMM.xlsx` viejo vino filtrado de otro lado, basta con
+  volver a apretar "Consolidar".
+- Pruebas: 359 OK (21 salteadas, ventana sin pantalla).

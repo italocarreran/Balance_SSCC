@@ -120,6 +120,11 @@ def consolidar_subastas(carpeta_base, aamm, registrar=print, progreso=None):
     desde la hora de cada PID, lo que dice el PID (Hora_PID), sin las
     filas de CANTIDAD MW = 0. La hoja 'Subastas' del libro se lleva de
     aca. Devuelve la ruta del archivo.
+
+    El consolidado trae TODAS las centrales (todas las configuraciones
+    del Access), sin el filtro BESS/SAE: el filtro se aplica recien al
+    llevar la hoja 'Subastas' a 11_PAGOS_BESS_AAMM.xlsx
+    (construir_subastas_desde_crudo). Pedido del usuario 2026-11-05.
     """
 
     aamm = validar_aamm(aamm)
@@ -162,7 +167,11 @@ def consolidar_subastas(carpeta_base, aamm, registrar=print, progreso=None):
     if progreso:
         progreso(100)
 
-    registrar(f"Listo: {len(df_crudo):,} fila(s) en {destino}")
+    centrales = df_crudo["CONFIGURACIÓN"].nunique(dropna=True)
+    registrar(
+        f"Listo: {len(df_crudo):,} fila(s) de {centrales} central(es) "
+        f"(todas, sin filtrar) en {destino}"
+    )
 
     return destino
 

@@ -275,7 +275,9 @@ Ver `desarrollo/MAPA.md` para qué hace cada módulo.
 │   ├── DB subastas/                  (botón "Traer")
 │   │   └── OfertasSSCCAdj*.accdb     <- el origen real de las subastas
 │   └── subastas_AAMM.xlsx            (botón "Consolidar": junta los Access;
-│                                      la hoja 'Subastas' se lleva de aquí)
+│                                      trae TODAS las centrales; la hoja
+│                                      'Subastas' se lleva de aquí y recién
+│                                      ahí se filtra BESS/SAE)
 ├── Prorrata retiros/
 │   └── Prorrata_Retiros_<AAMM>_pre.xlsx o _def.xlsx
 │       (hoja "Prorrata 15min")

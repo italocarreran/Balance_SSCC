@@ -240,8 +240,9 @@ def construir_subastas_desde_crudo(
     Del crudo de los Access (COLUMNAS_CRUDAS de Ofertas_Adjudicadas) a
     la hoja "Subastas" del consolidado.
 
-    El filtro es el mismo de siempre: se quedan solo las filas cuya
-    Configuración contiene "BESS" o "SAE".
+    El crudo (subastas_AAMM.xlsx) trae todas las centrales; el filtro se
+    aplica ACA, al importar a 11_PAGOS_BESS: se quedan solo las filas
+    cuya Configuración contiene "BESS" o "SAE".
 
     La hoja llega hasta "Energía SSCC". El FD y el FMA NO se escriben
     aca: se calculan y se aplican recien en Calculo RE545, desde las
@@ -278,6 +279,13 @@ def construir_subastas_desde_crudo(
     textos = df_crudo["CONFIGURACIÓN"].map(_texto_seguro)
     filtrado = df_crudo[textos.map(_contiene_bess_o_sae_sin_bat)]
     filtrado = filtrado.reset_index(drop=True)
+    centrales_total = textos[textos != ""].nunique()
+    centrales_bess = filtrado["CONFIGURACIÓN"].map(_texto_seguro).nunique()
+    registrar(
+        f"  Filtro BESS/SAE: {len(filtrado):,} de {len(df_crudo):,} "
+        f"fila(s); {centrales_bess} de {centrales_total} central(es) de "
+        f"{origen}."
+    )
 
     df = pd.DataFrame(index=filtrado.index)
 
