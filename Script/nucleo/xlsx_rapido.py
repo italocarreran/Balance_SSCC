@@ -384,7 +384,34 @@ def _remapear_estilos(xml, mapa):
 # PEGAR
 # ============================================================
 
-def pegar_hojas(ruta_destino, ruta_nuevas, orden=(), ignorar=(), rellenos=None):
+def _poner_guardados(xml, guardados):
+    """
+    Agrega a las celdas con formula de 'guardados' (ref -> valor) su
+    valor calculado: openpyxl las escribe con <v></v> vacio.
+    """
+
+    from .relleno_rapido import valor_guardado_xml
+
+    for ref, valor in guardados.items():
+        t, v = valor_guardado_xml(valor)
+        if not v:
+            continue
+        patron = re.compile(
+            rb'<c r="' + ref.encode() + rb'"([^>]*)>(<f[^>]*>.*?</f>)'
+            rb'(?:<v\s*/>|<v></v>)?</c>', re.S
+        )
+        xml = patron.sub(
+            lambda m: (
+                b'<c r="' + ref.encode() + b'"' + m.group(1) + t.encode()
+                + b">" + m.group(2) + b"<v>" + v.encode("utf-8") + b"</v></c>"
+            ),
+            xml, count=1,
+        )
+    return xml
+
+
+def pegar_hojas(ruta_destino, ruta_nuevas, orden=(), ignorar=(), rellenos=None,
+                guardados=None):
     """
     Pone en ruta_destino TODAS las hojas de ruta_nuevas (reemplazando
     las del mismo nombre o agregandolas) y deja las demas hojas de
@@ -398,15 +425,20 @@ def pegar_hojas(ruta_destino, ruta_nuevas, orden=(), ignorar=(), rellenos=None):
     cortadas (solo sus primeras filas): de esas se pegan las filas de
     encabezado del temporal y las filas de datos las genera el relleno,
     directo en el libro final y por partes.
+
+    guardados: {hoja: {ref: valor}} de celdas con formula que llevan
+    tambien su valor calculado (ver _poner_guardados).
     """
 
     ruta_destino = Path(ruta_destino)
+    guardados = guardados or {}
     ruta_nuevas = Path(ruta_nuevas)
     rellenos = rellenos or {}
 
-    if not ruta_destino.is_file() and rellenos:
-        # Con rellenos el temporal no esta completo: se parte de una
-        # copia suya y se pega encima de si mismo.
+    if not ruta_destino.is_file() and (rellenos or guardados):
+        # Con rellenos el temporal no esta completo (y a los guardados
+        # les falta su valor): se parte de una copia suya y se pega
+        # encima de si mismo.
         shutil.copyfile(ruta_nuevas, ruta_destino)
 
     if not ruta_destino.is_file():
@@ -448,6 +480,8 @@ def pegar_hojas(ruta_destino, ruta_nuevas, orden=(), ignorar=(), rellenos=None):
             xml = _a_texto_en_linea(xml, textos)
             xml = _remapear_estilos(xml, mapa_estilos)
             xml = xml.replace(b' tabSelected="1"', b"")
+            if hoja["name"] in guardados:
+                xml = _poner_guardados(xml, guardados[hoja["name"]])
 
             existente = por_nombre.get(hoja["name"])
             comentarios = _anexos_de_hoja(nuevas, hoja["parte"])
@@ -480,8 +514,8 @@ def pegar_hojas(ruta_destino, ruta_nuevas, orden=(), ignorar=(), rellenos=None):
 
         workbook = viejo.read(_WORKBOOK).decode("utf-8")
         workbook = _workbook_final(workbook, hojas_viejas, agregadas, orden)
-        if any(b"<f>" in xml for xml in reemplazos.values()) or any(
-            b"<f>" in hoja["xml"] for hoja in agregadas
+        if any(b"<f" in xml for xml in reemplazos.values()) or any(
+            b"<f" in hoja["xml"] for hoja in agregadas
         ):
             workbook = _calcular_al_abrir(workbook)
 

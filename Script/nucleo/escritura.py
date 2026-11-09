@@ -155,6 +155,7 @@ def _segundos(segundos):
 
 def _pegar_en_salida(
     writer_ruta, ruta_salida, wb_existente, escritas_vacio, rellenos=None,
+    guardados=None,
 ):
     """
     Pasa las hojas del libro temporal al de salida (xlsx_rapido) y borra
@@ -173,7 +174,7 @@ def _pegar_en_salida(
 
         pegar_hojas(
             ruta_salida, writer_ruta, ORDEN_HOJAS_SALIDA,
-            ignorar=escritas_vacio, rellenos=rellenos,
+            ignorar=escritas_vacio, rellenos=rellenos, guardados=guardados,
         )
     finally:
         Path(writer_ruta).unlink(missing_ok=True)
@@ -662,11 +663,13 @@ def escribir_pagos_bess(
             writer.book.calculation.fullCalcOnLoad = True
         crono.tramo("formato (encabezados, anchos, numeros, marco)")
         filas_rapidas = _rellenos_de(writer.book)
+        guardados = _guardados_de(writer.book)
         relleno = _asegurar_una_hoja(writer)
 
     crono.tramo("guardar el archivo temporal")
     _pegar_en_salida(
-        ruta_temporal, ruta_salida, wb_existente, relleno, filas_rapidas
+        ruta_temporal, ruta_salida, wb_existente, relleno, filas_rapidas,
+        guardados,
     )
     crono.tramo("pegar las hojas en el libro")
     # Cuando se escribio cada hoja (ver sellos.py / vigencia.py).
@@ -925,42 +928,70 @@ def formula_en_espanol(formula):
     return '"'.join(partes)
 
 
-def _comentar_formulas_de_prueba(ws, celdas, plantillas, letras, rangos,
-                                 matriciales=()):
+def _formulas_de_prueba_en_fila(ws, celdas, plantillas, letras, rangos,
+                                matriciales=()):
     """
-    Agrega al comentario del nombre de cada columna la formula de Excel
-    equivalente (pedido del usuario: "para que los coordinados puedan
-    probar, aunque no se actualice"). celdas: clave -> letra de la
-    columna donde va el comentario; la fila de ejemplo es la primera de
-    datos (o la que haga falta si la formula mira filas de arriba).
+    Pone en la PRIMERA fila de datos de cada columna la formula de Excel
+    equivalente (pedido del usuario, 2026-11-09: en vez de dejarla en el
+    comentario, "dejarla en la primera fila [...] y todos los demas
+    valores para abajo que sean valores pegados desde el Python", asi
+    los coordinados la extienden hacia abajo y comparan). El resto de
+    la columna sigue siendo el valor calculado por el programa.
+
+    celdas: clave -> letra de la columna. La fila es la 4 (la primera de
+    datos), o la que haga falta si la formula mira filas de arriba
+    ({W@-1} -> fila 5). La celda guarda tambien el valor del programa
+    como valor calculado, asi lo que vuelve a leer la hoja (compensacion,
+    CSV) lo ve sin abrir el libro en Excel. En el comentario del nombre
+    de la columna queda la formula en español, para escribirla a mano.
     """
 
+    from openpyxl.worksheet.formula import ArrayFormula
+
+    extras = _extras(ws)
+    guardados = _guardados(ws)
     for clave, plantilla in plantillas.items():
         letra = celdas.get(clave)
-        if letra is None:
+        if letra is None or letra in extras["formulas"]:
             continue
         saltos = [int(s) for s in re.findall(r"@(-?\d+)", plantilla)]
         fila = 4 - min([0] + saltos)
         try:
-            formula = formula_en_espanol(
-                _formula_de_prueba(plantilla, letras, rangos, fila)
-            )
+            formula = _formula_de_prueba(plantilla, letras, rangos, fila)
         except KeyError:
             continue  # la plantilla nombra una columna que no esta
-        texto = (
-            f"Fórmula equivalente para probar (fila {fila}; el programa no "
-            f"la escribe, el valor lo calcula él):\n{formula}"
+        if not any(
+            primera <= fila <= ultima
+            for c, (primera, ultima) in rangos.items()
+            if letras.get(c) == letra
+        ):
+            continue  # la tabla no llega a esa fila
+
+        ref = f"{letra}{fila}"
+        celda = ws[ref]
+        matricial = clave in matriciales
+        guardados[ref] = celda.value
+        celda.value = ArrayFormula(ref, formula) if matricial else formula
+        extras["formula_celda"].setdefault(letra, {})[fila] = (
+            formula, matricial
         )
-        if clave in matriciales:
+
+        texto = (
+            f"Fórmula de Excel equivalente en la fila {fila} (las demás "
+            f"filas son valores calculados por el programa; se puede "
+            f"extender hacia abajo para comparar):\n"
+            f"{formula_en_espanol(formula)}"
+        )
+        if matricial:
             texto += (
                 "\n(matricial: Ctrl+Shift+Enter en Excel 2019 o anterior)"
             )
-        celda = ws[f"{letra}3"]
-        previo = celda.comment.text + "\n\n" if celda.comment else ""
+        encabezado = ws[f"{letra}3"]
+        previo = encabezado.comment.text + "\n\n" if encabezado.comment else ""
         comentario = _comentario(previo + texto)
         comentario.width = 420
         comentario.height = 220
-        celda.comment = comentario
+        encabezado.comment = comentario
 
 
 def _terminar_e_costos(ws, letras, filas):
@@ -969,7 +1000,7 @@ def _terminar_e_costos(ws, letras, filas):
         SIN_PUESTO_E_COSTOS,
     )
     rangos = {clave: (4, 3 + filas) for clave in letras}
-    _comentar_formulas_de_prueba(
+    _formulas_de_prueba_en_fila(
         ws, letras, FORMULAS_PRUEBA_E_COSTOS, letras, rangos,
         MATRICIALES_E_COSTOS,
     )
@@ -990,12 +1021,12 @@ def _terminar_re545(ws, letras, df_re545, resumen=None, filas_resumen=0):
         clave: letra for clave, letra in letras.items()
         if not clave.startswith("R_")
     }
-    _comentar_formulas_de_prueba(
+    _formulas_de_prueba_en_fila(
         ws, principal, FORMULAS_PRUEBA_RE545, letras, rangos,
         MATRICIALES_RE545,
     )
     if resumen:
-        _comentar_formulas_de_prueba(
+        _formulas_de_prueba_en_fila(
             ws, resumen, FORMULAS_PRUEBA_RESUMEN_RE545, letras, rangos,
             MATRICIALES_RE545,
         )
@@ -1165,9 +1196,30 @@ def _extras(ws):
     if not hasattr(ws, "_balance_extras"):
         ws._balance_extras = {
             "formulas": {}, "guion": {}, "relleno": {},
-            "izquierda_000": set(),
+            "izquierda_000": set(), "formula_celda": {},
         }
     return ws._balance_extras
+
+
+def _guardados(ws):
+    """
+    ref -> valor calculado de las celdas con formula que lo llevan
+    guardado (las de _formulas_de_prueba_en_fila): openpyxl escribe la
+    formula sin valor y xlsx_rapido.pegar_hojas se lo agrega.
+    """
+
+    if not hasattr(ws, "_balance_guardados"):
+        ws._balance_guardados = {}
+    return ws._balance_guardados
+
+
+def _guardados_de(book):
+    """{hoja: {ref: valor}} de las hojas con formulas de prueba."""
+
+    return {
+        ws.title: ws._balance_guardados for ws in book.worksheets
+        if getattr(ws, "_balance_guardados", None)
+    }
 
 
 def _rellenos_de(book):
@@ -1548,11 +1600,13 @@ def escribir_salida(
             _respuestas_fd_a_la_izquierda(writer.sheets[HOJA_FD])
         crono.tramo("formato (encabezados, anchos, numeros, marco)")
         filas_rapidas = _rellenos_de(writer.book)
+        guardados = _guardados_de(writer.book)
         relleno = _asegurar_una_hoja(writer)
 
     crono.tramo("guardar el archivo temporal")
     _pegar_en_salida(
-        ruta_temporal, ruta_salida, wb_existente, relleno, filas_rapidas
+        ruta_temporal, ruta_salida, wb_existente, relleno, filas_rapidas,
+        guardados,
     )
     crono.tramo("pegar las hojas en el libro")
     crono.total()

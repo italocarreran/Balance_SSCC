@@ -274,10 +274,11 @@ TOTALES_E_COSTOS = ("BA", "U", "BC")
 # ninguna formula mira estas columnas.
 SIN_PUESTO_E_COSTOS = ("AB", "AD")
 
-# Formula de Excel EQUIVALENTE para el comentario de las columnas que se
-# calculan mirando otras filas (pedido del usuario: "como para que los
-# coordinados puedan probar"). No se escribe en las celdas: el valor lo
-# calcula el programa. Plantillas: {clave} = la celda de la fila de
+# Formula de Excel EQUIVALENTE de las columnas que se calculan mirando
+# otras filas (pedido del usuario: "como para que los coordinados puedan
+# probar"). Va en la PRIMERA fila de datos de la columna (y en español en
+# el comentario del nombre); las demas filas son los valores del
+# programa, asi se la puede extender hacia abajo y comparar. Plantillas: {clave} = la celda de la fila de
 # ejemplo, {clave:r} = el rango entero de la columna ($X$4:$X$n),
 # {clave:a} = desde la primera fila hasta la de ejemplo, {clave@-1} = la
 # fila de arriba. Las que necesitan otra hoja (Pmax, Subastas) no van.

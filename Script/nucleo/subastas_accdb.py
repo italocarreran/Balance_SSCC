@@ -49,18 +49,17 @@ from .utiles import (
 #                      corrio el resto de la hoja una columna)
 #   M Clave horaria <- Configuración & Dia & Hora_dia (igual que antes)
 #   N Ciclo         <- vacia (se calcula en Calculo E Costos)
-#   O Energía SSCC  <- CANTIDAD PONDERADA MW
+#   O Energía SSCC  <- CANTIDAD MW (columna H del consolidado)
 #   P FD            <- PENDIENTE (era DB!Y; no existe en el Access)
 #   Q FMA           <- PENDIENTE (era DB!V; no existe en el Access)
 # ============================================================
 
 # De que columna del Access sale "Energía SSCC" (Subastas!O). El
-# Access trae las dos cantidades: la cruda (Quantity -> "CANTIDAD MW")
-# y la ponderada (Quantity2 -> "CANTIDAD PONDERADA MW", que
-# entradas_sscc.py completa con la cruda cuando viene vacia). Se eligio
-# la ponderada porque es la que se remunera; esta en una constante
-# para poder cambiarla de un lado si el usuario confirma la otra.
-COLUMNA_ENERGIA_SSCC_ACCDB = "CANTIDAD PONDERADA MW"
+# Access trae las dos cantidades: la cruda (Quantity -> "CANTIDAD MW",
+# columna H de subastas_AAMM.xlsx) y la ponderada (Quantity2 ->
+# "CANTIDAD PONDERADA MW", columna J). Pedido del usuario (2026-11-09):
+# se toma la H, CANTIDAD MW, no la ponderada.
+COLUMNA_ENERGIA_SSCC_ACCDB = "CANTIDAD MW"
 
 # El Access no trae ni el FD ni el FMA: en la planilla 3 venian pegados
 # en DB!Y y DB!V. Los dos se calculan ahora desde la carpeta "FD y FMA"

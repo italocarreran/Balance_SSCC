@@ -5955,3 +5955,24 @@ ventana con xvfb. 332 pruebas.
   pageSize 1000; corta si la pagina viene vacia o repetida, o al llegar a
   totalPages). Fuera las rutas adivinadas. La tabla muestra Subestacion,
   Tension, Region y Coordinado.
+
+## 2026-11-09 (30) — Fórmula de prueba en la primera fila; Energía SSCC = CANTIDAD MW
+
+- Pedido: la fórmula equivalente de E Costos y RE545, en vez de solo en el
+  comentario, "en la primera fila con valores [...] y todos los demás valores
+  para abajo que sean valores pegados desde el Python", para que los
+  coordinados la extiendan y comparen. `escritura._formulas_de_prueba_en_fila`
+  (antes `_comentar_formulas_de_prueba`): la fórmula va en la fila 4 (o en la
+  primera donde aplica si mira filas de arriba: Bloque ordenado en la 5,
+  BI/BJ de RE545 en la 8), como fórmula de matriz si es matricial; el
+  comentario queda con la explicación y la fórmula en español. La celda
+  guarda también el valor del programa como valor calculado
+  (`relleno_rapido.celda_formula_xml` en las hojas grandes,
+  `xlsx_rapido._poner_guardados` en las chicas), así la compensación y el
+  CSV, que releen la hoja con pandas, ven el número sin abrir Excel.
+- Subastas: `Energía SSCC` sale de `CANTIDAD MW` (columna H del
+  consolidado), no de `CANTIDAD PONDERADA MW` (J).
+  `COLUMNA_ENERGIA_SSCC_ACCDB`.
+- Pruebas: test_planillas_ordenadas (fórmula en la fila 4, valores abajo,
+  valor guardado, lectura con pandas), test_relleno_rapido (valores guardados
+  iguales en los dos caminos), test_subastas_hoja_y_cambio_hora (H, no J).

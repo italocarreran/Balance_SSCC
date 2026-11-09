@@ -92,6 +92,35 @@ def _valor_pandas(valor):
     return str(valor), None
 
 
+def valor_guardado_xml(valor):
+    """
+    (atributo t, texto de <v>) del valor calculado que se guarda junto a
+    una formula (ver escritura._formulas_de_prueba_en_fila). Vacio si no
+    hay valor: Excel lo calcula al abrir.
+    """
+
+    if isinstance(valor, (bool, np.bool_)):
+        return ' t="b"', "1" if valor else "0"
+    if isinstance(valor, (int, float, np.integer, np.floating)):
+        if not math.isfinite(float(valor)):
+            return "", ""
+        return "", "%.16g" % float(valor)
+    if isinstance(valor, str) and valor != "":
+        return ' t="str"', escape(valor)
+    return "", ""
+
+
+def celda_formula_xml(ref, estilo, formula, matricial, valor):
+    """<c> con formula (y su valor calculado, si hay). estilo: ' s="n"'."""
+
+    t, v = valor_guardado_xml(valor)
+    f = f'<f t="array" ref="{ref}">' if matricial else "<f>"
+    return (
+        f'<c r="{ref}"{estilo}{t}>{f}{escape(formula[1:])}</f>'
+        f"<v>{v}</v></c>"
+    )
+
+
 def _texto_xml(texto):
     t = escape(texto)
     preservar = texto.strip() and texto != texto.strip()
@@ -152,6 +181,10 @@ class RellenoHoja:
         guion = extras.get("guion", {})                # letra -> texto
         rellenos = extras.get("relleno", {})           # letra -> (PatternFill, ultima)
         izquierda = extras.get("izquierda_000", set())  # letras de FD
+        # letra -> {fila: (formula, matricial)}: una sola celda con
+        # formula (la de prueba) en una columna de valores.
+        self.formula_celda = extras.get("formula_celda", {})
+        self.guardados = getattr(ws, "_balance_guardados", None) or {}
 
         # Ultima fila de cada tabla: la ultima fila con dato (los vacios
         # que deja pandas son texto vacio: tambien cuentan).
@@ -407,6 +440,25 @@ class RellenoHoja:
             ))
         return celdas
 
+    def _poner_formula_celda(self, columna, celdas):
+        """
+        Cambia en 'celdas' (lista de la columna, desde su fila0) las que
+        llevan formula de prueba, con el mismo estilo que tenia el valor
+        y el valor como valor calculado.
+        """
+
+        letra = columna["letra"]
+        for fila, (formula, matricial) in self.formula_celda.get(letra, {}).items():
+            i = fila - columna["fila0"]
+            if not 0 <= i < len(celdas):
+                continue
+            ref = f"{letra}{fila}"
+            estilo = re.search(r' s="\d+"', celdas[i] or "")
+            celdas[i] = celda_formula_xml(
+                ref, estilo.group(0) if estilo else "", formula, matricial,
+                self.guardados.get(ref),
+            )
+
     def filas_xml(self, mapa):
         """
         Las filas de datos (<row>...</row>) como bytes, en orden, con los
@@ -422,6 +474,7 @@ class RellenoHoja:
         columnas = []
         for columna in sorted(self.columnas, key=lambda c: c["columna"]):
             celdas = self._celdas_de_columna(columna, mapa)
+            self._poner_formula_celda(columna, celdas)
             antes = columna["fila0"] - primera
             despues = alto - antes - len(celdas)
             columnas.append([""] * antes + celdas + [""] * despues)
