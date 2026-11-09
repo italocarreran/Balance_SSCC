@@ -40,19 +40,46 @@ class TestPuntos(unittest.TestCase):
             self.assertEqual(bp.buscar(puntos, texto)[0][0]["id"], esperado, texto)
         self.assertEqual(bp.buscar(puntos, " "), [])
 
-    def test_prueba_las_rutas_hasta_que_una_sirve(self):
+    def test_baja_todas_las_paginas(self):
+        """La forma de /medidas-v2/measurement-point/all del portal."""
+
+        def pagina(n, total=3):
+            return {"page": n, "pageSize": 2, "totalElements": 5, "totalPages": total,
+                    "content": [{"subStation": f"SE {n}{k}", "region": "II", "tension": "220",
+                                 "coordinatorId": "C1", "measurePointId": f"P{n}{k}"}
+                                for k in range(2 if n < 2 else 1)]}
+
         class R:
-            def __init__(self, codigo, datos=None):
-                self.status_code, self._datos, self.text = codigo, datos, "x"
+            status_code, text = 200, ""
+
+            def __init__(self, datos):
+                self._datos = datos
 
             def json(self):
                 return self._datos
 
-        respuestas = [R(404), R(200, V1)]
-        with mock.patch("requests.get", side_effect=lambda *a, **k: respuestas.pop(0)):
+        pedidas = []
+
+        def get(url, params=None, **_):
+            pedidas.append(params["page"])
+            return R(pagina(params["page"]))
+
+        with mock.patch("requests.get", side_effect=get):
             puntos, url = bp.bajar_puntos("t", avisar=lambda *_: None)
-        self.assertEqual(url, bp.RUTAS_LISTA[1][0])
-        self.assertEqual(len(puntos), 2)
+        self.assertEqual(url, bp.URL_PUNTOS)
+        self.assertEqual(pedidas, [0, 1, 2])
+        self.assertEqual([p["id"] for p in puntos], ["P00", "P01", "P10", "P11", "P20"])
+        self.assertEqual(puntos[0]["subStation"], "SE 00")
+        self.assertEqual(puntos[0]["tension"], "220")
+        self.assertEqual(bp.buscar(puntos, "se 11")[0][0]["id"], "P11")
+
+    def test_error_de_la_api_dice_que_respondio(self):
+        class R:
+            status_code, text = 401, "clave invalida"
+
+        with mock.patch("requests.get", return_value=R()):
+            with self.assertRaisesRegex(RuntimeError, "HTTP 401 clave invalida"):
+                bp.bajar_puntos("t", avisar=lambda *_: None)
 
     def test_token_y_lista_en_config_hacia_arriba(self):
         with tempfile.TemporaryDirectory() as raiz:

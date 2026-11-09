@@ -47,8 +47,8 @@ una funciona sola, guardada en cualquier carpeta):
 - `Buscar_Puntos_PRMTE.py`: sin elegir archivo; baja una vez la lista de
   puntos de medida de la API (token de `__config__/tks.json` o pegado en la
   ventana), la guarda en `__config__/puntos_prmte.json` y busca por nombre
-  aproximado. La ruta de la API que entrega la lista está SIN CONFIRMAR: se
-  prueban varias (`RUTAS_LISTA`) y la ventana dice qué respondió cada una.
+  aproximado (`GET /medidas-v2/measurement-point/all`, todas sus páginas).
+  Muestra subestación, tensión, región y coordinado de cada punto.
 
 ```bash
 python Herramientas/Buscar_Barras_CMg.py

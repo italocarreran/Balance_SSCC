@@ -5945,3 +5945,13 @@ ventana con xvfb. 332 pruebas.
   Rule matched" (no existen en la API). Se agrega primero la ruta de medidas
   v2 que si existe, sin measurePointId, por si devuelve todos los puntos.
   La respuesta de error ahora muestra hasta 300 caracteres.
+
+## 2026-11-09 (29) — Buscar_Puntos_PRMTE con la ruta real de la lista
+
+- El usuario mando del portal de la API: GET /medidas-v2/measurement-point/all,
+  paginado ({page, pageSize, totalElements, totalPages, content:[{subStation,
+  region, tension, coordinatorId, measurePointId}]}).
+- `bajar_puntos` usa solo esa ruta y baja todas las paginas (page desde 0,
+  pageSize 1000; corta si la pagina viene vacia o repetida, o al llegar a
+  totalPages). Fuera las rutas adivinadas. La tabla muestra Subestacion,
+  Tension, Region y Coordinado.

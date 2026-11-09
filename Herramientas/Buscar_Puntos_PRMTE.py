@@ -15,10 +15,11 @@ programa. Solo necesita Python con 'requests'.
 El token se toma de __config__/tks.json ("coordinador" -> "prmte") si
 esta; si no, se pega en la ventana.
 
-OJO: la ruta de la API que entrega la LISTA de puntos no esta
-confirmada (la que usa Balance BESS baja las medidas de UN punto). Se
-prueban las rutas de RUTAS_LISTA en orden; si ninguna sirve, la ventana
-dice que respondio cada una. Cuando se sepa la correcta, se deja sola.
+La lista sale de GET /medidas-v2/measurement-point/all (portal de la
+API, 2026-11-09), que entrega los puntos por paginas:
+{"page", "pageSize", "totalElements", "totalPages",
+ "content": [{"measurePointId", "subStation", "region", "tension",
+              "coordinatorId"}]}.
 """
 
 import difflib
@@ -31,20 +32,13 @@ from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
 
-# Rutas que se prueban para bajar la lista de puntos (SIN CONFIRMAR),
-# con sus parametros. {periodo} = mes anterior (AAAAMM).
-# 2026-11-09: las cuatro de mas abajo respondieron "HTTP 404 No Mapping
-# Rule matched" (la ruta no existe en la API). La primera es la ruta de
-# medidas v2 que SI existe (la que usa Balance BESS), pedida sin punto
-# de medida, por si asi devuelve todos.
-RUTAS_LISTA = [
-    ("https://medidas.api.coordinador.cl/medidas-v2/measurement",
-     {"period": "{periodo}010000", "channelId": "1"}),
-    ("https://medidas.api.coordinador.cl/medidas-v2/measure-points", {}),
-    ("https://medidas.api.coordinador.cl/medidas-v2/measurePoint", {}),
-    ("https://medidas.api.coordinador.cl/medidas/api/puntos-medida/", {}),
-    ("https://medidas.api.coordinador.cl/medidas/api/medidas/{periodo}/", {}),
-]
+# La lista de puntos de medida, por paginas (portal de la API).
+URL_PUNTOS = "https://medidas.api.coordinador.cl/medidas-v2/measurement-point/all"
+TAMANO_PAGINA = 1000
+MAXIMO_PAGINAS = 500   # tope de seguridad
+# Los datos de cada punto que se muestran, en este orden.
+CAMPOS = (("subStation", "Subestación"), ("tension", "Tensión"),
+          ("region", "Región"), ("coordinatorId", "Coordinado"))
 TIMEOUT = 120
 MAXIMO_RESULTADOS = 60
 
@@ -109,43 +103,57 @@ def a_puntos(registros):
             if k != clave_id and isinstance(v, (str, int)) and str(v).strip()
             and not isinstance(v, bool) and len(str(v)) < 80
         )
-        puntos.setdefault(ident, detalle)
-    return [{"id": i, "detalle": d} for i, d in sorted(puntos.items())]
+        campos = {c: str(r.get(c) or "").strip() for c, _ in CAMPOS}
+        puntos.setdefault(ident, {"detalle": detalle, **campos})
+    return [{"id": i, **datos} for i, datos in sorted(puntos.items())]
 
 
 def bajar_puntos(token, avisar=print):
-    """Prueba RUTAS_LISTA hasta que una devuelva puntos."""
+    """
+    Todos los puntos de /measurement-point/all, pagina por pagina
+    (page empieza en 0). Devuelve (puntos, url).
+    """
 
     import requests
 
-    hoy = date.today()
-    anterior = (hoy.replace(day=1).toordinal() - 1)
-    periodo = date.fromordinal(anterior).strftime("%Y%m")
-    respuestas = []
-    for ruta, extras in RUTAS_LISTA:
-        url = ruta.format(periodo=periodo)
-        params = {k: v.format(periodo=periodo) for k, v in extras.items()}
-        params["user_key"] = token
-        avisar(f"Probando {url} ...")
+    registros, pagina, total, anterior = [], 0, None, None
+    while pagina < MAXIMO_PAGINAS:
+        avisar(f"Bajando la pagina {pagina + 1}"
+               + (f" de {total}" if total else "") + "...")
         try:
-            r = requests.get(url, params=params, timeout=TIMEOUT,
-                             headers={"accept": "application/json"})
+            r = requests.get(
+                URL_PUNTOS, timeout=TIMEOUT,
+                params={"page": pagina, "pageSize": TAMANO_PAGINA,
+                        "user_key": token},
+                headers={"accept": "application/json"},
+            )
         except requests.RequestException as error:
-            respuestas.append(f"{url}: {error}")
-            continue
+            raise RuntimeError(f"{URL_PUNTOS}: {error}") from error
         if r.status_code != 200:
-            respuestas.append(f"{url}: HTTP {r.status_code} {r.text[:300]}")
-            continue
+            raise RuntimeError(
+                f"{URL_PUNTOS} (pagina {pagina}): HTTP {r.status_code} "
+                f"{r.text[:300]}"
+            )
         try:
-            puntos = a_puntos(_registros(r.json()))
-        except ValueError:
-            respuestas.append(f"{url}: no es JSON")
-            continue
-        if puntos:
-            return puntos, url
-        respuestas.append(f"{url}: respondio sin puntos")
-    raise RuntimeError("Ninguna ruta entrego la lista de puntos:\n\n" + "\n".join(respuestas))
-
+            datos = r.json()
+        except ValueError as error:
+            raise RuntimeError(f"{URL_PUNTOS}: la respuesta no es JSON") from error
+        contenido = _registros(datos)
+        # Sin contenido, o la misma pagina otra vez (la API ignoro 'page'):
+        # no hay mas.
+        if not contenido or contenido == anterior:
+            break
+        registros += contenido
+        anterior = contenido
+        if isinstance(datos, dict) and datos.get("totalPages") is not None:
+            total = int(datos["totalPages"])
+            if pagina + 1 >= total:
+                break
+        pagina += 1
+    puntos = a_puntos(registros)
+    if not puntos:
+        raise RuntimeError(f"{URL_PUNTOS} respondio sin puntos de medida.")
+    return puntos, URL_PUNTOS
 
 # ------------------------------------------------------------
 # La busqueda
@@ -253,7 +261,7 @@ def main():
 
     root = tk.Tk()
     root.title("Buscar puntos de medida PRMTE")
-    root.geometry("900x580")
+    root.geometry("1000x580")
 
     estado = {"puntos": []}
     var_token = tk.StringVar(value=token_guardado())
@@ -276,11 +284,12 @@ def main():
 
     marco = tk.Frame(root)
     marco.pack(fill="both", expand=True, padx=14, pady=4)
-    tabla = ttk.Treeview(marco, columns=("id", "parecido", "detalle"),
+    columnas = (("id", "Punto de medida (id exacto)", 250),
+                ("parecido", "Parecido", 70)) + tuple(
+        (c, titulo, 130) for c, titulo in CAMPOS)
+    tabla = ttk.Treeview(marco, columns=[c for c, _, _ in columnas],
                          show="headings", selectmode="browse")
-    for col, titulo, ancho in (("id", "Punto de medida (id exacto)", 260),
-                               ("parecido", "Parecido", 80),
-                               ("detalle", "Detalle", 480)):
+    for col, titulo, ancho in columnas:
         tabla.heading(col, text=titulo)
         tabla.column(col, width=ancho, anchor="center" if col == "parecido" else "w")
     sb = ttk.Scrollbar(marco, orient="vertical", command=tabla.yview)
@@ -306,7 +315,8 @@ def main():
             return
         resultados = buscar(puntos, var_texto.get())
         for p, nota in resultados:
-            tabla.insert("", "end", values=(p["id"], f"{nota} %", p["detalle"]))
+            tabla.insert("", "end", values=(
+                p["id"], f"{nota} %", *[p.get(c, "") for c, _ in CAMPOS]))
         if resultados:
             tabla.selection_set(tabla.get_children()[0])
         var_info.set(f"{len(resultados)} parecido(s) de {len(puntos):,}. "
