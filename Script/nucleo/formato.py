@@ -122,6 +122,62 @@ def _texto_de_celda(valor):
     return str(valor)
 
 
+def ancho_de_numero(maximo_absoluto, hay_negativos, decimales, miles=True):
+    """
+    Cuantos caracteres ocupa en pantalla el numero mas largo de una
+    columna (con separador de miles y sus decimales), mas el margen.
+    """
+
+    if maximo_absoluto != maximo_absoluto:  # NaN: columna sin numeros
+        return 0
+    texto = (
+        f"{maximo_absoluto:,.{decimales}f}" if miles
+        else f"{maximo_absoluto:.{decimales}f}"
+    )
+    return len(texto) + (1 if hay_negativos else 0) + 3
+
+
+def _ensanchar_con_todos_los_datos(ws, formatos):
+    """
+    El ancho de las columnas de numeros, mirando TODAS las filas y no
+    solo la muestra (pedido del usuario: que al abrir no salga "#####"
+    en ningun valor). La muestra son las primeras FILAS_MUESTRA filas: un
+    numero mas largo mas abajo, o una columna que la hoja lleva como
+    formula (en la muestra se ve el texto de la formula, corto), quedaba
+    angosta. Se usan los DataFrame completos que anoto _volcar
+    (ws._balance_bloques). Solo ensancha, y los numeros no tienen el
+    tope de ANCHO_MAXIMO (un numero cortado no se puede leer).
+    """
+
+    import numpy as np
+    import pandas as pd
+
+    for _, col0, df in getattr(ws, "_balance_bloques", ()):
+        for j in range(df.shape[1]):
+            serie = df.iloc[:, j]
+            if pd.api.types.is_bool_dtype(serie.dtype) or not (
+                pd.api.types.is_numeric_dtype(serie.dtype)
+            ):
+                continue
+            columna = col0 + j
+            formato = formatos.get(columna)
+            if formato in (FORMATO_FECHA, FORMATO_CLAVE):
+                continue
+            numeros = serie.to_numpy(dtype=float, na_value=np.nan)
+            numeros = numeros[np.isfinite(numeros)]
+            if not len(numeros):
+                continue
+            # Sin formato (columna con formula): se estima como decimal.
+            decimales = 0 if formato == FORMATO_ENTERO else 2
+            necesario = ancho_de_numero(
+                float(np.abs(numeros).max()), bool((numeros < 0).any()),
+                decimales,
+            )
+            dimension = ws.column_dimensions[get_column_letter(columna)]
+            if (dimension.width or 0) < necesario:
+                dimension.width = necesario
+
+
 def _combinar_titulos_cuadro(ws, fila_titulos, fila_encabezado):
     """
     Combina cada titulo de cuadro de 'fila_titulos' sobre las columnas
@@ -290,6 +346,8 @@ def formatear_hoja(ws, fila_encabezado=1, fila_titulos_cuadro=None):
         formato = _formato_de_columna(columna, titulos)
         if formato:
             formatos[indice + 1] = formato
+
+    _ensanchar_con_todos_los_datos(ws, formatos)
 
     for desde, hasta in titulos_cuadro:
         _ensanchar_para_titulo(ws, fila_titulos_cuadro, desde, hasta)

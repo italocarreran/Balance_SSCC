@@ -5987,3 +5987,18 @@ ventana con xvfb. 332 pruebas.
   y no tiene el tope de 38 de las columnas de datos.
 - Prueba: test_planillas_ordenadas.test_la_columna_del_total_alcanza_para_el_numero
   (falla con el código anterior: 18 < 21).
+
+## 2026-11-09 (32) — Anchos con todas las filas; totales con más margen
+
+- El usuario seguía viendo "#####" en C1/D1 del Resumen. Con un libro nuevo
+  el ancho alcanza (verificado en LibreOffice): lo más probable es que la
+  hoja no se haya regenerado ("Ejecutar todo" no reescribe las hojas al día,
+  quedan con el ancho viejo). Igual:
+  - `formato._ensanchar_con_todos_los_datos`: el ancho de las columnas de
+    números se calcula con TODAS las filas (los DataFrame de _volcar), no
+    solo con las primeras 200 de la muestra, y las columnas que van como
+    fórmula se miden por su valor (antes por el texto de la fórmula). Solo
+    ensancha; sin el tope de 38.
+  - `_ancho_para_total`: más margen (+20 % y 4).
+- Prueba: test_el_ancho_mira_todas_las_filas_no_solo_la_muestra (falla con el
+  código anterior: 15 < 19).
