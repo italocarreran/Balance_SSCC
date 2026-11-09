@@ -5976,3 +5976,14 @@ ventana con xvfb. 332 pruebas.
 - Pruebas: test_planillas_ordenadas (fórmula en la fila 4, valores abajo,
   valor guardado, lectura con pandas), test_relleno_rapido (valores guardados
   iguales en los dos caminos), test_subastas_hoja_y_cambio_hora (H, no J).
+
+## 2026-11-09 (31) — Columnas de totales con ancho suficiente
+
+- Pedido: que las columnas con el total de la fila 1 (Resumen: RECIBE, PAGA,
+  NETO; E Costos y RE545: Total C1, Total C2, Monto) se vean enteras al abrir
+  la planilla, sin "#####". `escritura._ancho_para_total`: calcula la suma
+  con los datos completos (`_suma_de_columna`, también en hojas cortadas) y
+  ensancha la columna para "Total: 1.234.567" en negrita; nunca la angosta
+  y no tiene el tope de 38 de las columnas de datos.
+- Prueba: test_planillas_ordenadas.test_la_columna_del_total_alcanza_para_el_numero
+  (falla con el código anterior: 18 < 21).

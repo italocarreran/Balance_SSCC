@@ -302,6 +302,44 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
         # La lectura sigue encontrando los nombres.
         self.assertEqual(list(resumen["NOMBRE"]), ["EMPRESA UNO"])
 
+    def test_la_columna_del_total_alcanza_para_el_numero(self):
+        """
+        Pedido del usuario: el total de la fila 1 se ve entero al abrir
+        la planilla, sin "#####" ni ajustar el ancho a mano.
+        """
+
+        df = self.armar_calculo()
+        df["Monto a compensar"] = [4.0e9, 3.0e9, 2.5e9]
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = Path(carpeta) / nucleo.nombre_salida("2607")
+            nucleo.escribir_pagos_bess(
+                ruta, df_ecostos=df,
+                df_resumen=pd.DataFrame({
+                    "NOMBRE": ["EMPRESA UNO", "EMPRESA DOS"],
+                    "RECIBE": [9.5e9, 2.0e9],
+                    "PAGA": [1.0, 2.0],
+                    "NETO": [9.5e9, 2.0e9],
+                }),
+                registrar=lambda *a: None,
+            )
+            wb = openpyxl.load_workbook(ruta)
+
+        def ancho_minimo(total):
+            return len(f"Total: {round(total):,}")
+
+        resumen = wb[nucleo.HOJA_RESUMEN]
+        for letra, total in (("C", 11.5e9), ("E", 11.5e9)):
+            self.assertGreater(
+                resumen.column_dimensions[letra].width, ancho_minimo(total),
+                letra,
+            )
+        ws = wb[nucleo.HOJA_CALCULO_ECOSTOS]
+        nombres = {c.value: c.column_letter for c in ws[3] if c.value}
+        monto = nombres["Monto a compensar [CLP]"]
+        self.assertGreater(
+            ws.column_dimensions[monto].width, ancho_minimo(9.5e9)
+        )
+
     def test_los_comentarios_traen_la_formula_para_probar(self):
         with tempfile.TemporaryDirectory() as carpeta:
             ruta = self.escribir(carpeta)

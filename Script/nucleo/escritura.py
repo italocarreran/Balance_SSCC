@@ -782,6 +782,51 @@ COLOR_MONTO = "375623"
 RELLENO_MONTO_DATOS = "E2EFDA"
 
 
+def _suma_de_columna(ws, letra, primera, ultima):
+    """
+    La suma de la columna 'letra' entre las filas primera y ultima, con
+    los datos COMPLETOS (la hoja puede estar cortada, ver _volcar): lo
+    que va a mostrar el total de la fila 1.
+    """
+
+    from openpyxl.utils import column_index_from_string
+
+    columna = column_index_from_string(letra)
+    for fila0, col0, df in getattr(ws, "_balance_bloques", ()):
+        j = columna - col0
+        if 0 <= j < df.shape[1] and fila0 <= primera:
+            desde = primera - fila0
+            serie = pd.to_numeric(
+                df.iloc[desde:desde + ultima - primera + 1, j],
+                errors="coerce",
+            )
+            return float(serie.sum())
+    total = 0.0
+    for fila in range(primera, ultima + 1):
+        valor = ws[f"{letra}{fila}"].value
+        if isinstance(valor, (int, float)) and not isinstance(valor, bool):
+            total += valor
+    return total
+
+
+def _ancho_para_total(ws, letra, total):
+    """
+    Ensancha la columna para que el total de la fila 1 ("Total: 1.234.567",
+    en negrita) se vea entero al abrir el libro y no como "#####"
+    (pedido del usuario). Solo ensancha: nunca angosta la columna, y no
+    tiene el tope de ANCHO_MAXIMO de las columnas de datos.
+    """
+
+    if total != total or total in (float("inf"), float("-inf")):
+        return
+    texto = f"Total: {round(total):,}"
+    # Negrita y digitos algo mas anchos que el promedio: +15 % y margen.
+    necesario = len(texto) * 1.15 + 3
+    dimension = ws.column_dimensions[letra]
+    if (dimension.width or 0) < necesario:
+        dimension.width = round(necesario, 1)
+
+
 def _terminar_cuadros(
     ws, letras, filas, formulas, totales, monto, sin_puesto=(),
 ):
@@ -837,6 +882,10 @@ def _terminar_cuadros(
             continue
         celda = ws[f"{letras[clave]}1"]
         celda.value = f"=SUM({letras[clave]}{primera}:{letras[clave]}{ultima})"
+        _ancho_para_total(
+            ws, letras[clave],
+            _suma_de_columna(ws, letras[clave], primera, ultima),
+        )
         celda.number_format = '"Total: "#,##0'
         celda.font = Font(
             bold=True, color=COLOR_MONTO if clave == monto else "244062"
@@ -1054,6 +1103,7 @@ def _totales_resumen(ws, filas):
         if letra is None:
             continue
         celda = ws[f"{letra}1"]
+        _ancho_para_total(ws, letra, _suma_de_columna(ws, letra, 4, ultima))
         if nombre == "NETO":
             # Redondeado a peso: un 0,0000001 de punto flotante es 0.
             celda.value = f"=ROUND(SUM({letra}4:{letra}{ultima}),0)"
