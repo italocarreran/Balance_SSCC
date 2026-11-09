@@ -820,8 +820,9 @@ def _ancho_para_total(ws, letra, total):
     if total != total or total in (float("inf"), float("-inf")):
         return
     texto = f"Total: {round(total):,}"
-    # Negrita y digitos algo mas anchos que el promedio: +15 % y margen.
-    necesario = len(texto) * 1.15 + 3
+    # Negrita y digitos algo mas anchos que el promedio: +20 % y margen
+    # (que sobre un poco antes que falte: es el valor mas importante).
+    necesario = len(texto) * 1.2 + 4
     dimension = ws.column_dimensions[letra]
     if (dimension.width or 0) < necesario:
         dimension.width = round(necesario, 1)

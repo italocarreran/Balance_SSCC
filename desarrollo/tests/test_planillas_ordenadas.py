@@ -340,6 +340,41 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
             ws.column_dimensions[monto].width, ancho_minimo(9.5e9)
         )
 
+    def test_el_ancho_mira_todas_las_filas_no_solo_la_muestra(self):
+        """
+        Un numero largo despues de las primeras 200 filas (la muestra
+        con la que se decidia el ancho) tambien se ve entero; y una
+        columna que va como formula se mide por su valor, no por el
+        texto de la formula. Columnas SIN total en la fila 1 (el total
+        ya ensancha la suya).
+        """
+
+        df = pd.concat([self.armar_calculo()] * 150, ignore_index=True)
+        cmg = nucleo.NOMBRES_CALCULO_E_COSTOS["CMg"]
+        ajustada = nucleo.NOMBRES_CALCULO_E_COSTOS["AS"]
+        df[cmg] = 1.5
+        df.loc[len(df) - 1, cmg] = 98765432109.25
+        df[ajustada] = 1.0
+        df.loc[len(df) - 1, ajustada] = -123456789012.5
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = Path(carpeta) / nucleo.nombre_salida("2607")
+            nucleo.escribir_pagos_bess(
+                ruta, df_ecostos=df, registrar=lambda *a: None,
+            )
+            ws = openpyxl.load_workbook(ruta)[nucleo.HOJA_CALCULO_ECOSTOS]
+        nombres = {c.value: c.column_letter for c in ws[3] if c.value}
+        letra_cmg = next(l for n, l in nombres.items() if n.startswith("CMg ["))
+        self.assertGreaterEqual(
+            ws.column_dimensions[letra_cmg].width,
+            len("98,765,432,109.25") + 2,
+        )
+        letra_aj = nombres["Descarga ajustada FD-prorrata [kWh]"]
+        self.assertTrue(str(ws[f"{letra_aj}4"].value).startswith("="))
+        self.assertGreaterEqual(
+            ws.column_dimensions[letra_aj].width,
+            len("-123,456,789,012.50") + 2,
+        )
+
     def test_los_comentarios_traen_la_formula_para_probar(self):
         with tempfile.TemporaryDirectory() as carpeta:
             ruta = self.escribir(carpeta)
