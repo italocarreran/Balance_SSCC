@@ -5933,3 +5933,15 @@ ventana con xvfb. 332 pruebas.
   CONFIRMAR (no hay acceso a la API desde el desarrollo): `RUTAS_LISTA`
   prueba cuatro y la ventana muestra la respuesta de cada una.
 - Pruebas: test_buscar_barras, test_buscar_puntos_prmte.
+
+## 2026-11-09 (28) — Errores con boton "Copiar"; quinta ruta para la lista PRMTE
+
+- Pedido: "los mensajes de error que tengan un boton de copiar para mandarlo
+  escrito y no con foto". `Script/dialogos.mostrar_error` reemplaza a
+  messagebox.showerror en Balance_BESS.py y Balance_CRA.py (texto
+  seleccionable + "Copiar", que copia titulo y mensaje). Herramientas/ trae
+  su propia copia (son sueltas).
+- Buscar_Puntos_PRMTE: las cuatro rutas respondieron "HTTP 404 No Mapping
+  Rule matched" (no existen en la API). Se agrega primero la ruta de medidas
+  v2 que si existe, sin measurePointId, por si devuelve todos los puntos.
+  La respuesta de error ahora muestra hasta 300 caracteres.

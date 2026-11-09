@@ -31,13 +31,19 @@ from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
 
-# Rutas que se prueban para bajar la lista de puntos (SIN CONFIRMAR).
-# {periodo} = mes anterior como AAAAMM.
+# Rutas que se prueban para bajar la lista de puntos (SIN CONFIRMAR),
+# con sus parametros. {periodo} = mes anterior (AAAAMM).
+# 2026-11-09: las cuatro de mas abajo respondieron "HTTP 404 No Mapping
+# Rule matched" (la ruta no existe en la API). La primera es la ruta de
+# medidas v2 que SI existe (la que usa Balance BESS), pedida sin punto
+# de medida, por si asi devuelve todos.
 RUTAS_LISTA = [
-    "https://medidas.api.coordinador.cl/medidas-v2/measure-points",
-    "https://medidas.api.coordinador.cl/medidas-v2/measurePoint",
-    "https://medidas.api.coordinador.cl/medidas/api/puntos-medida/",
-    "https://medidas.api.coordinador.cl/medidas/api/medidas/{periodo}/",
+    ("https://medidas.api.coordinador.cl/medidas-v2/measurement",
+     {"period": "{periodo}010000", "channelId": "1"}),
+    ("https://medidas.api.coordinador.cl/medidas-v2/measure-points", {}),
+    ("https://medidas.api.coordinador.cl/medidas-v2/measurePoint", {}),
+    ("https://medidas.api.coordinador.cl/medidas/api/puntos-medida/", {}),
+    ("https://medidas.api.coordinador.cl/medidas/api/medidas/{periodo}/", {}),
 ]
 TIMEOUT = 120
 MAXIMO_RESULTADOS = 60
@@ -116,17 +122,19 @@ def bajar_puntos(token, avisar=print):
     anterior = (hoy.replace(day=1).toordinal() - 1)
     periodo = date.fromordinal(anterior).strftime("%Y%m")
     respuestas = []
-    for ruta in RUTAS_LISTA:
+    for ruta, extras in RUTAS_LISTA:
         url = ruta.format(periodo=periodo)
+        params = {k: v.format(periodo=periodo) for k, v in extras.items()}
+        params["user_key"] = token
         avisar(f"Probando {url} ...")
         try:
-            r = requests.get(url, params={"user_key": token}, timeout=TIMEOUT,
+            r = requests.get(url, params=params, timeout=TIMEOUT,
                              headers={"accept": "application/json"})
         except requests.RequestException as error:
             respuestas.append(f"{url}: {error}")
             continue
         if r.status_code != 200:
-            respuestas.append(f"{url}: HTTP {r.status_code} {r.text[:150]}")
+            respuestas.append(f"{url}: HTTP {r.status_code} {r.text[:300]}")
             continue
         try:
             puntos = a_puntos(_registros(r.json()))
@@ -174,6 +182,65 @@ def buscar(puntos, texto, limite=MAXIMO_RESULTADOS):
             salida.append((p, round(100 * nota)))
     salida.sort(key=lambda x: (-x[1], x[0]["id"]))
     return salida[:limite]
+
+
+# ------------------------------------------------------------
+# Cuadro de error con boton "Copiar" (copia de Script/dialogos.py: esta
+# herramienta no importa nada del programa).
+# ------------------------------------------------------------
+
+def mostrar_error(titulo, mensaje, parent=None, **_opciones):
+    """Como messagebox.showerror(titulo, mensaje), con boton Copiar."""
+
+    import tkinter as tk
+
+    raiz = parent or tk._default_root
+    ventana = tk.Toplevel(raiz)
+    ventana.title(titulo)
+    ventana.resizable(True, True)
+    if raiz is not None:
+        ventana.transient(raiz)
+
+    texto_completo = f"{titulo}\n\n{mensaje}"
+    lineas = max(4, min(20, str(mensaje).count("\n") + 2 + len(str(mensaje)) // 80))
+
+    cuerpo = tk.Frame(ventana, padx=14, pady=12)
+    cuerpo.pack(fill="both", expand=True)
+    tk.Label(
+        cuerpo, text="✖", fg="#c0392b", font=("Segoe UI", 20, "bold"),
+    ).pack(side="left", anchor="n", padx=(0, 12))
+    caja = tk.Text(
+        cuerpo, wrap="word", width=78, height=lineas, font=("Segoe UI", 9),
+        relief="flat", background=ventana.cget("background"),
+    )
+    caja.insert("1.0", str(mensaje))
+    caja.config(state="disabled")  # se puede seleccionar, no editar
+    caja.pack(side="left", fill="both", expand=True)
+
+    botones = tk.Frame(ventana, padx=14, pady=10)
+    botones.pack(fill="x")
+    aviso = tk.Label(botones, text="", fg="#2d7a2d", font=("Segoe UI", 8))
+
+    def copiar():
+        ventana.clipboard_clear()
+        ventana.clipboard_append(texto_completo)
+        aviso.config(text="Copiado: pégalo donde quieras.")
+
+    tk.Button(botones, text="Aceptar", width=12, command=ventana.destroy).pack(
+        side="right"
+    )
+    tk.Button(
+        botones, text="Copiar", width=12, bg="#1f5fa8", fg="white",
+        font=("Segoe UI", 9, "bold"), command=copiar,
+    ).pack(side="right", padx=8)
+    aviso.pack(side="left")
+
+    ventana.bind("<Escape>", lambda e: ventana.destroy())
+    ventana.bind("<Return>", lambda e: ventana.destroy())
+    ventana.grab_set()
+    ventana.focus_set()
+    ventana.wait_window()
+    return "ok"
 
 
 # ------------------------------------------------------------
@@ -279,7 +346,7 @@ def main():
         boton_bajar.config(state="normal")
         if error is not None:
             var_info.set("No se pudo bajar la lista.")
-            messagebox.showerror("API de medidas", str(error))
+            mostrar_error("API de medidas", str(error))
             return
         estado["puntos"] = puntos
         mostrar()

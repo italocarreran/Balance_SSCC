@@ -51,7 +51,7 @@ class TestPuntos(unittest.TestCase):
         respuestas = [R(404), R(200, V1)]
         with mock.patch("requests.get", side_effect=lambda *a, **k: respuestas.pop(0)):
             puntos, url = bp.bajar_puntos("t", avisar=lambda *_: None)
-        self.assertEqual(url, bp.RUTAS_LISTA[1])
+        self.assertEqual(url, bp.RUTAS_LISTA[1][0])
         self.assertEqual(len(puntos), 2)
 
     def test_token_y_lista_en_config_hacia_arriba(self):

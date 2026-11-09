@@ -161,7 +161,7 @@ class TestVentanaActualizar(unittest.TestCase):
             self.nucleo, "generar_medidas_sae", generar_falso
         ), mock.patch.object(self.app.threading, "Thread", HiloEnElMismo), \
                 mock.patch.object(self.app.messagebox, "showinfo"), \
-                mock.patch.object(self.app.messagebox, "showerror"):
+                mock.patch.object(self.app, "mostrar_error"):
             boton.invoke()
             for _ in range(5):
                 self.root.update()
