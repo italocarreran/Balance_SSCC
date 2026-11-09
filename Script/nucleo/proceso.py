@@ -621,7 +621,7 @@ class Bitacora:
 
 def calcular_hoja_re545(
     df_medidores, mapa_barra, dic_cmg, df_subastas, df_fd_csf, df_fd_cpf,
-    tablas_fma, diccionario, umbral_soc_minimo, dic_capacidad,
+    tablas_fma, diccionario, dic_capacidad,
     dic_eficiencia, df_resumen_ventana, dic_factor, registrar=print,
 ):
     """
@@ -633,7 +633,7 @@ def calcular_hoja_re545(
 
     registrar(
         "Construyendo Calculo RE545 (etapa base: traspaso de "
-        "Medidores + L, M, N, O, S, U, V)..."
+        "Medidores + L, N, O, S, U, V)..."
     )
     df_re545 = construir_calculo_re545(
         df_medidores, mapa_barra, dic_cmg, registrar=registrar
@@ -646,7 +646,7 @@ def calcular_hoja_re545(
         registrar=registrar,
     )
     df_re545_base = completar_calculo_re545(
-        df_re545, df_subastas_re545, umbral_soc_minimo, dic_capacidad,
+        df_re545, df_subastas_re545, dic_capacidad,
         dic_eficiencia, registrar=registrar,
     )
 
@@ -856,7 +856,7 @@ def generar_pagos_bess(
     df_fd_csf = df_fd_cpf = None
     centrales_del_libro = tablas_fma = None
     resumen = diccionario = None
-    mapa_barra = dic_cmg = dic_factor = umbral_soc_minimo = None
+    mapa_barra = dic_cmg = dic_factor = None
     dic_eficiencia = dic_capacidad = None
     periodo_medidores = validar_aamm(aamm) if aamm else ""
 
@@ -929,7 +929,7 @@ def generar_pagos_bess(
         )
 
         mapa_barra = construir_mapa_barra(resumen)
-        dic_factor, umbral_soc_minimo = construir_dic_resumen_factor(resumen)
+        dic_factor = construir_dic_resumen_factor(resumen)
 
         # Eficiencia y Capacidad solo las usa RE545 (V y U/BC/BN).
         if quiere_re545:
@@ -980,7 +980,7 @@ def generar_pagos_bess(
             df_medidores=df_medidores, mapa_barra=mapa_barra,
             dic_cmg=dic_cmg, df_subastas=df_subastas, df_fd_csf=df_fd_csf,
             df_fd_cpf=df_fd_cpf, tablas_fma=tablas_fma,
-            diccionario=diccionario, umbral_soc_minimo=umbral_soc_minimo,
+            diccionario=diccionario,
             dic_capacidad=dic_capacidad, dic_eficiencia=dic_eficiencia,
             df_resumen_ventana=df_resumen_ventana, dic_factor=dic_factor,
         )
@@ -1011,7 +1011,7 @@ def generar_pagos_bess(
             "y monto a compensar)..."
         )
         df_ecostos_base = completar_calculo_e_costos_grupos(
-            df_ecostos, df_subastas, dic_factor, umbral_soc_minimo,
+            df_ecostos, df_subastas, dic_factor,
             diccionario, df_fd_csf, df_fd_cpf,
             registrar=registrar,
         )

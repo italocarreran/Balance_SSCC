@@ -115,6 +115,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from Script import config, nucleo
 from Script.arbol import _prefijos_arbol
+from Script.dialogos import mostrar_error
 
 
 COLOR_OK = "#1a6b1a"
@@ -1716,7 +1717,7 @@ def main():
                 )
             else:
                 var_estado.set("Termino con errores.")
-                messagebox.showerror(
+                mostrar_error(
                     "Error", res.get("error", "Revisa el registro.")
                 )
 
@@ -2024,7 +2025,7 @@ def main():
         try:
             creadas = nucleo.crear_estructura_caso(base, registrar=log)
         except nucleo.ErrorEntrada as error:
-            messagebox.showerror("No se pudo crear", str(error))
+            mostrar_error("No se pudo crear", str(error))
             return False
 
         if creadas:

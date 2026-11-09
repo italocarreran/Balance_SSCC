@@ -52,6 +52,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from Script import config, cra
 from Script.arbol import _prefijos_arbol
+from Script.dialogos import mostrar_error
 
 
 COLOR_ESTADO = {
@@ -220,10 +221,10 @@ def main():
         try:
             cra.validar_aamm(aamm)
         except cra.ErrorEntrada as error:
-            messagebox.showerror("Periodo", str(error))
+            mostrar_error("Periodo", str(error))
             return
         if not base or not Path(base).is_dir():
-            messagebox.showerror("Carpeta base", "Elegi una carpeta base valida.")
+            mostrar_error("Carpeta base", "Elegi una carpeta base valida.")
             return
 
         corriendo["activo"] = True
@@ -359,7 +360,7 @@ def main():
     def crear_carpetas():
         base = var_base.get().strip()
         if not base:
-            messagebox.showerror("Carpeta base", "Elegi una carpeta base.")
+            mostrar_error("Carpeta base", "Elegi una carpeta base.")
             return
         creadas = cra.crear_carpetas_caso(base)
         log(

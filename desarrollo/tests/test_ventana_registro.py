@@ -53,7 +53,7 @@ class TestRegistro(base.TestVentanaActualizar):
         with mock.patch.object(self.nucleo, "traer_subastas", proceso_falso), \
                 mock.patch.object(self.app.threading, "Thread", HiloInmediato), \
                 mock.patch.object(self.app.messagebox, "showinfo"), \
-                mock.patch.object(self.app.messagebox, "showerror"):
+                mock.patch.object(self.app, "mostrar_error"):
             self._boton("Traer", self._fila("DB subastas")).invoke()
             for _ in range(5):
                 self.root.update()

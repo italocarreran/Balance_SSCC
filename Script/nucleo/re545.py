@@ -7,7 +7,7 @@ import pandas as pd
 
 from .alertas import ALTA, Alerta, anotar
 from .avisos import _avisar_claves_sin_mapeo
-from .columnas_compartidas import calcular_l, calcular_m, calcular_n_o
+from .columnas_compartidas import calcular_l, calcular_n_o
 from .diccionarios import _buscar_cmg
 from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, HOJA_CALCULO_RE545,
@@ -69,7 +69,6 @@ NOMBRES_CALCULO_RE545 = {
     "Energia_Negativa": "Carga kWh",
     "SoC": "SoC %",
     "L": "Adj SSCC",
-    "M": "SoC sobre el minimo",
     "N": "Energía SSCC (-) por remunerar",
     "O": "Energía SSCC (+) por remunerar",
     "Copia_Ventana": "Ciclo de Carga del mes",
@@ -160,13 +159,13 @@ NOMBRES_CALCULO_RE545 = {
 # Pedido del usuario (2026-11-03, "ordenar RE545", igual que E Costos)
 # salen tambien, sin dejar de calcularse:
 #   - las CTF de Reservas, FD y FMA (AE, AH, AK, AN, AQ, AT);
-#   - M "SoC sobre el minimo", N / O "Energía SSCC (-)/(+) por
-#     remunerar": no las usa ninguna otra columna;
+#   - N / O "Energía SSCC (-)/(+) por remunerar": no las usa ninguna
+#     otra columna (M "SoC sobre el minimo" ya ni se calcula);
 #   - BK "Curva Cmg Decendente promedio horario": desde la observacion
 #     4 la curva ya no se agrupa por ella, solo se mostraba;
 #   - BY "Energía ya Asignada ultima hora": no la usa ninguna columna.
 COLUMNAS_AUXILIARES_RE545 = (
-    "BL", "BR", "AE", "AH", "AK", "AN", "AQ", "AT", "M", "N", "O", "BK",
+    "BL", "BR", "AE", "AH", "AK", "AN", "AQ", "AT", "N", "O", "BK",
     "BY",
 )
 COLUMNAS_CTF_RE545 = ("AE", "AH", "AK", "AN", "AQ", "AT")
@@ -652,18 +651,18 @@ def completar_checks_resumen_re545(df_resumen_re545, df_re545):
 
 
 def completar_calculo_re545(
-    df_re545, df_subastas, umbral_soc_minimo, dic_capacidad,
+    df_re545, df_subastas, dic_capacidad,
     dic_eficiencia, registrar=print,
 ):
     """
-    Agrega a la etapa base de RE545 las columnas calculadas L, M, N,
+    Agrega a la etapa base de RE545 las columnas calculadas L, N,
     O, S, U, V y AC:AU, en el orden final de la hoja pero todavia
     con los nombres internos (el renombre a los nombres reales lo
     hace renombrar_calculo_re545, despues de la tabla resumen).
 
-    L y M son literalmente las mismas formulas que en Calculo E Costos
-    (mismo COUNTIFS contra Subastas, mismo 1*(SoC > umbral)), asi que
-    se reusan calcular_l() y calcular_m(). N y O tambien: la formula
+    L es literalmente la misma formula que en Calculo E Costos (mismo
+    COUNTIFS contra Subastas), asi que se reusa calcular_l() (M "SoC
+    sobre el minimo" se saco: no llegaba a ningun monto). N y O tambien: la formula
     de RE545 (SUMIFS del grupo menos SUMIFS de los bloques anteriores)
     es la version en formula de lo mismo que calcula calcular_n_o()
     para E Costos -- suma, dentro del grupo central+ciclo y contando
@@ -681,7 +680,6 @@ def completar_calculo_re545(
     df = df_re545.reset_index(drop=True).copy()
 
     df["L"] = calcular_l(df, df_subastas)
-    df["M"] = calcular_m(df, umbral_soc_minimo)
 
     n, o = calcular_n_o(df)
     df["N"] = n.reset_index(drop=True)

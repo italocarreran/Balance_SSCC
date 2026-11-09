@@ -5894,3 +5894,64 @@ ventana con xvfb. 332 pruebas.
   caso con el mismo nombre de carpeta). Los que quedaron en el caso (.sellos
   o Log/) se mueven solos. Control y registro siguen en <caso>/Log/.
 - Pruebas: desarrollo/tests/__init__.py usa BESS_CARPETA_CONFIG temporal.
+
+## 2026-11-05 (25) — Fuera "SoC sobre el minimo" y las columnas de Centrales que no se usan
+
+- Pedido: el usuario quita de Centrales.xlsx '% Energía sobre mínima
+  (indicador nuevo ciclo)', 'Energía mínima', 'Ciclos max diarios' y 'Horas
+  para descarga forzada'; "si no se usa modifica el código para que no
+  falle. si soc sobre el mínimo no se usa hay que sacarlo igual del calculo".
+- `construir_dic_resumen_factor` devuelve solo Pmax (ya no exige ni lee el %
+  de energia sobre minima). Se saco la columna M "SoC sobre el minimo" de E
+  Costos y RE545 (`calcular_m`): no llegaba a ningun monto.
+- Comprobado: caso grande sin esas columnas -> SAE_2609.csv identico byte a
+  byte al del codigo anterior.
+
+## 2026-11-05 (26) — Buscar_Barras_CMg.py
+
+- Pedido: "un código para buscar las barras en los cmg ... una ventana
+  selecciono el archivo csv y indico el nombre de la barra aproximado".
+- Ventana aparte en la raiz. Lee solo la columna BARRA del CSV (pyarrow si
+  esta: 2,9 M filas en ~1 s; sin pyarrow ~4 s) y busca mientras se escribe:
+  nombres limpios (sin tildes ni guiones bajos), palabras en cualquier
+  orden, numeros por valor (12 = 0012) y parecido para lo mal escrito.
+  Doble clic / Enter / "Copiar nombre" copia el nombre exacto.
+- Prueba: desarrollo/tests/test_buscar_barras.py (barras reales de
+  Centrales.xlsx entre 1.000 de relleno).
+
+## 2026-11-09 (27) — Herramientas/: buscar barras de CMg y puntos PRMTE
+
+- Pedido: "que quede en el repo, en una carpeta hermana a la de los scripts.
+  Donde esté este y el de cmg".
+- Carpeta `Herramientas/` (hermana de `Script/`): `Buscar_Barras_CMg.py`
+  (movido desde la raiz) y `Buscar_Puntos_PRMTE.py` (nuevo). Los dos son
+  sueltos: no importan nada del resto del programa.
+- Buscar_Puntos_PRMTE: sin archivo; baja la lista de puntos de la API una
+  vez, la guarda en `__config__/puntos_prmte.json` (el __config__ mas
+  cercano hacia arriba) y busca por nombre aproximado. Token de
+  `__config__/tks.json` o pegado en la ventana. La ruta de la lista esta SIN
+  CONFIRMAR (no hay acceso a la API desde el desarrollo): `RUTAS_LISTA`
+  prueba cuatro y la ventana muestra la respuesta de cada una.
+- Pruebas: test_buscar_barras, test_buscar_puntos_prmte.
+
+## 2026-11-09 (28) — Errores con boton "Copiar"; quinta ruta para la lista PRMTE
+
+- Pedido: "los mensajes de error que tengan un boton de copiar para mandarlo
+  escrito y no con foto". `Script/dialogos.mostrar_error` reemplaza a
+  messagebox.showerror en Balance_BESS.py y Balance_CRA.py (texto
+  seleccionable + "Copiar", que copia titulo y mensaje). Herramientas/ trae
+  su propia copia (son sueltas).
+- Buscar_Puntos_PRMTE: las cuatro rutas respondieron "HTTP 404 No Mapping
+  Rule matched" (no existen en la API). Se agrega primero la ruta de medidas
+  v2 que si existe, sin measurePointId, por si devuelve todos los puntos.
+  La respuesta de error ahora muestra hasta 300 caracteres.
+
+## 2026-11-09 (29) — Buscar_Puntos_PRMTE con la ruta real de la lista
+
+- El usuario mando del portal de la API: GET /medidas-v2/measurement-point/all,
+  paginado ({page, pageSize, totalElements, totalPages, content:[{subStation,
+  region, tension, coordinatorId, measurePointId}]}).
+- `bajar_puntos` usa solo esa ruta y baja todas las paginas (page desde 0,
+  pageSize 1000; corta si la pagina viene vacia o repetida, o al llegar a
+  totalPages). Fuera las rutas adivinadas. La tabla muestra Subestacion,
+  Tension, Region y Coordinado.

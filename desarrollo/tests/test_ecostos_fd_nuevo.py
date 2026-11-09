@@ -66,7 +66,7 @@ def calculo_base():
 def calcular(fd_cpf=FD_CPF, fd_csf=FD_CSF):
     mensajes = []
     df = nucleo.completar_calculo_e_costos_grupos(
-        calculo_base(), subastas(), {"sae a": 0.4}, 0.06, None,
+        calculo_base(), subastas(), {"sae a": 0.4}, None,
         fd_csf, fd_cpf, registrar=mensajes.append,
     )
     return df, mensajes
@@ -123,7 +123,7 @@ class TestMetodoNuevoFD(unittest.TestCase):
         base = calculo_base()
         sin_subastas = subastas().iloc[0:0]
         df = nucleo.completar_calculo_e_costos_grupos(
-            base, sin_subastas, {"sae a": 0.4}, 0.06, None,
+            base, sin_subastas, {"sae a": 0.4}, None,
             FD_CSF, FD_CPF, registrar=lambda *_: None,
         )
         for columna in ("AG", "AM", "AS", "AT", "AW", "BA", "BC"):

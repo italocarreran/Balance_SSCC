@@ -93,14 +93,3 @@ def calcular_n_o(df_ecostos):
     # vienen en el resultado (en los datos reales no las hay).
     con_grupo = tabla["g1"].notna() & tabla["g2"].notna()
     return n[con_grupo], o[con_grupo]
-
-
-def calcular_m(df_ecostos, umbral_soc_minimo):
-    """
-    Replica M ("SoC sobre el minimo"): 1 si SoC > umbral_soc_minimo
-    (ver construir_dic_resumen_factor), si no 0.
-    """
-
-    soc = pd.to_numeric(df_ecostos["SoC"], errors="coerce").fillna(0.0)
-
-    return (soc > umbral_soc_minimo).astype("int64")
