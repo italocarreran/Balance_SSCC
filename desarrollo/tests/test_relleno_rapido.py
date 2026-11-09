@@ -76,9 +76,17 @@ def _escribir(carpeta, rapida, d):
     return ruta
 
 
+def _valor(celda):
+    from openpyxl.worksheet.formula import ArrayFormula
+
+    if isinstance(celda.value, ArrayFormula):
+        return ("matricial", celda.value.ref, celda.value.text)
+    return celda.value
+
+
 def _atributos(celda):
     return (
-        celda.value, celda.number_format, repr(celda.font), repr(celda.fill),
+        _valor(celda), celda.number_format, repr(celda.font), repr(celda.fill),
         repr(celda.border), repr(celda.alignment),
         celda.comment.text if celda.comment else None,
     )
@@ -88,8 +96,21 @@ class TestEscrituraRapida(unittest.TestCase):
     def test_el_libro_sale_igual_celda_por_celda(self):
         d = _datos(450)
         with tempfile.TemporaryDirectory() as uno,                 tempfile.TemporaryDirectory() as dos:
-            normal = openpyxl.load_workbook(_escribir(uno, False, d))
-            rapida = openpyxl.load_workbook(_escribir(dos, True, d))
+            ruta_normal = _escribir(uno, False, d)
+            ruta_rapida = _escribir(dos, True, d)
+            normal = openpyxl.load_workbook(ruta_normal)
+            rapida = openpyxl.load_workbook(ruta_rapida)
+            # Los valores guardados (la formula de prueba de la primera
+            # fila lleva el valor del programa) tambien salen iguales.
+            for nombre in ("Calculo E Costos", "Calculo RE545"):
+                a = openpyxl.load_workbook(ruta_normal, data_only=True)[nombre]
+                b = openpyxl.load_workbook(ruta_rapida, data_only=True)[nombre]
+                filas_a = [[c.value for c in f] for f in a.iter_rows(max_row=10)]
+                filas_b = [[c.value for c in f] for f in b.iter_rows(max_row=10)]
+                self.assertEqual(filas_a, filas_b, nombre)
+                self.assertTrue(
+                    any(v is not None for v in filas_a[3]), nombre
+                )
             self.assertEqual(normal.sheetnames, rapida.sheetnames)
             for nombre in normal.sheetnames:
                 a, b = normal[nombre], rapida[nombre]

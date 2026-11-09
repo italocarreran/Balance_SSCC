@@ -131,6 +131,19 @@ class TestSubastasConsolidadas(unittest.TestCase):
             "Hora_PID": [0, 0, 0],
         })
 
+    def test_energia_sscc_sale_de_cantidad_mw_no_de_la_ponderada(self):
+        """Pedido del usuario: la columna H (CANTIDAD MW) del consolidado,
+        no la J (CANTIDAD PONDERADA MW)."""
+
+        crudo = self._crudo()
+        crudo["CANTIDAD PONDERADA MW"] = [0.5, 0.3, 0.9]
+        hoja = nucleo.construir_subastas_desde_crudo(
+            crudo, "2609", registrar=lambda *_: None
+        )
+        self.assertEqual(
+            sorted(hoja["Energía SSCC"].tolist()), [3.0, 5.0]
+        )
+
     def test_consolidar_escribe_el_archivo_y_la_hoja_sale_de_ahi(self):
         from unittest import mock
         from Script.nucleo import traer

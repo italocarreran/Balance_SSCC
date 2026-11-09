@@ -788,8 +788,8 @@ importable como cualquier módulo.
   cambio de hora de la planilla como parámetro opcional, hoy apagado —
   pendiente); `Propietario` sale de la columna nueva de
   `Centrales.xlsx`/`Resumen BESS` (`construir_mapa_propietario()`);
-  `Energía SSCC` = `CANTIDAD PONDERADA MW`
-  (`COLUMNA_ENERGIA_SSCC_ACCDB`, a confirmar). `FD` (`calcular_fd_subastas()`) y
+  `Energía SSCC` = `CANTIDAD MW` (columna H del consolidado, no la J
+  ponderada; `COLUMNA_ENERGIA_SSCC_ACCDB`, confirmado por el usuario 2026-11-09). `FD` (`calcular_fd_subastas()`) y
   `FMA` (`calcular_fma_subastas()`) **no existen en el Access** —venían pegadas
   en `DB!Y`/`DB!V`— y se calculan desde la carpeta `FD y FMA/`: el FD del
   `SSCC_Desempeño_*` y el FMA de las tres salidas `fma_*`, con el Vector de

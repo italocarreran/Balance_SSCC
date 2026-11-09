@@ -334,7 +334,7 @@ ORIGEN_COLUMNAS_RE545 = {
     ),
 }
 
-# Formula de Excel EQUIVALENTE para el comentario (mismo criterio que
+# Formula de Excel EQUIVALENTE en la primera fila (mismo criterio que
 # FORMULAS_PRUEBA_E_COSTOS). Las columnas de la tabla resumen (cuadro 5)
 # van con prefijo R_ (R_Central, R_Ventana, R_Edisp_T, R_Margen, R_flag);
 # en las plantillas del cuadro 5 la fila de ejemplo es la de la tabla

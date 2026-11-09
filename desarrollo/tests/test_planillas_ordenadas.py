@@ -211,7 +211,11 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
             nucleo.escribir_pagos_bess(
                 ruta, df_ecostos=df, registrar=lambda *a: None
             )
-            ws = openpyxl.load_workbook(ruta)[nucleo.HOJA_CALCULO_ECOSTOS]
+            # data_only: la fila 4 lleva la formula de prueba, con el
+            # valor del programa guardado.
+            ws = openpyxl.load_workbook(ruta, data_only=True)[
+                nucleo.HOJA_CALCULO_ECOSTOS
+            ]
         nombres = {c.value: c.column_letter for c in ws[3] if c.value}
         descarga = nombres["Curva monotona CMg Descarga [CLP/kWh]"]
         carga = nombres["Curva monotona CMg Carga [CLP/kWh]"]
@@ -268,9 +272,12 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
         self.assertIn("Hoja origen: CMg", ws[f'{nombres["CMg Promedio [CLP/kWh]"]}3'].comment.text)
         self.assertIn("Edisp_T", ws[f'{nombres["Energía asignada [kWh]"]}3'].comment.text)
         self.assertIn(
-            "Fórmula equivalente",
+            "Fórmula de Excel equivalente en la fila 4",
             ws[f'{nombres["Monto a compensar [CLP]"]}3'].comment.text,
         )
+        # La formula de prueba va en la fila 4; abajo, valores.
+        self.assertTrue(str(ws[f"{monto}4"].value).startswith("=IF(SUMIFS("))
+        self.assertEqual([ws[f"{monto}{f}"].value for f in (5, 6)], [2, 3])
 
     def test_re545_con_aporte_ctf_deja_la_reserva_como_valor(self):
         with tempfile.TemporaryDirectory() as carpeta:
@@ -295,20 +302,103 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
         # La lectura sigue encontrando los nombres.
         self.assertEqual(list(resumen["NOMBRE"]), ["EMPRESA UNO"])
 
+    def test_la_columna_del_total_alcanza_para_el_numero(self):
+        """
+        Pedido del usuario: el total de la fila 1 se ve entero al abrir
+        la planilla, sin "#####" ni ajustar el ancho a mano.
+        """
+
+        df = self.armar_calculo()
+        df["Monto a compensar"] = [4.0e9, 3.0e9, 2.5e9]
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = Path(carpeta) / nucleo.nombre_salida("2607")
+            nucleo.escribir_pagos_bess(
+                ruta, df_ecostos=df,
+                df_resumen=pd.DataFrame({
+                    "NOMBRE": ["EMPRESA UNO", "EMPRESA DOS"],
+                    "RECIBE": [9.5e9, 2.0e9],
+                    "PAGA": [1.0, 2.0],
+                    "NETO": [9.5e9, 2.0e9],
+                }),
+                registrar=lambda *a: None,
+            )
+            wb = openpyxl.load_workbook(ruta)
+
+        def ancho_minimo(total):
+            return len(f"Total: {round(total):,}")
+
+        resumen = wb[nucleo.HOJA_RESUMEN]
+        for letra, total in (("C", 11.5e9), ("E", 11.5e9)):
+            self.assertGreater(
+                resumen.column_dimensions[letra].width, ancho_minimo(total),
+                letra,
+            )
+        ws = wb[nucleo.HOJA_CALCULO_ECOSTOS]
+        nombres = {c.value: c.column_letter for c in ws[3] if c.value}
+        monto = nombres["Monto a compensar [CLP]"]
+        self.assertGreater(
+            ws.column_dimensions[monto].width, ancho_minimo(9.5e9)
+        )
+
     def test_los_comentarios_traen_la_formula_para_probar(self):
         with tempfile.TemporaryDirectory() as carpeta:
             ruta = self.escribir(carpeta)
             ws = openpyxl.load_workbook(ruta)[nucleo.HOJA_CALCULO_ECOSTOS]
         nombres = {c.value: c for c in ws[3] if c.value}
         monto = nombres["Monto a compensar [CLP]"].comment.text
-        self.assertIn("Fórmula equivalente para probar (fila 4", monto)
+        self.assertIn("Fórmula de Excel equivalente en la fila 4", monto)
         # En español y con ";" (para pegar en un Excel en español).
         self.assertIn("=MAX(0;(SUMAR.SI.CONJUNTO(", monto)
         self.assertNotIn("SUMIFS", monto)
         bloque = nombres["Bloque ordenado"].comment.text
-        self.assertIn("(fila 5", bloque)  # mira la fila de arriba
+        self.assertIn("en la fila 5", bloque)  # mira la fila de arriba
         curva = nombres["Curva monotona CMg Descarga [CLP/kWh]"].comment.text
         self.assertIn("matricial", curva)
+
+    def test_la_formula_de_prueba_va_en_la_primera_fila(self):
+        """
+        Pedido del usuario: la formula equivalente en la primera fila de
+        datos (no solo en el comentario) y el resto de la columna como
+        valores del programa, para extenderla y comparar. La celda
+        guarda tambien el valor del programa (lo que leen la
+        compensacion y el CSV sin abrir Excel).
+        """
+
+        from openpyxl.worksheet.formula import ArrayFormula
+
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = self.escribir(carpeta)
+            ws = openpyxl.load_workbook(ruta)[nucleo.HOJA_CALCULO_ECOSTOS]
+            valores = openpyxl.load_workbook(ruta, data_only=True)[
+                nucleo.HOJA_CALCULO_ECOSTOS
+            ]
+            # Como la vuelve a leer el programa (pandas, valores).
+            leida = pd.read_excel(
+                ruta, sheet_name=nucleo.HOJA_CALCULO_ECOSTOS, header=2
+            )
+        nombres = {c.value: c.column_letter for c in ws[3] if c.value}
+        monto = nombres["Monto a compensar [CLP]"]
+        self.assertEqual(
+            ws[f"{monto}4"].value,
+            f"=MAX(0,(SUMIFS($AM$4:$AM$6,$H$4:$H$6,H4,$M$4:$M$6,M4)"
+            f"-SUMIFS($AQ$4:$AQ$6,$H$4:$H$6,H4,$M$4:$M$6,M4))"
+            f"/COUNTIFS($H$4:$H$6,H4,$M$4:$M$6,M4))",
+        )
+        self.assertEqual(
+            [valores[f"{monto}{f}"].value for f in (4, 5, 6)], [1, 2, 3]
+        )
+        self.assertEqual([ws[f"{monto}{f}"].value for f in (5, 6)], [2, 3])
+        # Mira la fila de arriba: va en la 5, y la 4 queda como valor.
+        bloque = nombres["Bloque ordenado"]
+        self.assertTrue(str(ws[f"{bloque}5"].value).startswith("=IF("))
+        self.assertNotIsInstance(ws[f"{bloque}4"].value, str)
+        # Matricial: como formula de matriz.
+        curva = nombres["Curva monotona CMg Descarga [CLP/kWh]"]
+        self.assertIsInstance(ws[f"{curva}4"].value, ArrayFormula)
+        self.assertEqual(valores[f"{curva}4"].value, 1)
+        self.assertEqual(
+            leida["Monto a compensar [CLP]"].tolist(), [1, 2, 3]
+        )
 
     def test_el_resumen_queda_primero_y_el_calculo_detras(self):
         with tempfile.TemporaryDirectory() as carpeta:
@@ -353,9 +443,11 @@ class TestLibroDePagosOrdenado(unittest.TestCase):
                 f"+{nombres['Valorización Carga [CLP]']}5",
             )
             # Curva monotona sin fila en ese puesto: guion, no vacio.
+            # (la fila 4 lleva la formula de prueba, ver
+            # test_la_formula_de_prueba_va_en_la_primera_fila)
             curva = nombres["Curva monotona CMg Descarga [CLP/kWh]"]
             self.assertEqual(
-                [ws[f"{curva}{f}"].value for f in (4, 5, 6)], [1, 2, 3]
+                [ws[f"{curva}{f}"].value for f in (5, 6)], [2, 3]
             )
             # B:H sin comentario; CMg con su origen.
             self.assertTrue(all(ws.cell(3, c).comment is None for c in range(2, 9)))

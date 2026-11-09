@@ -16,7 +16,7 @@ De donde sale cada unidad (revisado en el codigo, no supuesto):
   - Gen_Unidad: energia del intervalo en kWh (docs/Estructura_Archivos_Reales.md).
   - CMg: CMg[CLP/KWh] de cmg_15min (Script/Cmg/Extrae_CMG_barras.py);
     la valorizacion kWh x CMg da CLP ("Total [CLP]" de E Costos).
-  - Energía SSCC de Subastas: CANTIDAD PONDERADA MW; RE545 la pasa a
+  - Energía SSCC de Subastas: CANTIDAD MW; RE545 la pasa a
     kWh del cuarto con /4*1000 (re545_reservas.py, AU).
   - SoC: fraccion (0 a 1), RE545 hace SoC x Capacidad (MWh) x 1000.
   - Pmax (MW) y Capacidad (MWh) de Resumen BESS.
