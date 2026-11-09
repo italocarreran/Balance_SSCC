@@ -38,13 +38,24 @@ pip install python-calamine
 python Balance_BESS.py
 ```
 
-Para encontrar el nombre exacto de una barra en el CSV de CMg (el que va en
-`Barra inyección` de Centrales.xlsx), hay una ventana aparte: se elige el
-CSV, se escribe el nombre aproximado (`arena 220`, `tocopila`, `victor jara`)
-y doble clic copia el nombre exacto.
+**Herramientas sueltas** (carpeta `Herramientas/`, hermana de `Script/`; cada
+una funciona sola, guardada en cualquier carpeta):
+
+- `Buscar_Barras_CMg.py`: se elige el CSV de CMg, se escribe el nombre
+  aproximado de la barra (`arena 220`, `tocopila`) y doble clic copia el
+  nombre exacto (el de `Barra inyección` en Centrales.xlsx).
+- `Buscar_Puntos_PRMTE.py`: sin elegir archivo; baja una vez la lista de
+  puntos de medida de la API (token de `__config__/tks.json` o pegado en la
+  ventana), la guarda en `__config__/puntos_prmte.json` y busca por nombre
+  aproximado. La ruta de la API que entrega la lista está SIN CONFIRMAR: se
+  prueban varias (`RUTAS_LISTA`) y la ventana dice qué respondió cada una.
 
 ```bash
-python Buscar_Barras_CMg.py
+python Herramientas/Buscar_Barras_CMg.py
+```
+
+```bash
+python Herramientas/Buscar_Puntos_PRMTE.py
 ```
 
 0. **La configuración vive en `__config__/`**, la carpeta hermana de la de

@@ -17,7 +17,7 @@ Como se busca:
 
 Doble clic en una barra (o el boton 'Copiar') copia su nombre exacto.
 
-Uso:  python Buscar_Barras_CMg.py
+Uso:  python Herramientas/Buscar_Barras_CMg.py (funciona en cualquier carpeta)
 """
 
 import difflib

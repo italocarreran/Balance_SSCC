@@ -1,13 +1,17 @@
 # -*- coding: utf-8 -*-
-"""Buscar_Barras_CMg.py: encontrar la barra exacta con un nombre aproximado."""
+"""Herramientas/Buscar_Barras_CMg.py: encontrar la barra exacta con un nombre aproximado."""
 
 import tempfile
 import unittest
 from pathlib import Path
 
+import sys
+
 import pandas as pd
 
-import Buscar_Barras_CMg as bb
+# Las herramientas viven en Herramientas/, hermana de Script/.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "Herramientas"))
+import Buscar_Barras_CMg as bb  # noqa: E402
 
 REALES = [
     "ARENA_________220", "TOCOPILLA_____110", "PEQ___________220",

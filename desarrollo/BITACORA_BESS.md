@@ -5918,3 +5918,18 @@ ventana con xvfb. 332 pruebas.
   Doble clic / Enter / "Copiar nombre" copia el nombre exacto.
 - Prueba: desarrollo/tests/test_buscar_barras.py (barras reales de
   Centrales.xlsx entre 1.000 de relleno).
+
+## 2026-11-09 (27) — Herramientas/: buscar barras de CMg y puntos PRMTE
+
+- Pedido: "que quede en el repo, en una carpeta hermana a la de los scripts.
+  Donde esté este y el de cmg".
+- Carpeta `Herramientas/` (hermana de `Script/`): `Buscar_Barras_CMg.py`
+  (movido desde la raiz) y `Buscar_Puntos_PRMTE.py` (nuevo). Los dos son
+  sueltos: no importan nada del resto del programa.
+- Buscar_Puntos_PRMTE: sin archivo; baja la lista de puntos de la API una
+  vez, la guarda en `__config__/puntos_prmte.json` (el __config__ mas
+  cercano hacia arriba) y busca por nombre aproximado. Token de
+  `__config__/tks.json` o pegado en la ventana. La ruta de la lista esta SIN
+  CONFIRMAR (no hay acceso a la API desde el desarrollo): `RUTAS_LISTA`
+  prueba cuatro y la ventana muestra la respuesta de cada una.
+- Pruebas: test_buscar_barras, test_buscar_puntos_prmte.
