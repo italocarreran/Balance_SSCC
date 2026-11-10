@@ -30,7 +30,7 @@ def fila(**valores):
     base = {
         r.C_CENTRAL: "SAE-UNO", r.C_EMPRESA: "EMPRESA",
         r.C_ECOSTOS: 100.0, r.C_RE545: 200.0, r.C_TOTAL: 300.0,
-        r.C_DESCARGA: 500.0, r.C_CARGA: -600.0, r.C_CMG: 50.0,
+        r.C_DESCARGA: 500.0, r.C_CARGA: 600.0, r.C_CMG: 50.0,
         r.C_HORAS_ADJ: 100.0, r.C_ADJ_CPF: 10.0, r.C_ADJ_CSF: 5.0,
         r.C_RESERVA: 1000.0, r.C_FD_CPF: 0.9, r.C_FD_CSF: 0.8,
         r.C_OFERTA_DIAS: 20.0, r.C_DIAS: 31.0, r.C_HORAS_SUB: 300.0,
@@ -93,7 +93,7 @@ class TestPorQueNoRecibe(unittest.TestCase):
 
 class TestComparacion(unittest.TestCase):
 
-    def test_explica_con_lo_que_se_movio_en_el_mismo_sentido(self):
+    def test_que_paso_y_lo_que_mas_cambio(self):
         # Cambios de menos de $1.000 no se comentan: montos realistas.
         anterior = pd.DataFrame([
             fila(**{r.C_RE545: 200000.0, r.C_TOTAL: 200100.0}),
@@ -101,48 +101,60 @@ class TestComparacion(unittest.TestCase):
         ])
         actual = pd.DataFrame([
             fila(**{r.C_RE545: 400000.0, r.C_TOTAL: 400100.0, r.C_OFERTA_DIAS: 28.0,
-                    r.C_ADJ_CPF: 15.0, r.C_CMG: 10.0}),
+                    r.C_ADJ_CPF: 15.0}),
             fila(**{r.C_CENTRAL: "SAE-DOS"}),
         ])
         lineas, tabla = r.comparar_resumenes(actual, anterior)
-        uno = tabla.set_index(r.C_CENTRAL).loc["SAE-UNO", "Explicación"]
-        self.assertTrue(uno.startswith("RE545 sube $200.000 (+100 %):"), uno)
-        self.assertIn("lo adjudicado en CPF subió (10 → 15 MW)", uno)
-        self.assertIn("los días con oferta completa subieron (20 → 28 días)", uno)
-        # El CMg bajo, pero el RE545 sube: no lo explica, no se nombra.
-        self.assertNotIn("CMg", uno)
+        uno = tabla.set_index(r.C_CENTRAL).loc["SAE-UNO"]
+        self.assertEqual(uno["Qué pasó"], "RE545 sube $200.000 (+100 %).")
+        self.assertEqual(
+            uno["Lo que más cambió"],
+            "• adjudicado CPF 10 → 15 MW (+50 %)\n"
+            "• días con oferta completa 20 → 28 días (+40 %)",
+        )
         # Lo que no cambio va en una sola linea, no en su fila.
-        self.assertEqual(tabla.set_index(r.C_CENTRAL).loc["SAE-DOS", "Explicación"], "")
+        self.assertEqual(tabla.set_index(r.C_CENTRAL).loc["SAE-DOS", "Qué pasó"], "")
         self.assertIn("Sin cambios relevantes: SAE-DOS.", lineas)
         # Lo que mas cambio, arriba.
         self.assertEqual(tabla[r.C_CENTRAL].iloc[0], "SAE-UNO")
 
-    def test_central_que_estuvo_parte_del_mes_anterior(self):
+    def test_caso_gabriela_con_c1_c2_y_ciclos(self):
         """
-        Caso real (SAE-CRCA-PFV-GABRIELA): E Costos +2.209 % y el reporte
-        decia "sin un cambio grande en sus entradas". El mes anterior
-        estuvo solo una parte del mes: eso tiene que salir, y la columna
-        Datos muestra lo adjudicado "tanto vs tanto".
+        Caso real (SAE-CRCA-PFV-GABRIELA, sept -> oct): E Costos +2.209 %.
+        C1 casi igual, C2 se cae (el CMg baja) y los ciclos con monto pasan
+        de 4 a 30: eso es lo que tiene que decir.
         """
 
         anterior = pd.DataFrame([fila(**{
-            r.C_ECOSTOS: 9.8e6, r.C_RE545: 0.0, r.C_TOTAL: 9.8e6,
-            r.C_DIAS: 9.0, r.C_HORAS_SUB: 150.0, r.C_ADJ_CPF: 900.0,
+            r.C_ECOSTOS: 9845069.2, r.C_RE545: 0.0, r.C_TOTAL: 9845069.2,
+            r.C_EC_C1: 518e6, r.C_EC_C2: 653e6, r.C_EC_CICLOS: 4.0,
+            r.C_EC_CICLOS_MES: 31.0, r.C_ADJ_CPF: 17274.0,
         })])
         actual = pd.DataFrame([fila(**{
-            r.C_ECOSTOS: 227.3e6, r.C_RE545: 0.0, r.C_TOTAL: 227.3e6,
-            r.C_ADJ_CPF: 4300.0, r.C_HORAS_SUB: 700.0,
+            r.C_ECOSTOS: 227344681.2, r.C_RE545: 0.0, r.C_TOTAL: 227344681.2,
+            r.C_EC_C1: 471e6, r.C_EC_C2: 244e6, r.C_EC_CICLOS: 30.0,
+            r.C_EC_CICLOS_MES: 32.0, r.C_ADJ_CPF: 0.0,
         })])
         _, tabla = r.comparar_resumenes(actual, anterior)
-        texto = tabla["Explicación"].iloc[0]
-        self.assertIn("los días en el mes subieron (9 → 31 días)", texto)
-        self.assertIn("las horas adjudicadas subieron (150 → 700 h)", texto)
-        datos = tabla["Datos (anterior → actual)"].iloc[0]
-        self.assertIn("Adjudicado CPF: 900 → 4.300 MW", datos)
-        # Sin ruido: lo que no cambio no va, salvo el FD, que va siempre
-        # ("yo creo que tiene que ver con los FD"): dice que fue igual.
-        self.assertIn("FD CPF: 0,90 (igual)", datos)
-        self.assertNotIn("Días con oferta completa", datos)
+        self.assertEqual(
+            tabla["Qué pasó"].iloc[0],
+            "E Costos sube $217 MM (+2.209 %): ciclos con monto 4 → 30 de 32; "
+            "C1 $518 MM → $471 MM y C2 $653 MM → $244 MM.",
+        )
+        self.assertIn("• adjudicado CPF 17.274 → 0 MW (-100 %)", tabla["Lo que más cambió"].iloc[0])
+
+    def test_el_cmg_general_va_arriba_y_no_en_cada_central(self):
+        def mes(cmg, montos):
+            return pd.DataFrame([
+                fila(**{r.C_CENTRAL: f"C{i}", r.C_RE545: m, r.C_TOTAL: m + 100.0,
+                        r.C_CMG: cmg}) for i, m in enumerate(montos)
+            ])
+
+        lineas, tabla = r.comparar_resumenes(
+            mes(6.8, [3e6, 4e6, 5e6]), mes(22.0, [1e6, 1e6, 1e6])
+        )
+        self.assertTrue(any(l.startswith("El CMg promedio bajó 69 %") for l in lineas), lineas)
+        self.assertFalse(any("CMg" in t for t in tabla["Lo que más cambió"]))
 
     def test_nueva_sin_ingreso_dice_por_que(self):
         """Caso real (SAE-LILE): adjudicada, pero FD = 0 todo el mes."""
@@ -154,34 +166,119 @@ class TestComparacion(unittest.TestCase):
                     r.C_TOTAL: 0.0, r.C_FD_CPF: 0.0, r.C_FD_CSF: 0.0}),
         ])
         _, tabla = r.comparar_resumenes(actual, anterior)
-        lile = tabla.set_index(r.C_CENTRAL).loc["SAE-LILE"]
         self.assertEqual(
-            lile["Explicación"],
+            tabla.set_index(r.C_CENTRAL).loc["SAE-LILE", "Qué pasó"],
             "Nueva: no estaba en la planilla anterior. Recibe $0. Según FD "
             "no tuvo participación (FD CPF y CSF = 0 en todo el mes).",
         )
-        self.assertIn("Adjudicado CPF: 10 MW", lile["Datos (anterior → actual)"])
-        self.assertNotIn("sin dato", lile["Datos (anterior → actual)"])
 
-    def test_queda_en_cero_dice_por_que(self):
+    def test_queda_y_sigue_en_cero_dicen_por_que(self):
         anterior = pd.DataFrame([fila(**{r.C_RE545: 2e6, r.C_TOTAL: 2.1e6})])
         actual = pd.DataFrame([fila(**{r.C_ECOSTOS: 0.0, r.C_RE545: 0.0,
                                        r.C_TOTAL: 0.0, r.C_FD_CPF: 0.0})])
         _, tabla = r.comparar_resumenes(actual, anterior)
         self.assertIn("Queda en $0: Según FD no tuvo participación",
-                      tabla["Explicación"].iloc[0])
+                      tabla["Qué pasó"].iloc[0])
+        cero = fila(**{r.C_ECOSTOS: 0.0, r.C_RE545: 0.0, r.C_TOTAL: 0.0,
+                       r.C_FD_CSF: 0.0})
+        _, tabla = r.comparar_resumenes(pd.DataFrame([cero]), pd.DataFrame([cero]))
+        self.assertTrue(tabla["Qué pasó"].iloc[0].startswith("Sigue en $0. Según FD"))
 
     def test_central_nueva_y_que_ya_no_esta(self):
         anterior = pd.DataFrame([fila(**{r.C_CENTRAL: "VIEJA"})])
         actual = pd.DataFrame([fila(**{r.C_CENTRAL: "NUEVA"})])
         _, tabla = r.comparar_resumenes(actual, anterior)
-        textos = dict(zip(tabla[r.C_CENTRAL], tabla["Explicación"]))
+        textos = dict(zip(tabla[r.C_CENTRAL], tabla["Qué pasó"]))
         self.assertTrue(textos["NUEVA"].startswith("Nueva"))
         self.assertTrue(textos["VIEJA"].startswith("Ya no está"))
 
     def test_plata_a_la_chilena(self):
         self.assertEqual(r.plata(1234567.6), "$1.234.568")
         self.assertEqual(r.plata(-5), "-$5")
+        self.assertEqual(r.plata_corta(217499612.0), "$217 MM")
+        self.assertEqual(r.plata_corta(436684.0), "$436.684")
+
+
+class TestFormulasVacias(unittest.TestCase):
+    """
+    Las planillas de sept y oct del usuario se escribieron antes de que
+    las formulas llevaran su valor: Total C1, Total C2... se leian vacios
+    (y el reporte decia 0). Se calculan con la misma plantilla de la hoja.
+    """
+
+    def test_e_costos(self):
+        from Script.nucleo.ecostos import FORMULAS_E_COSTOS, NOMBRES_CALCULO_E_COSTOS
+
+        df = pd.DataFrame({
+            "Descarga kWh": [10.0, 0.0], "Carga kWh": [0.0, -4.0],
+            "CMg": [2.0, 3.0], "Adj SSCC": [1, 0],
+            "Valorización Descarga [$]": [50.0, 0.0],
+            "Valorización Carga [$]": [0.0, -8.0],
+            "Total [CLP]": [None, None], "Total": [None, None],
+        })
+        r.completar_formulas(df, FORMULAS_E_COSTOS, NOMBRES_CALCULO_E_COSTOS)
+        self.assertEqual(df["Total [CLP]"].tolist(), [50.0, -8.0])     # C1 = AY + AZ
+        self.assertEqual(df["Valorizacion Descarga"].tolist(), [20.0, 0.0])
+        self.assertEqual(df["Total"].tolist(), [20.0, 0.0])            # C2 = L*(S+T)
+
+    def test_no_pisa_lo_que_trae_valor(self):
+        from Script.nucleo.ecostos import FORMULAS_E_COSTOS, NOMBRES_CALCULO_E_COSTOS
+
+        df = pd.DataFrame({
+            "Valorización Descarga [$]": [50.0], "Valorización Carga [$]": [1.0],
+            "Total [CLP]": [99.0],
+        })
+        r.completar_formulas(df, FORMULAS_E_COSTOS, NOMBRES_CALCULO_E_COSTOS)
+        self.assertEqual(df["Total [CLP]"].tolist(), [99.0])
+
+    def test_re545_con_if_count(self):
+        from Script.nucleo.re545 import FORMULAS_RE545, NOMBRES_CALCULO_RE545
+
+        df = pd.DataFrame({
+            "Energía asignada": [2.0, None], "Curva Cmg Decendente": [5.0, 5.0],
+            "Total C1": [None, None],
+        })
+        r.completar_formulas(df, FORMULAS_RE545, NOMBRES_CALCULO_RE545)
+        self.assertEqual(df["Total C1"].iloc[0], 10.0)
+        self.assertTrue(math.isnan(df["Total C1"].iloc[1]))   # el "" de la formula
+
+
+class TestCambiosPorCentral(unittest.TestCase):
+    """
+    La sub tabla (pedido del usuario: "por cada cosa que diga el cambio y
+    su variacion y si cambio o no").
+    """
+
+    def test_un_renglon_por_concepto_con_su_cambio(self):
+        anterior = pd.DataFrame([fila(**{r.C_RE545: 200000.0, r.C_TOTAL: 200100.0})])
+        actual = pd.DataFrame([fila(**{r.C_RE545: 400000.0, r.C_TOTAL: 400100.0,
+                                       r.C_ADJ_CPF: 15.0})])
+        cambios = r.cambios_por_central(actual, anterior).set_index("Concepto")
+        self.assertEqual(list(r.cambios_por_central(actual, anterior).columns),
+                         list(r.COLUMNAS_CAMBIOS))
+        self.assertEqual(cambios.loc["Recibe RE545", "Cambio"], r.SUBE)
+        self.assertEqual(cambios.loc["Recibe RE545", "Variación [%]"], 100.0)
+        self.assertEqual(cambios.loc["Adjudicado CPF", "Anterior"], 10.0)
+        self.assertEqual(cambios.loc["Adjudicado CPF", "Actual"], 15.0)
+        self.assertEqual(cambios.loc["FD CPF promedio", "Cambio"], r.IGUAL)
+        # La plata, primero.
+        self.assertEqual(
+            list(r.cambios_por_central(actual, anterior)["Concepto"])[:3],
+            ["Recibe total", "Recibe E Costos", "Recibe RE545"],
+        )
+
+    def test_sin_ruido_y_sin_dato(self):
+        anterior = pd.DataFrame([fila(**{r.C_ADJ_CSF: 0.0})])
+        actual = pd.DataFrame([fila(**{r.C_ADJ_CSF: 0.0, r.C_FD_CSF: math.nan})])
+        cambios = r.cambios_por_central(actual, anterior).set_index("Concepto")
+        self.assertNotIn("Adjudicado CSF", cambios.index)       # 0 en los dos
+        self.assertEqual(cambios.loc["FD CSF promedio", "Cambio"], r.SIN_DATO)
+
+    def test_nueva(self):
+        cambios = r.cambios_por_central(
+            pd.DataFrame([fila()]), pd.DataFrame(columns=list(r.COLUMNAS_RESUMEN))
+        )
+        self.assertTrue((cambios["Cambio"] == r.NUEVO).all())
 
 
 def _planilla(carpeta, nombre, multiplicar=1.0):
@@ -213,12 +310,17 @@ class TestArchivos(unittest.TestCase):
             )
             self.assertEqual(destino, actual.parent / "Log" / "Comparacion_2610_vs_2609.xlsx")
             libro = openpyxl.load_workbook(destino)
-            self.assertEqual(libro.sheetnames, ["Comparacion", "Detalle"])
+            self.assertEqual(libro.sheetnames, ["Comparacion", "Cambios por central"])
+            sub = libro["Cambios por central"]
+            self.assertEqual(
+                [c.value for c in sub[3] if c.value], list(r.COLUMNAS_CAMBIOS)
+            )
+            self.assertIsNotNone(sub.auto_filter.ref)
             ws = libro["Comparacion"]
             self.assertTrue(str(ws["B2"].value).startswith("Cuadro N° 1"))
             self.assertEqual(ws["B3"].value, "Resumen")
             self.assertTrue(lineas[0].startswith("Total del mes:"))
-            self.assertTrue(any("RE545 sube" in e for e in tabla["Explicación"]))
+            self.assertTrue(any("RE545 sube" in e for e in tabla["Qué pasó"]))
             # Las columnas con formula (Total C1, Total C2...) llevan el
             # valor del programa: se leen sin abrir el libro en Excel.
             self.assertTrue((resumen_tmp := nucleo.resumen_por_central(
@@ -332,13 +434,12 @@ class TestNoParticipo(unittest.TestCase):
         })])
         _, tabla = r.comparar_resumenes(actual, anterior)
         self.assertIn(
-            "las horas con 'No participó' en FD CSF bajaron (700 → 0 h)",
-            tabla["Explicación"].iloc[0],
+            "• horas FD CSF 'No participó' 700 → 0 h (-100 %)",
+            tabla["Lo que más cambió"].iloc[0],
         )
-        self.assertIn(
-            "Horas FD CSF 'No participó': 700 de 720 → 0 de 744",
-            tabla["Datos (anterior → actual)"].iloc[0],
-        )
+        cambios = r.cambios_por_central(actual, anterior).set_index("Concepto")
+        self.assertEqual(cambios.loc["FD CSF: horas 'No participó'", "Anterior"], 700.0)
+        self.assertEqual(cambios.loc["FD CSF: horas 'No participó'", "Cambio"], r.BAJA)
 
 
 class TestHerramienta(unittest.TestCase):
