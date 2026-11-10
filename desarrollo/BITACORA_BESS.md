@@ -6125,3 +6125,11 @@ ventana con xvfb. 332 pruebas.
   Usa Script/ (a diferencia de las otras herramientas).
 - Verificado: ventana corrida con xvfb (python3.12 + tk) y las dos hojas
   renderizadas con LibreOffice. Pruebas: test_reporte (15).
+
+## 2026-11-10 (39) — Columna NUP de Resumen BESS se descarta
+
+- El usuario agregó "NUP" en 'Resumen BESS' de Centrales.xlsx; no va a la
+  11_. `escritura.COLUMNAS_DESCARTADAS_RESUMEN` ("energia minima", "nup"),
+  usada en `_escribir_hoja_centrales`. Ningún cálculo la busca (todo se lee
+  por nombre de columna).
+- Prueba: test_unidades.test_tampoco_trae_nup.

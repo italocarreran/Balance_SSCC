@@ -1485,6 +1485,15 @@ _HOJAS_CONSOLIDADO = (
 )
 
 
+# Columnas de 'Resumen BESS' (Centrales.xlsx) que se descartan al
+# importarla a la hoja 'Centrales' de la planilla, por su nombre
+# normalizado. Ninguna se usa en un calculo:
+#   - 'Energía mínima' (pedido del usuario: "quitémosla");
+#   - 'NUP' (2026-11-10: el usuario la agrego en Centrales.xlsx, pero
+#     "hay que descartarla al importar a 11_").
+COLUMNAS_DESCARTADAS_RESUMEN = ("energia minima", "nup")
+
+
 def _escribir_hoja_centrales(writer, resumen, diccionario):
     """
     La hoja "Centrales": 'Resumen BESS' con su titulo y sus
@@ -1494,12 +1503,12 @@ def _escribir_hoja_centrales(writer, resumen, diccionario):
     vuelve a leer: las dos puntas se mueven juntas.
     """
 
-    # 'Energía mínima' no se usa en ningun calculo (pedido del usuario:
-    # "quitémosla"). Todo lo de Resumen BESS se busca por nombre de
-    # columna, asi que sacarla no corre nada.
+    # Columnas de 'Resumen BESS' que no pasan a la planilla (ver
+    # COLUMNAS_DESCARTADAS_RESUMEN). Todo lo de Resumen BESS se busca por
+    # nombre de columna, asi que sacarlas no corre nada.
     resumen = resumen.loc[:, [
         columna for columna in resumen.columns
-        if normalizar(columna) != "energia minima"
+        if normalizar(columna) not in COLUMNAS_DESCARTADAS_RESUMEN
     ]]
 
     # Fila 1 vacia, "Cuadro N° ..." en la 2 y encabezados en la 3.
