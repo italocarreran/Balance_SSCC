@@ -6056,3 +6056,18 @@ ventana con xvfb. 332 pruebas.
 - Pruebas: test_columnas_repetidas_como_en_la_hoja_fd y
   test_con_la_hoja_fd_real_del_libro (FD escrito y releído como en la
   corrida); las dos fallan con el código anterior con el mismo error.
+
+## 2026-11-10 (35) — Subastas sin columna Propietario
+
+- El usuario notó que el Propietario de Subastas se buscaba en Resumen BESS
+  con el nombre de Subastas (sin pasar por el Diccionario), y preguntó si la
+  columna hacía falta. No: ningún cálculo la leía; el propietario ya se
+  homologa en COMPENSACION_CENTRAL y el Resumen, por el nombre Balance BESS
+  (`compensacion._con_empresa` + `construir_mapa_propietario`). Opción
+  elegida: sacarla.
+- `subastas_accdb.construir_subastas_desde_*`: sin `mapa_propietarios` ni la
+  columna L, ni el aviso "sin Propietario". `NOMBRES_SUBASTAS` sin "L".
+  `subastas_para_hoja` la saca de una hoja de antes al reescribirla.
+  `proceso.generar_consolidado` ya no lee Centrales para esto.
+- Pruebas: test_subastas_hoja_y_cambio_hora (test_sin_propietario y la hoja
+  del consolidado sin la columna).

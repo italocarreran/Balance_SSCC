@@ -786,8 +786,9 @@ importable como cualquier módulo.
   `DATE(Año,Mes,Dia)`; `Hora_dia` = `HORA` sin corrección; `Hora_mes` =
   `(Dia-1)*24 + Hora_dia` (`calcular_hora_mes_subastas()`, con el ajuste de
   cambio de hora de la planilla como parámetro opcional, hoy apagado —
-  pendiente); `Propietario` sale de la columna nueva de
-  `Centrales.xlsx`/`Resumen BESS` (`construir_mapa_propietario()`);
+  pendiente); la hoja ya no lleva `Propietario` (2026-11-10: ningún cálculo
+  lo usaba; se busca en COMPENSACION_CENTRAL y el Resumen por el nombre
+  Balance BESS, `construir_mapa_propietario()`);
   `Energía SSCC` = `CANTIDAD MW` (columna H del consolidado, no la J
   ponderada; `COLUMNA_ENERGIA_SSCC_ACCDB`, confirmado por el usuario 2026-11-09). `FD` (`calcular_fd_subastas()`) y
   `FMA` (`calcular_fma_subastas()`) **no existen en el Access** —venían pegadas

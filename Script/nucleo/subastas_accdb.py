@@ -12,9 +12,6 @@ from .hojas_entrada import (
     NOMBRES_SUBASTAS, _contiene_bess_o_sae_sin_bat,
     _ordenar_subastas_por_hora_mes,
 )
-from .parametros import (
-    ARCHIVO_CENTRALES, HOJA_RESUMEN_BESS,
-)
 from .utiles import (
     ErrorEntrada, _entero_a_texto, _texto_seguro, normalizar,
 )
@@ -44,9 +41,9 @@ from .utiles import (
 #   I Hora_dia      <- HORA                    (sin sumar ni restar 1)
 #   J Hora_mes      <- (DIA-1)*24 + HORA       (+ ajuste de cambio de hora)
 #   K Configuración <- CONFIGURACIÓN
-#   L Propietario   <- Centrales.xlsx, "Resumen BESS", columna
-#                      "Propietario" (el usuario la agrego en la B y
-#                      corrio el resto de la hoja una columna)
+#   (L Propietario: ya no va en la hoja, pedido del usuario 2026-11-10;
+#    ningun calculo la usaba y el propietario se busca despues, en
+#    COMPENSACION_CENTRAL y el Resumen, por el nombre Balance BESS)
 #   M Clave horaria <- Configuración & Dia & Hora_dia (igual que antes)
 #   N Ciclo         <- vacia (se calcula en Calculo E Costos)
 #   O Energía SSCC  <- CANTIDAD MW (columna H del consolidado)
@@ -79,8 +76,8 @@ def construir_mapa_propietario(resumen_bess):
     _mapa_resumen_bess_por_nombre), ese corrimiento no rompe nada.
 
     Si la columna no esta (un Centrales.xlsx viejo), devuelve un dict
-    vacio en vez de reventar: la columna Propietario queda vacia y se
-    avisa en el log.
+    vacio en vez de reventar. La usan COMPENSACION_CENTRAL y el Resumen
+    (la hoja Subastas ya no lleva Propietario).
     """
 
     columna_nombre = columna_propietario = None
@@ -152,7 +149,6 @@ def calcular_hora_mes_subastas(dias, horas, dia_cambio_hora=None, ajuste=1):
 def construir_subastas_desde_accdb(
     carpeta_subastas,
     aamm,
-    mapa_propietarios=None,
     dia_cambio_hora=None,
     registrar=print,
 ):
@@ -178,7 +174,7 @@ def construir_subastas_desde_accdb(
         )
 
     return construir_subastas_desde_crudo(
-        df_crudo, aamm, mapa_propietarios=mapa_propietarios,
+        df_crudo, aamm,
         dia_cambio_hora=dia_cambio_hora, registrar=registrar,
         origen=f"{resumen['archivos_leidos']} Access",
     )
@@ -187,7 +183,6 @@ def construir_subastas_desde_accdb(
 def construir_subastas_desde_consolidado(
     carpeta_subastas,
     aamm,
-    mapa_propietarios=None,
     dia_cambio_hora=None,
     registrar=print,
 ):
@@ -221,7 +216,7 @@ def construir_subastas_desde_consolidado(
         )
 
     return construir_subastas_desde_crudo(
-        df_crudo, aamm, mapa_propietarios=mapa_propietarios,
+        df_crudo, aamm,
         dia_cambio_hora=dia_cambio_hora, registrar=registrar,
         origen=ruta.name,
     )
@@ -230,7 +225,6 @@ def construir_subastas_desde_consolidado(
 def construir_subastas_desde_crudo(
     df_crudo,
     aamm,
-    mapa_propietarios=None,
     dia_cambio_hora=None,
     registrar=print,
     origen="los Access",
@@ -305,11 +299,6 @@ def construir_subastas_desde_crudo(
 
     df["K"] = filtrado["CONFIGURACIÓN"].map(_texto_seguro)
 
-    mapa_propietarios = mapa_propietarios or {}
-    df["L"] = df["K"].map(
-        lambda central: mapa_propietarios.get(normalizar(central), "")
-    )
-
     df["M"] = (
         df["K"]
         + df["H"].map(_entero_a_texto)
@@ -322,29 +311,9 @@ def construir_subastas_desde_crudo(
         filtrado[COLUMNA_ENERGIA_SSCC_ACCDB], errors="coerce"
     )
 
-    df = df[list("BCDEFGHIJKLMNO")]
+    df = df[list("BCDEFGHIJKMNO")]
     df = df.rename(columns=NOMBRES_SUBASTAS)
     df = _ordenar_subastas_por_hora_mes(df)
-
-    if mapa_propietarios:
-        sin_propietario = sorted(
-            {
-                central
-                for central, propietario in zip(df.iloc[:, 9], df.iloc[:, 10])
-                if not propietario
-            }
-        )
-        for central in sin_propietario:
-            registrar(
-                f"  [AVISO] sin Propietario en {ARCHIVO_CENTRALES} "
-                f"('{HOJA_RESUMEN_BESS}'): {central}"
-            )
-    else:
-        registrar(
-            f"  [AVISO] la hoja '{HOJA_RESUMEN_BESS}' de "
-            f"{ARCHIVO_CENTRALES} no tiene columna 'Propietario': la "
-            f"columna Propietario de Subastas queda vacia."
-        )
 
     registrar(
         f"  Subastas: {len(df):,} fila(s) desde {origen} (filtro "
