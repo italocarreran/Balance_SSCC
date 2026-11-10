@@ -6002,3 +6002,23 @@ ventana con xvfb. 332 pruebas.
   - `_ancho_para_total`: más margen (+20 % y 4).
 - Prueba: test_el_ancho_mira_todas_las_filas_no_solo_la_muestra (falla con el
   código anterior: 15 < 19).
+
+## 2026-11-10 (33) — Matriz "Centrales por origen": corrida parcial y cuatro colores
+
+- Pedido: la matriz del control no salía corriendo parcial (octubre, antes de
+  la prorrata): solo se armaba al calcular E Costos/RE545. Ahora
+  `proceso.matriz_desde_consolidado` la arma con lo que HAYA en
+  Balance_BESS.xlsx (las hojas que faltan quedan "Aún no se corre", en gris)
+  y `actualizar_matriz_en_control` la escribe al final de cada generación de
+  hojas de entrada (`generar_consolidado`), además de en el cálculo.
+- Colores (`matriz_centrales`, estados en `attrs["estados"]`;
+  `escritura._pintar_matriz`, con leyenda a la derecha): verde se encontró;
+  amarillo no está pero puede no estar; rojo no está y debería; gris aún no
+  se corre.
+- Subastas manda sobre FD, FMA y Ofertas, por servicio (Concepto CPF/CSF):
+  adjudicada CPF sin FD CPF o sin FMA CPF -> rojo; sin CSF en Subastas, no
+  estar en FD CSF -> amarillo (presta solo CPF). Adjudicada y sin oferta ->
+  rojo. Sin adjudicación en el mes -> amarillo. Sin Subastas corrida, lo que
+  falta en FD/FMA/Ofertas queda amarillo. Medidores, SoC, CMg, Diccionario y
+  Resumen BESS que faltan, rojo.
+- Pruebas: test_matriz_centrales (5 nuevas).

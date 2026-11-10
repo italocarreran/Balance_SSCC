@@ -56,7 +56,7 @@ Script/
         xlsx_rapido.py         <- pegar hojas en el .xlsx a nivel zip (sin abrir el libro)
         relleno_rapido.py      <- filas de datos de las hojas grandes generadas directo en XML (mismo formato)
         lector.py              <- leer Excel con calamine (si esta) donde se verifico que da lo mismo
-        matriz_centrales.py    <- matriz de control: cada central y si se encontro en cada origen (Control_corrida)
+        matriz_centrales.py    <- matriz de control: cada central y si se encontro en cada origen (Control_corrida); verde/amarillo/rojo/gris, sale tambien en corridas parciales (proceso.matriz_desde_consolidado)
         csv_sae.py             <- SAE_AAMM.csv, el CSV de pagos (macro Generar_CSV_SAE): boton final
         formato.py             <- ancho/negrita/panel fijo de las hojas
         proceso.py             <- los dos procesos completos

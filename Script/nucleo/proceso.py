@@ -22,7 +22,7 @@ from .ecostos import (
 from .manifiesto import construir_manifiesto
 from .ecostos_prorratas import agregar_central_fd, mapa_unidad_fd_a_central
 from .factores_subastas import leer_fma_consolidado, subastas_con_fd_y_fma
-from .escritura import escribir_pagos_bess, escribir_salida
+from .escritura import escribir_control, escribir_pagos_bess, escribir_salida
 from .estructura import SECCIONES_CONSOLIDADO, SECCIONES_PAGOS
 from .fma import cargar_tablas_fma
 from .hojas_entrada import (
@@ -48,7 +48,8 @@ from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, ARCHIVO_MEDIDAS_SAE,
     CARPETA_DB_SUBASTAS, CARPETA_FD_FMA, COLUMNA_CENTRAL, HOJA_CENTRALES,
     HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545,
-    HOJA_FMA, HOJA_MEDIDORES, HOJA_RESUMEN_BESS,
+    HOJA_CMG, HOJA_FD, HOJA_FMA, HOJA_MEDIDORES, HOJA_OFERTAS_SSCC,
+    HOJA_RESUMEN_BESS, HOJA_SUBASTAS,
 )
 from .prorrata_retiros import (
     buscar_archivo_prorrata, construir_prorrata_retiros,
@@ -429,6 +430,10 @@ def generar_consolidado(
         tablas_fma=tablas_fma,
     )
 
+    # El control "Centrales por origen" con lo que haya ya en la
+    # planilla, aunque falten hojas (corrida parcial).
+    actualizar_matriz_en_control(rutas, registrar)
+
     avanzar(100)
     registrar(f"Listo: {rutas['salida']}")
 
@@ -469,6 +474,94 @@ def _leer_medidores_del_libro(ruta_salida, registrar):
     registrar(f"  filas: {len(df_medidores):,}")
 
     return df_medidores
+
+
+def matriz_desde_consolidado(ruta_salida, registrar=print, **ya_leidos):
+    """
+    La matriz de centrales (matriz_centrales.py) con lo que HAYA en las
+    hojas de entrada de Balance_BESS.xlsx, aunque falten algunas
+    (pedido del usuario: que salga tambien en una corrida parcial, por
+    ejemplo Subastas antes que FD). Una hoja que no esta o esta vacia
+    queda como "Aún no se corre".
+
+    ya_leidos: los argumentos de construir_matriz_centrales que quien
+    llama ya tiene en memoria (resumen, diccionario, df_medidores, ...):
+    esos no se vuelven a leer. None si el libro no existe.
+    """
+
+    ruta_salida = Path(ruta_salida)
+    if not ruta_salida.is_file():
+        return None
+
+    callado = lambda *_: None  # noqa: E731 - los lectores anotan de mas
+    datos = dict(ya_leidos)
+
+    def leer(clave, hoja, funcion):
+        if clave in datos:
+            return
+        valor = None
+        if hoja in libro.sheet_names:
+            try:
+                valor = funcion()
+            except Exception:  # noqa: BLE001 - hoja vacia o de antes
+                valor = None
+        datos[clave] = valor
+
+    def tabla(hoja):
+        df = leer_hoja_con_fila_vacia(libro, hoja)
+        return None if df.empty else df
+
+    registrar("Armando la matriz de centrales por origen...")
+    with abrir_excel(ruta_salida) as libro:
+        if "resumen" not in datos or "diccionario" not in datos:
+            centrales = None
+            try:
+                centrales = leer_centrales_planilla(ruta_salida, libro=libro)
+            except Exception:  # noqa: BLE001
+                centrales = None
+            resumen, diccionario = centrales or (None, None)
+            datos.setdefault("resumen", resumen)
+            datos.setdefault("diccionario", diccionario)
+        leer("df_medidores", HOJA_MEDIDORES, lambda: tabla(HOJA_MEDIDORES))
+        leer("df_wxy", HOJA_OFERTAS_SSCC, lambda: leer_ofertas_sscc_consolidado(
+            ruta_salida, registrar=callado, libro=libro)[0])
+        leer("df_cmg", HOJA_CMG, lambda: leer_cmg_consolidado(
+            ruta_salida, registrar=callado, libro=libro))
+        leer("df_subastas", HOJA_SUBASTAS, lambda: tabla(HOJA_SUBASTAS))
+        if "df_fd_csf" not in datos or "df_fd_cpf" not in datos:
+            fd = (None, None)
+            if HOJA_FD in libro.sheet_names:
+                try:
+                    fd = leer_fd_consolidado(
+                        ruta_salida, registrar=callado, libro=libro
+                    )
+                except Exception:  # noqa: BLE001
+                    fd = (None, None)
+            datos.setdefault("df_fd_csf", fd[0])
+            datos.setdefault("df_fd_cpf", fd[1])
+        leer("tablas_fma", HOJA_FMA, lambda: leer_fma_consolidado(
+            ruta_salida, registrar=callado, libro=libro))
+
+    return construir_matriz_centrales(**datos)
+
+
+def actualizar_matriz_en_control(rutas, registrar=print, **ya_leidos):
+    """
+    Escribe la matriz de centrales en Control_corrida.xlsx (el resto del
+    control se preserva). Es solo un control: si algo falla, se avisa y
+    la corrida sigue.
+    """
+
+    try:
+        matriz = matriz_desde_consolidado(
+            rutas["salida"], registrar, **ya_leidos
+        )
+        if matriz is not None and len(matriz):
+            escribir_control(rutas["control"], df_matriz_centrales=matriz)
+        return matriz
+    except Exception as error:  # noqa: BLE001 - es solo un control
+        registrar(f"  [AVISO] no se pudo armar la matriz de centrales: {error}")
+        return None
 
 
 def _leer_entradas_del_consolidado(
@@ -940,12 +1033,20 @@ def generar_pagos_bess(
 
         # Control: cada central y si se encontro en cada origen (va a
         # Control_corrida.xlsx). Con lo ya leido: no abre nada.
+        ya = dict(
+            resumen=resumen, diccionario=diccionario,
+            df_medidores=df_medidores, df_wxy=df_wxy, df_cmg=df_cmg,
+            df_subastas=df_subastas,
+        )
+        # El FD solo se lee para E Costos y el FMA para RE545: si no se
+        # leyeron, salen de la planilla (no "aun no se corre").
+        if df_fd_csf is not None or df_fd_cpf is not None:
+            ya.update(df_fd_csf=df_fd_csf, df_fd_cpf=df_fd_cpf)
+        if tablas_fma is not None:
+            ya["tablas_fma"] = tablas_fma
         try:
-            df_matriz_centrales = construir_matriz_centrales(
-                resumen=resumen, diccionario=diccionario,
-                df_medidores=df_medidores, df_wxy=df_wxy, df_cmg=df_cmg,
-                df_subastas=df_subastas, df_fd_csf=df_fd_csf,
-                df_fd_cpf=df_fd_cpf, tablas_fma=tablas_fma,
+            df_matriz_centrales = matriz_desde_consolidado(
+                rutas["salida"], registrar, **ya
             )
         except Exception as error:  # noqa: BLE001 - es solo un control
             registrar(f"  [AVISO] no se pudo armar la matriz de centrales: {error}")
