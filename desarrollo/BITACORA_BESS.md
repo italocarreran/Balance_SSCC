@@ -6175,3 +6175,31 @@ ventana con xvfb. 332 pruebas.
   `xlsx_rapido._poner_guardados` (ahora en una sola pasada) en las chicas.
 - Pruebas: test_reporte (+4, una con una hoja FD real con "No participó" y FD
   = 1; otra que las fórmulas traen su valor).
+
+## 2026-11-10 (42) — Comparación revisada con las planillas reales de sept y oct
+
+- El usuario subió 11_PAGOS_BESS_2609 y _2610 (bajados por Drive con
+  `drive.usercontent.google.com` agregado a la red del entorno).
+- Encontrado con los datos reales:
+  - Total C1/C2, descarga ajustada y Reserva se leían 0: esas planillas son de
+    antes de guardar el valor de las fórmulas. `reporte.completar_formulas`
+    calcula una columna con fórmula vacía con la MISMA plantilla de la hoja
+    (FORMULAS_E_COSTOS / FORMULAS_RE545; aritmética y el IF(COUNT(..)<2,"",x)).
+    Y una suma sin ningún valor es "sin dato", no 0.
+  - GABRIELA (+$217 MM en E Costos): C1 $518 MM → $471 MM, C2 $653 MM → $244
+    MM (el CMg promedio baja de 22,1 a 6,8), ciclos con monto 4 → 30 de 32.
+    LILE y ELENA: "No participó" en todas sus horas del servicio adjudicado.
+  - El CMg bajó ~69 % para todas: va una vez arriba y no en cada central
+    (`_cambio_general`, `_GENERALES`).
+  - La carga se guarda positiva (su % salía al revés).
+  - "Solo recibe por E Costos" con 0 días de oferta completa: ese es el motivo
+    (sin oferta completa la energía no va a RE545).
+- Visualización (pedido: "es difícil de ver así como con párrafo"):
+  - Hoja "Comparacion": columnas "Qué pasó" (una línea por lado: cuánto, y
+    ciclos/ventanas con monto y C1/C2) y "Lo que más cambió" (hasta 4
+    entradas, una por línea, con anterior → actual y %).
+  - Hoja nueva "Cambios por central" (reemplaza "Detalle"): un renglón por
+    central y concepto, Anterior / Actual / Diferencia / Variación % / Cambio
+    (▲ Sube, ▼ Baja, Igual, Sin dato, Nuevo, Ya no está), con filtro, franja
+    por central, verde/rojo solo en la plata y flechas en gris para el resto.
+- Pruebas: test_reporte reescrito (28).

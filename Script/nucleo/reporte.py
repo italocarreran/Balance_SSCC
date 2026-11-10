@@ -135,7 +135,60 @@ def _por_central(df, columna_central, columna_valor, como="sum"):
         return {}
     tabla = pd.DataFrame({"c": central.map(normalizar), "v": _num(valor)})
     tabla = tabla[tabla["c"] != ""]
+    if como == "sum":
+        # Sin ningun valor (una columna con formula sin valor guardado)
+        # es "sin dato", no 0.
+        return tabla.groupby("c")["v"].sum(min_count=1).to_dict()
     return tabla.groupby("c")["v"].agg(como).to_dict()
+
+
+def completar_formulas(df, plantillas, nombres):
+    """
+    Las columnas con formula de una hoja de calculo que vienen VACIAS (un
+    libro escrito antes de que se guardara el valor calculado, y que no se
+    abrio ni guardo en Excel) se calculan aca con la MISMA plantilla que
+    escribe la hoja (FORMULAS_E_COSTOS / FORMULAS_RE545), desde las
+    columnas con valores. Solo aritmetica (+ - * / y parentesis) y el
+    IF(COUNT(a,b)<2,"",x) que deja vacio si falta un dato (eso ya lo hace
+    el NaN); una plantilla con otra funcion queda como esta.
+    """
+
+    import re
+
+    marcador = re.compile(r"\{(\w+)\}")
+    si_falta = re.compile(r'^IF\(COUNT\([^)]*\)<2,"",(.*)\)$')
+    solo_cuentas = re.compile(r"^[\s\d.+\-*/()v\[\]'\w]*$")
+    en_curso = set()
+
+    def tiene_valor(nombre):
+        return nombre in df and _num(_col(df, nombre)).notna().any()
+
+    def calcular(clave):
+        nombre = nombres.get(clave, clave)
+        if tiene_valor(nombre) or clave not in plantillas or clave in en_curso:
+            return
+        en_curso.add(clave)
+        expresion = plantillas[clave].lstrip("=")
+        hallado = si_falta.match(expresion)
+        if hallado:
+            expresion = hallado.group(1)
+        if re.search(r"[A-Z]{2,}\(", marcador.sub("x", expresion)):
+            return  # otra funcion de Excel: no se calcula
+        valores = {}
+        for otra in marcador.findall(expresion):
+            calcular(otra)
+            columna = nombres.get(otra, otra)
+            if columna not in df:
+                return
+            valores[otra] = _num(_col(df, columna)).to_numpy(dtype=float)
+        codigo = marcador.sub(lambda m: f"v['{m.group(1)}']", expresion)
+        if not solo_cuentas.match(codigo):
+            return
+        df[nombre] = eval(codigo, {"__builtins__": {}}, {"v": valores})  # noqa: S307
+
+    for clave in plantillas:
+        calcular(clave)
+    return df
 
 
 def _leer(libro, hoja, funcion, registrar):
@@ -190,6 +243,16 @@ def resumen_por_central(ruta_planilla, registrar=print):
 
     resumen_bess, diccionario = centrales or (None, None)
 
+    # Las columnas con formula que vengan vacias se calculan (ver
+    # completar_formulas).
+    from .ecostos import FORMULAS_E_COSTOS, NOMBRES_CALCULO_E_COSTOS
+    from .re545 import FORMULAS_RE545, NOMBRES_CALCULO_RE545
+
+    if ecostos is not None:
+        ecostos = completar_formulas(ecostos, FORMULAS_E_COSTOS, NOMBRES_CALCULO_E_COSTOS)
+    if re545 is not None:
+        re545 = completar_formulas(re545, FORMULAS_RE545, NOMBRES_CALCULO_RE545)
+
     datos = {}  # columna -> {central normalizada: valor}
     nombres = {}  # central normalizada -> como se escribe
 
@@ -207,7 +270,12 @@ def resumen_por_central(ruta_planilla, registrar=print):
             datos[columna] = _por_central(df, "Configuracion", "Monto a compensar")
     if ecostos is not None:
         datos[C_DESCARGA] = _por_central(ecostos, "Configuracion", "Descarga kWh")
-        datos[C_CARGA] = _por_central(ecostos, "Configuracion", "Carga kWh")
+        # La carga viene negativa: se guarda como energia (positiva), asi
+        # "mas carga" es un numero mas grande y su % se lee bien.
+        datos[C_CARGA] = {
+            c: abs(v) if _hay(v) else v
+            for c, v in _por_central(ecostos, "Configuracion", "Carga kWh").items()
+        }
         datos[C_CMG] = _por_central(ecostos, "Configuracion", "CMg", "mean")
         adj = _por_central(ecostos, "Configuracion", "Adj SSCC")
         # Adj SSCC va por cuarto de hora: 4 cuartos = 1 hora.
@@ -217,7 +285,7 @@ def resumen_por_central(ruta_planilla, registrar=print):
         energia = _num(_col(medidores, "Gen_Unidad"))
         clave = _col(medidores, "clave").map(normalizar)
         datos[C_DESCARGA] = energia.clip(lower=0).groupby(clave).sum().to_dict()
-        datos[C_CARGA] = energia.clip(upper=0).groupby(clave).sum().to_dict()
+        datos[C_CARGA] = (-energia.clip(upper=0)).groupby(clave).sum().to_dict()
     if re545 is not None:
         datos[C_RESERVA] = _por_central(re545, "Configuracion", "Reserva con FD y FMA")
 
@@ -438,6 +506,11 @@ def explicar_central(fila):
 
     ecostos, re545 = fila.get(C_ECOSTOS), fila.get(C_RE545)
     if _hay(re545) and re545 == 0 and _hay(ecostos) and ecostos > 0:
+        if _hay(dias) and dias == 0:
+            # Sin oferta completa la energia de la ventana no va a RE545
+            # (Medidores!T): esa es la razon de fondo.
+            return ("Solo recibe por E Costos: ningún día con oferta completa "
+                    "(sin oferta completa, la energía no va a RE545).")
         motivo = next(motivos(), None)
         return "Solo recibe por E Costos" + (f": {motivo[0].lower()}{motivo[1:]}" if motivo else ".")
     if _hay(ecostos) and ecostos == 0 and _hay(re545) and re545 > 0:
@@ -479,33 +552,31 @@ def reporte_corrida(resumen):
 
 # Que mira cada lado para explicar un cambio, y como se dice.
 _MOTORES_RE545 = (
-    (C_NP_CPF, "las horas con 'No participó' en FD CPF", "h"),
-    (C_NP_CSF, "las horas con 'No participó' en FD CSF", "h"),
-    (C_RE_VENTANAS, "las ventanas con monto", ""),
-    (C_RE_C1, "el Total C1", "CLP"),
-    (C_RE_C2, "el Total C2", "CLP"),
-    (C_DIAS, "los días en el mes", "días"),
-    (C_HORAS_SUB, "las horas adjudicadas", "h"),
-    (C_ADJ_CPF, "lo adjudicado en CPF", "MW"),
-    (C_ADJ_CSF, "lo adjudicado en CSF", "MW"),
-    (C_RESERVA, "la reserva con FD y FMA", "kWh"),
-    (C_FD_CPF, "el FD CPF promedio", ""),
-    (C_FD_CSF, "el FD CSF promedio", ""),
-    (C_OFERTA_DIAS, "los días con oferta completa", "días"),
+    (C_NP_CPF, "horas FD CPF 'No participó'", "h"),
+    (C_NP_CSF, "horas FD CSF 'No participó'", "h"),
+    (C_FD_CPF, "FD CPF promedio", ""),
+    (C_FD_CSF, "FD CSF promedio", ""),
+    (C_ADJ_CPF, "adjudicado CPF", "MW"),
+    (C_ADJ_CSF, "adjudicado CSF", "MW"),
+    (C_HORAS_SUB, "horas adjudicadas", "h"),
+    (C_RESERVA, "reserva con FD y FMA", "kWh"),
+    (C_OFERTA_DIAS, "días con oferta completa", "días"),
+    (C_DIAS, "días en el mes", "días"),
+    (C_CMG, "CMg promedio", "CLP/kWh"),
 )
 _MOTORES_ECOSTOS = (
-    (C_NP_CPF, "las horas con 'No participó' en FD CPF", "h"),
-    (C_NP_CSF, "las horas con 'No participó' en FD CSF", "h"),
-    (C_EC_CICLOS, "los ciclos con monto", ""),
-    (C_EC_C1, "el Total C1 (energía ajustada por FD y prorrata × curva monótona)", "CLP"),
-    (C_EC_C2, "el Total C2 (energía medida × CMg)", "CLP"),
-    (C_EC_AJUSTADA, "la descarga ajustada por FD y prorrata", "kWh"),
-    (C_DIAS, "los días en el mes", "días"),
-    (C_HORAS_SUB, "las horas adjudicadas", "h"),
-    (C_DESCARGA, "la descarga", "kWh"),
-    (C_CARGA, "la carga", "kWh"),
-    (C_CMG, "el CMg promedio", "CLP/kWh"),
-    (C_HORAS_ADJ, "las horas con Adj SSCC", "h"),
+    (C_NP_CPF, "horas FD CPF 'No participó'", "h"),
+    (C_NP_CSF, "horas FD CSF 'No participó'", "h"),
+    (C_FD_CPF, "FD CPF promedio", ""),
+    (C_FD_CSF, "FD CSF promedio", ""),
+    (C_ADJ_CPF, "adjudicado CPF", "MW"),
+    (C_ADJ_CSF, "adjudicado CSF", "MW"),
+    (C_HORAS_SUB, "horas adjudicadas", "h"),
+    (C_EC_AJUSTADA, "descarga ajustada FD-prorrata", "kWh"),
+    (C_DESCARGA, "descarga", "kWh"),
+    (C_CARGA, "carga", "kWh"),
+    (C_CMG, "CMg promedio", "CLP/kWh"),
+    (C_DIAS, "días en el mes", "días"),
 )
 
 
@@ -536,15 +607,14 @@ def _motores(actual, anterior, motores, sube):
         pct = _pct(nuevo, viejo)
         if not _hay(pct) or abs(pct) < CAMBIO_MINIMO_PCT:
             continue
-        # La carga es negativa: "mas carga" es un numero mas chico.
-        crece = (nuevo < viejo) if columna == C_CARGA else (nuevo > viejo)
+        crece = nuevo > viejo
         # C2 se RESTA en el monto: si baja, el monto sube.
         empuja_arriba = (not crece) if columna in _RESTAN else crece
         if empuja_arriba != sube:
             continue
         decimales = 2 if columna in (C_FD_CPF, C_FD_CSF) else 0
-        viejo_txt = numero(abs(viejo) if columna == C_CARGA else viejo, decimales)
-        nuevo_txt = numero(abs(nuevo) if columna == C_CARGA else nuevo, decimales)
+        viejo_txt = numero(viejo, decimales)
+        nuevo_txt = numero(nuevo, decimales)
         if unidad == "CLP":
             viejo_txt, nuevo_txt, unidad = plata(viejo), plata(nuevo), ""
         detalle = f"{viejo_txt} → {nuevo_txt}{(' ' + unidad) if unidad else ''}"
@@ -558,20 +628,120 @@ def _motores(actual, anterior, motores, sube):
     return [texto for _, texto in candidatos[:2]]
 
 
-def _frase_lado(lado, nuevo, viejo, actual, anterior, motores):
+def plata_corta(valor):
+    """1.234.567.890 -> '$1.235 MM'; los montos chicos, enteros."""
+
+    if _hay(valor) and abs(valor) >= 1e6:
+        signo = "-" if valor < 0 else ""
+        return f"{signo}${numero(abs(valor) / 1e6, 0)} MM"
+    return plata(valor) if _hay(valor) else "sin dato"
+
+
+# Como se arma el monto de cada lado: (ciclos o ventanas con monto, del
+# mes, Total C1, Total C2).
+_MECANICA = {
+    "E Costos": (C_EC_CICLOS, C_EC_CICLOS_MES, C_EC_C1, C_EC_C2, "ciclos"),
+    "RE545": (C_RE_VENTANAS, C_RE_VENTANAS_MES, C_RE_C1, C_RE_C2, "ventanas"),
+}
+
+
+def _mecanica(lado, actual, anterior):
+    """'ciclos con monto 4 → 30 de 32; C1 $518 MM → $471 MM y C2 ...'."""
+
+    con, del_mes, c1, c2, que = _MECANICA[lado]
+    partes = []
+    nuevo, viejo = actual.get(con), anterior.get(con)
+    if _hay(nuevo) and _hay(viejo) and nuevo != viejo:
+        total = actual.get(del_mes)
+        partes.append(
+            f"{que} con monto {numero(viejo)} → {numero(nuevo)}"
+            + (f" de {numero(total)}" if _hay(total) else "")
+        )
+    totales = []
+    for columna, nombre in ((c1, "C1"), (c2, "C2")):
+        nuevo, viejo = actual.get(columna), anterior.get(columna)
+        if _hay(nuevo) and _hay(viejo) and (nuevo or viejo):
+            totales.append((nombre, viejo, nuevo, abs(_pct(nuevo, viejo))))
+    if any(_hay(p) and p >= CAMBIO_MINIMO_PCT for *_, p in totales):
+        partes.append(" y ".join(
+            f"{nombre} {plata_corta(viejo)} → {plata_corta(nuevo)}"
+            for nombre, viejo, nuevo, _ in totales
+        ))
+    return "; ".join(partes)
+
+
+def _cambio_general(actual, anterior, columna):
+    """
+    La variacion % "de todo el sistema" de una entrada (la mediana entre
+    las centrales que estan en los dos meses), o NaN. Sirve para no
+    repetir en cada central algo que le paso a todas (el CMg).
+    """
+
+    a = actual.set_index(actual[C_CENTRAL].map(normalizar))[columna]
+    b = anterior.set_index(anterior[C_CENTRAL].map(normalizar))[columna]
+    pcts = [
+        _pct(a[c], b[c]) for c in set(a.index) & set(b.index)
+        if _hay(a[c]) and _hay(b[c]) and b[c] != 0
+    ]
+    pcts = [p for p in pcts if _hay(p) and not math.isinf(p)]
+    return float(pd.Series(pcts).median()) if len(pcts) >= 3 else math.nan
+
+
+# Entradas que suelen moverse para todas las centrales a la vez: se
+# dicen una vez arriba, y en una central solo si se aparta de eso.
+_GENERALES = (C_CMG,)
+_APARTE_PCT = 15.0
+
+
+def _entradas_que_mas_cambiaron(actual, anterior, motores, cuantas=3, generales=None):
+    """'CMg promedio 22,1 → 6,8 CLP/kWh (-69 %), ...': las que mas se
+    movieron (10 % o mas), en cualquier sentido."""
+
+    mecanica = {c for valores in _MECANICA.values() for c in valores[:4]}
+    candidatos = []
+    for columna, nombre, unidad in motores:
+        if columna in mecanica:
+            continue
+        nuevo, viejo = actual.get(columna), anterior.get(columna)
+        pct = _pct(nuevo, viejo)
+        if not _hay(pct) or abs(pct) < CAMBIO_MINIMO_PCT:
+            continue
+        general = (generales or {}).get(columna)
+        if _hay(general) and not math.isinf(pct) and abs(pct - general) < _APARTE_PCT:
+            continue  # le paso a todas: va en el resumen de arriba
+        decimales = 2 if columna in (C_FD_CPF, C_FD_CSF) else (1 if columna == C_CMG else 0)
+        texto = (
+            f"{nombre} {numero(viejo, decimales)} → {numero(nuevo, decimales)}"
+            + (f" {unidad}" if unidad else "")
+            + (f" ({_texto_pct(pct)})" if not math.isinf(pct) else "")
+        )
+        candidatos.append((abs(pct) if not math.isinf(pct) else 1e9, texto))
+    candidatos.sort(reverse=True)
+    return [texto for _, texto in candidatos[:cuantas]]
+
+
+def _frase_lado(lado, nuevo, viejo, actual, anterior, motores, generales=None):
+    """
+    Una frase corta por lado: cuanto cambio, como se movio el monto
+    (ciclos/ventanas con monto, Total C1 y C2; el monto es max(0, C1 - C2)
+    por ciclo o ventana) y las entradas que mas cambiaron. El detalle
+    completo va en la hoja "Cambios por central".
+    """
+
     delta = (nuevo if _hay(nuevo) else 0.0) - (viejo if _hay(viejo) else 0.0)
     if abs(delta) < CAMBIO_MINIMO_CLP:
         return None
     pct = _pct(nuevo, viejo)
-    sube = delta > 0
     cabeza = (
-        f"{lado} {'sube' if sube else 'baja'} {plata(abs(delta))}"
+        f"{lado} {'sube' if delta > 0 else 'baja'} {plata_corta(abs(delta))}"
         + (f" ({_texto_pct(pct)})" if _hay(pct) else "")
     )
-    razones = _motores(actual, anterior, motores, sube)
-    if razones:
-        return f"{cabeza}: {' y '.join(razones)}."
-    return f"{cabeza}, sin un cambio grande en sus entradas (ver Datos)."
+    mecanica = _mecanica(lado, actual, anterior)
+    entradas = _entradas_que_mas_cambiaron(actual, anterior, motores, generales=generales)
+    texto = cabeza + (f": {mecanica}" if mecanica else "")
+    if not mecanica and not entradas:
+        texto += ", sin un cambio grande en sus entradas"
+    return texto + ".", entradas
 
 
 # Las cifras que van en la columna "Datos", en este orden.
@@ -669,6 +839,7 @@ def comparar_resumenes(actual, anterior):
     claves = sorted(set(a.index) | set(b.index),
                     key=lambda c: (a[C_CENTRAL].get(c) or b[C_CENTRAL].get(c)).upper())
 
+    generales = {c: _cambio_general(actual, anterior, c) for c in _GENERALES}
     filas, sin_cambios = [], []
     for clave in claves:
         fila_a = a.loc[clave].to_dict() if clave in a.index else {}
@@ -678,6 +849,7 @@ def comparar_resumenes(actual, anterior):
         total_a = fila_a.get(C_TOTAL, math.nan)
         total_b = fila_b.get(C_TOTAL, math.nan)
 
+        entradas = []
         if not fila_b:
             explicacion = f"Nueva: no estaba en la planilla anterior. Recibe {plata(total_a)}." \
                 if _hay(total_a) else "Nueva: no estaba en la planilla anterior."
@@ -691,31 +863,36 @@ def comparar_resumenes(actual, anterior):
             explicacion = (f"Ya no está en esta planilla (antes recibía "
                            f"{plata(total_b)}).") if _hay(total_b) else "Ya no está en esta planilla."
         else:
-            frases = [
+            lados = [
                 _frase_lado("RE545", fila_a.get(C_RE545), fila_b.get(C_RE545),
-                            fila_a, fila_b, _MOTORES_RE545),
+                            fila_a, fila_b, _MOTORES_RE545, generales),
                 _frase_lado("E Costos", fila_a.get(C_ECOSTOS), fila_b.get(C_ECOSTOS),
-                            fila_a, fila_b, _MOTORES_ECOSTOS),
+                            fila_a, fila_b, _MOTORES_ECOSTOS, generales),
             ]
-            frases = [f for f in frases if f]
+            lados = [l for l in lados if l]
+            frases = [frase for frase, _ in lados]
+            # Lo que mas cambio, sin repetir lo que comparten los dos lados.
+            for _, de_un_lado in lados:
+                for entrada in de_un_lado:
+                    if entrada not in entradas:
+                        entradas.append(entrada)
+            entradas = entradas[:4]
             if frases and _hay(total_a) and total_a == 0:
                 # Quedo en cero: el porque.
                 frases.append(f"Queda en $0: {explicar_central(fila_a)}")
-            if not frases:
+            if not frases and _hay(total_a) and total_a == 0:
+                frases.append(f"Sigue en $0. {explicar_central(fila_a)}")
+            elif not frases:
                 sin_cambios.append(nombre)
-            explicacion = " ".join(frases)
+            explicacion = "\n".join(frases)
 
         delta = (total_a if _hay(total_a) else 0.0) - (total_b if _hay(total_b) else 0.0)
-        datos = (
-            datos_lado_a_lado(fila_a, fila_b)
-            if explicacion or abs(delta) >= CAMBIO_MINIMO_CLP else ""
-        )
         filas.append({
             C_CENTRAL: nombre, C_EMPRESA: empresa,
             "Total anterior [CLP]": total_b, "Total actual [CLP]": total_a,
             "Diferencia [CLP]": delta, "Diferencia [%]": _pct(total_a, total_b),
-            "Explicación": explicacion,
-            "Datos (anterior → actual)": datos,
+            "Qué pasó": explicacion,
+            "Lo que más cambió": "\n".join(f"• {e}" for e in entradas),
         })
 
     tabla = pd.DataFrame(filas)
@@ -732,13 +909,20 @@ def comparar_resumenes(actual, anterior):
     if _hay(total_a) and _hay(total_b):
         delta = total_a - total_b
         lineas.append(
-            f"Total del mes: {plata(total_b)} → {plata(total_a)} "
-            f"({'+' if delta >= 0 else '-'}{plata(abs(delta))}"
+            f"Total del mes: {plata_corta(total_b)} → {plata_corta(total_a)} "
+            f"({'+' if delta >= 0 else '-'}{plata_corta(abs(delta))}"
             + (f", {_texto_pct(_pct(total_a, total_b))}" if total_b else "") + ")."
         )
         for lado, col in (("RE545", C_RE545), ("E Costos", C_ECOSTOS)):
             va, vb = actual[col].sum(), anterior[col].sum()
-            lineas.append(f"{lado}: {plata(vb)} → {plata(va)}.")
+            lineas.append(f"{lado}: {plata_corta(vb)} → {plata_corta(va)}.")
+    cmg = generales.get(C_CMG)
+    if _hay(cmg) and abs(cmg) >= CAMBIO_MINIMO_PCT:
+        lineas.append(
+            f"El CMg promedio {'subió' if cmg > 0 else 'bajó'} {_texto_pct(abs(cmg)).lstrip('+')} "
+            f"en casi todas las centrales: mueve a la vez el Total C1 y el Total C2 "
+            f"(no se repite en cada central)."
+        )
     if len(tabla):
         cambio = tabla[tabla["Diferencia [CLP]"].abs() >= CAMBIO_MINIMO_CLP]
         if len(cambio):
@@ -746,7 +930,7 @@ def comparar_resumenes(actual, anterior):
             lineas.append(
                 f"El mayor cambio: {mayor[C_CENTRAL]} "
                 f"({'+' if mayor['Diferencia [CLP]'] >= 0 else '-'}"
-                f"{plata(abs(mayor['Diferencia [CLP]']))})."
+                f"{plata_corta(abs(mayor['Diferencia [CLP]']))})."
             )
     if sin_cambios:
         lineas.append(f"Sin cambios relevantes: {', '.join(sin_cambios)}.")
@@ -772,11 +956,12 @@ def comparar_planillas(ruta_actual, ruta_anterior, registrar=print):
     destino = carpeta / (
         f"Comparacion_{_periodo(ruta_actual)}_vs_{_periodo(ruta_anterior)}.xlsx"
     )
-    detalle = _detalle_lado_a_lado(actual, anterior)
+    cambios = cambios_por_central(actual, anterior, list(tabla[C_CENTRAL]))
     escribir_reporte(destino, [
         ("Comparacion", lineas, tabla,
          f"{ruta_actual.name} contra {ruta_anterior.name}"),
-        ("Detalle", [], detalle, "Las entradas de cada central, mes anterior y actual"),
+        ("Cambios por central", [], cambios,
+         "Cada concepto de cada central: anterior, actual y si cambió"),
     ])
     registrar(f"Reporte: {destino}")
     return destino, lineas, tabla
@@ -791,20 +976,178 @@ def _periodo(ruta):
     return hallado.group(1) if hallado else Path(ruta).stem
 
 
-def _detalle_lado_a_lado(actual, anterior):
-    """Cada entrada en dos columnas (anterior | actual), central por central."""
+# La sub tabla de cambios (pedido del usuario: "que se vea mas ordenado
+# las diferencias [...] una sub tabla [...] por cada cosa que diga el
+# cambio y su variacion y si cambio o no"): un renglon por central y
+# concepto, en este orden -- la plata, como se arma el monto y despues
+# las entradas que lo mueven. (columna, concepto, unidad, va siempre).
+CONCEPTOS_CAMBIO = (
+    (C_TOTAL, "Recibe total", "CLP", True),
+    (C_ECOSTOS, "Recibe E Costos", "CLP", True),
+    (C_RE545, "Recibe RE545", "CLP", True),
+    (C_EC_C1, "E Costos: Total C1", "CLP", False),
+    (C_EC_C2, "E Costos: Total C2", "CLP", False),
+    (C_EC_CICLOS, "E Costos: ciclos con monto", "ciclos", False),
+    (C_RE_C1, "RE545: Total C1", "CLP", False),
+    (C_RE_C2, "RE545: Total C2", "CLP", False),
+    (C_RE_VENTANAS, "RE545: ventanas con monto", "ventanas", False),
+    (C_FD_CPF, "FD CPF promedio", "FD", True),
+    (C_FD_CSF, "FD CSF promedio", "FD", True),
+    (C_NP_CPF, "FD CPF: horas 'No participó'", "h", False),
+    (C_NP_CSF, "FD CSF: horas 'No participó'", "h", False),
+    (C_DIAS, "Días en el mes", "días", False),
+    (C_HORAS_SUB, "Horas adjudicadas", "h", False),
+    (C_ADJ_CPF, "Adjudicado CPF", "MW", False),
+    (C_ADJ_CSF, "Adjudicado CSF", "MW", False),
+    (C_OFERTA_DIAS, "Días con oferta completa", "días", False),
+    (C_HORAS_ADJ, "Horas con Adj SSCC", "h", False),
+    (C_DESCARGA, "Descarga", "kWh", False),
+    (C_CARGA, "Carga", "kWh", False),
+    (C_EC_AJUSTADA, "Descarga ajustada FD-prorrata", "kWh", False),
+    (C_RESERVA, "Reserva con FD y FMA", "kWh", False),
+    (C_CMG, "CMg promedio", "CLP/kWh", False),
+)
+
+COLUMNAS_CAMBIOS = (
+    C_CENTRAL, "Concepto", "Unidad", "Anterior", "Actual", "Diferencia",
+    "Variación [%]", "Cambio",
+)
+SUBE, BAJA, IGUAL, SIN_DATO = "▲ Sube", "▼ Baja", "Igual", "Sin dato"
+NUEVO, YA_NO = "Nuevo", "Ya no está"
+
+
+def _cambio(nuevo, viejo):
+    """(diferencia, variacion %, 'Sube'/'Baja'/'Igual'/'Sin dato')."""
+
+    if not _hay(nuevo) or not _hay(viejo):
+        return math.nan, math.nan, SIN_DATO
+    diferencia = nuevo - viejo
+    pct = _pct(nuevo, viejo)
+    igual = (abs(pct) < 1.0) if not math.isinf(pct) else False
+    if igual or diferencia == 0:
+        return diferencia, (0.0 if not math.isinf(pct) else math.nan), IGUAL
+    return (diferencia, pct if not math.isinf(pct) else math.nan,
+            SUBE if diferencia > 0 else BAJA)
+
+
+def cambios_por_central(actual, anterior, orden=None):
+    """
+    La sub tabla: un renglon por central y concepto (CONCEPTOS_CAMBIO),
+    con anterior, actual, diferencia, variacion y si cambio. Sin ruido:
+    un concepto que es 0 o no esta en los dos meses no va, salvo la
+    plata y el FD (que van siempre). orden: las centrales en ese orden
+    (el de la tabla de la comparacion, lo que mas cambio arriba).
+    """
 
     a = actual.set_index(actual[C_CENTRAL].map(normalizar))
     b = anterior.set_index(anterior[C_CENTRAL].map(normalizar))
-    claves = sorted(set(a.index) | set(b.index))
+    claves = list(dict.fromkeys(
+        [normalizar(c) for c in (orden or [])] + sorted(set(a.index) | set(b.index))
+    ))
     filas = []
     for clave in claves:
-        fila = {C_CENTRAL: (a[C_CENTRAL].get(clave) or b[C_CENTRAL].get(clave))}
-        for columna in COLUMNAS_RESUMEN[2:]:
-            fila[f"{columna} anterior"] = b[columna].get(clave, math.nan) if clave in b.index else math.nan
-            fila[f"{columna} actual"] = a[columna].get(clave, math.nan) if clave in a.index else math.nan
-        filas.append(fila)
-    return pd.DataFrame(filas)
+        en_a, en_b = clave in a.index, clave in b.index
+        if not en_a and not en_b:
+            continue
+        fila_a = a.loc[clave].to_dict() if en_a else {}
+        fila_b = b.loc[clave].to_dict() if en_b else {}
+        nombre = fila_a.get(C_CENTRAL) or fila_b.get(C_CENTRAL)
+        for columna, concepto, unidad, siempre in CONCEPTOS_CAMBIO:
+            nuevo, viejo = fila_a.get(columna, math.nan), fila_b.get(columna, math.nan)
+            vacio_a = not _hay(nuevo) or nuevo == 0
+            vacio_b = not _hay(viejo) or viejo == 0
+            if vacio_a and vacio_b and not siempre:
+                continue
+            if not en_b:
+                diferencia, pct, cambio = math.nan, math.nan, NUEVO
+            elif not en_a:
+                diferencia, pct, cambio = math.nan, math.nan, YA_NO
+            else:
+                diferencia, pct, cambio = _cambio(nuevo, viejo)
+            filas.append({
+                C_CENTRAL: nombre, "Concepto": concepto, "Unidad": unidad,
+                "Anterior": viejo, "Actual": nuevo, "Diferencia": diferencia,
+                "Variación [%]": pct, "Cambio": cambio,
+            })
+    return pd.DataFrame(filas, columns=list(COLUMNAS_CAMBIOS))
+
+
+def formato_cambios(ws):
+    """
+    La hoja de la sub tabla: cada numero con el formato de su unidad, la
+    columna Cambio en colores (Sube verde, Baja rojo, Igual y Sin dato en
+    gris), una franja por central para que se lean juntas y filtro en el
+    encabezado (para mirar una central o solo lo que cambio).
+    """
+
+    from openpyxl.styles import Font, PatternFill
+
+    def relleno(color):
+        return PatternFill(fill_type="solid", start_color=color, end_color=color)
+
+    # Verde y rojo solo en la plata (lo que recibe la central): en lo
+    # demas "sube" no es ni bueno ni malo (que el Total C2 baje sube el
+    # monto), asi que va en gris, mas marcado si cambio 10 % o mas.
+    plata_sube = (relleno("E2EFDA"), Font(color="375623", bold=True))
+    plata_baja = (relleno("F8CBAD"), Font(color="9C0006", bold=True))
+    fuerte = (None, Font(color="262626", bold=True))
+    leve = (None, Font(color="808080"))
+    colores = {
+        IGUAL: (None, Font(color="A6A6A6")),
+        SIN_DATO: (None, Font(color="A6A6A6", italic=True)),
+        NUEVO: (relleno("DDEBF7"), Font(color="1F4E78", bold=True)),
+        YA_NO: (relleno("EDEDED"), Font(color="595959", bold=True)),
+    }
+    franja = relleno("F5F8FC")
+    fila_enc = FILA_ENCABEZADO_REPORTE
+    columnas = {
+        str(c.value): c.column for c in ws[fila_enc] if c.value is not None
+    }
+    if "Cambio" not in columnas:
+        return
+    primera_col = min(columnas.values())
+    ultima_col = max(columnas.values())
+    formatos = {"CLP": "#,##0", "FD": "0.00", "CLP/kWh": "#,##0.0"}
+    anterior_central, banda = None, False
+    for fila in range(fila_enc + 1, ws.max_row + 1):
+        central = ws.cell(fila, columnas[C_CENTRAL]).value
+        if central is None:
+            continue
+        if central != anterior_central:
+            banda, anterior_central = not banda, central
+        unidad = ws.cell(fila, columnas["Unidad"]).value
+        formato = formatos.get(unidad, "#,##0")
+        for nombre in ("Anterior", "Actual", "Diferencia"):
+            ws.cell(fila, columnas[nombre]).number_format = formato
+        ws.cell(fila, columnas["Variación [%]"]).number_format = '+0.0" %";-0.0" %";0" %"'
+        if banda:
+            for col in range(primera_col, ultima_col + 1):
+                ws.cell(fila, col).fill = franja
+        celda = ws.cell(fila, columnas["Cambio"])
+        concepto = str(ws.cell(fila, columnas["Concepto"]).value or "")
+        variacion = ws.cell(fila, columnas["Variación [%]"]).value
+        if celda.value in (SUBE, BAJA):
+            if concepto.startswith("Recibe"):
+                fondo, letra = plata_sube if celda.value == SUBE else plata_baja
+            elif isinstance(variacion, (int, float)) and abs(variacion) < CAMBIO_MINIMO_PCT:
+                fondo, letra = leve
+            else:
+                fondo, letra = fuerte
+        else:
+            fondo, letra = colores.get(celda.value, (None, None))
+        if fondo is not None:
+            celda.fill = fondo
+        if letra is not None:
+            celda.font = letra
+    for nombre, ancho in ((C_CENTRAL, 30), ("Concepto", 34), ("Unidad", 10),
+                          ("Anterior", 18), ("Actual", 18), ("Diferencia", 18),
+                          ("Variación [%]", 13), ("Cambio", 12)):
+        letra = ws.cell(fila_enc, columnas[nombre]).column_letter
+        ws.column_dimensions[letra].width = ancho
+    primera = ws.cell(fila_enc, primera_col).coordinate
+    ultima = ws.cell(ws.max_row, ultima_col).coordinate
+    ws.auto_filter.ref = f"{primera}:{ultima}"
+    ws.freeze_panes = ws.cell(fila_enc + 1, primera_col + 2).coordinate
 
 
 # ------------------------------------------------------------
@@ -838,7 +1181,7 @@ def escribir_hoja_reporte(writer, hoja, lineas, tabla, titulo):
 
 FILA_ENCABEZADO_REPORTE = 3
 FILA_TITULOS_REPORTE = 2
-_TEXTOS_LARGOS = ("Resumen", "Observación", "Explicación", "Datos (anterior → actual)")
+_TEXTOS_LARGOS = ("Resumen", "Observación", "Qué pasó", "Lo que más cambió")
 
 
 def dar_formato_reporte(ws):
@@ -860,7 +1203,9 @@ def dar_formato_reporte(ws):
         letra = celda_nombre.column_letter
         celdas = [ws.cell(f, celda_nombre.column) for f in range(fila_enc + 1, ws.max_row + 1)]
         if nombre in _TEXTOS_LARGOS:
-            ws.column_dimensions[letra].width = 70 if nombre == "Resumen" else 90
+            ws.column_dimensions[letra].width = {
+                "Resumen": 60, "Qué pasó": 75, "Lo que más cambió": 70,
+            }.get(nombre, 90)
             for celda in celdas:
                 celda.alignment = Alignment(
                     wrap_text=True, vertical="top", horizontal="left"
@@ -906,6 +1251,7 @@ def escribir_reporte(destino, hojas):
         )
         for nombre in nombres:
             dar_formato_reporte(writer.sheets[nombre])
+            formato_cambios(writer.sheets[nombre])
     return destino
 
 
