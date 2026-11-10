@@ -6098,3 +6098,30 @@ ventana con xvfb. 332 pruebas.
   el cuadro 3 (total por empresa) en verde. La columna se ensancha para el
   total (`_ancho_para_total`).
 - Prueba: test_compensacion_central.test_titulos_y_comentarios_sin_filtro.
+
+## 2026-11-10 (38) — Reporte de la corrida y comparación entre planillas
+
+- Pedido: (1) en Herramientas, comparar los resultados de COMPENSACION con
+  el mes o la versión anterior "tipo reporte" ("tal central aumentó su
+  ingreso por RE545 dado que las ofertas aumentaron tanto"), con el
+  resultado en Log/; (2) en el control, un botón "Generar reporte" que diga
+  por qué una central no recibe ("según FD no tuvo participación"). "Que
+  estén ordenados sin mucho ruido".
+- `Script/nucleo/reporte.py` (común a los dos): `resumen_por_central` lee la
+  planilla (Monto a compensar, Descarga/Carga, CMg y Adj SSCC de E Costos;
+  Reserva con FD y FMA de RE545; Subastas por servicio con el nombre
+  Balance_BESS; FD promedio; días con oferta completa; Propietario).
+  `explicar_central`: el primer motivo que aplica, en una frase.
+  `comparar_resumenes`: por lado (RE545, E Costos) la diferencia y hasta dos
+  entradas que se movieron ≥10 % en el mismo sentido; cambios < $1.000 no se
+  comentan; las centrales sin cambio van en una sola línea.
+- Control: hoja `Reporte` (`HOJA_REPORTE`, `escribir_control(df_reporte=)`),
+  botón "Generar reporte" en la fila `control` (Balance_BESS.py,
+  `generar_reporte_corrida`).
+- `Herramientas/Comparar_Meses.py`: dos planillas (sugiere la del mes
+  anterior en las carpetas vecinas; recuerda las rutas en
+  `__config__/comparar_meses.json`), escribe
+  `Log/Comparacion_<AAMM>_vs_<AAMM>.xlsx` (hojas Comparacion y Detalle).
+  Usa Script/ (a diferencia de las otras herramientas).
+- Verificado: ventana corrida con xvfb (python3.12 + tk) y las dos hojas
+  renderizadas con LibreOffice. Pruebas: test_reporte (15).

@@ -189,8 +189,12 @@ HOJA_LOG = "Log"
 
 # Cada central y si se encontro en cada origen (ver matriz_centrales.py).
 HOJA_MATRIZ_CENTRALES = "Centrales por origen"
+# Lo que recibe cada central y por que (boton "Generar reporte", ver
+# reporte.py).
+HOJA_REPORTE = "Reporte"
 ORDEN_HOJAS_CONTROL = (
-    HOJA_EJECUCION, HOJA_MATRIZ_CENTRALES, HOJA_ALERTAS, HOJA_LOG,
+    HOJA_EJECUCION, HOJA_REPORTE, HOJA_MATRIZ_CENTRALES, HOJA_ALERTAS,
+    HOJA_LOG,
 )
 
 # El periodo AAMM (ej. "2607") ya no se infiere del nombre del archivo:
