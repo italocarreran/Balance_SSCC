@@ -139,8 +139,9 @@ class TestComparacion(unittest.TestCase):
         self.assertIn("las horas adjudicadas subieron (150 → 700 h)", texto)
         datos = tabla["Datos (anterior → actual)"].iloc[0]
         self.assertIn("Adjudicado CPF: 900 → 4.300 MW", datos)
-        # Sin ruido: lo que no cambio no va.
-        self.assertNotIn("FD CPF", datos)
+        # Sin ruido: lo que no cambio no va, salvo el FD, que va siempre
+        # ("yo creo que tiene que ver con los FD"): dice que fue igual.
+        self.assertIn("FD CPF: 0,90 (igual)", datos)
         self.assertNotIn("Días con oferta completa", datos)
 
     def test_nueva_sin_ingreso_dice_por_que(self):
