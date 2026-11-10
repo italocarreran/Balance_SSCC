@@ -441,28 +441,74 @@ def escribir_control(
             {hoja: 2 for hoja in hojas_control},
         )
         if HOJA_MATRIZ_CENTRALES in escritas:
-            _pintar_matriz(writer.sheets[HOJA_MATRIZ_CENTRALES])
+            _pintar_matriz(
+                writer.sheets[HOJA_MATRIZ_CENTRALES],
+                df_matriz_centrales.attrs.get("estados"),
+            )
 
     return ruta_control
 
 
-def _pintar_matriz(ws):
-    """La matriz de centrales: "Sí ..." en verde y "No ..." en rojo."""
+def _pintar_matriz(ws, estados=None):
+    """
+    La matriz de centrales con sus cuatro colores (ver
+    matriz_centrales.py): verde si se encontro, amarillo si no esta pero
+    puede no estar, rojo si no esta y deberia, gris si ese origen aun no
+    se corre. estados: {(central, columna): estado}; sin estados (una
+    matriz de antes) se pinta por el texto: "Sí" verde, "No" rojo.
+    """
 
     from openpyxl.styles import Font, PatternFill
 
-    verde = PatternFill(fill_type="solid", start_color="E2EFDA", end_color="E2EFDA")
-    rojo = PatternFill(fill_type="solid", start_color="F8CBAD", end_color="F8CBAD")
-    letra_roja = Font(color="9C0006", bold=True)
+    from .matriz_centrales import AVISO, FALTA, OK, PENDIENTE
+
+    def relleno(color):
+        return PatternFill(fill_type="solid", start_color=color, end_color=color)
+
+    estilos = {
+        OK: (relleno("E2EFDA"), None),
+        AVISO: (relleno("FFF2CC"), Font(color="7F6000")),
+        FALTA: (relleno("F8CBAD"), Font(color="9C0006", bold=True)),
+        PENDIENTE: (relleno("D9D9D9"), Font(color="595959", italic=True)),
+    }
+    nombres = {
+        celda.column: str(celda.value) for celda in ws[3]
+        if celda.value is not None
+    }
     for fila in ws.iter_rows(min_row=4, min_col=3):
         for celda in fila:
-            texto = str(celda.value or "")
-            if texto.startswith("Sí"):
-                celda.fill = verde
-            elif texto.startswith("No"):
-                celda.fill = rojo
-                celda.font = letra_roja
+            if celda.value is None:
+                continue
+            texto = str(celda.value)
+            central = str(ws.cell(celda.row, 2).value)
+            estado = (estados or {}).get((central, nombres.get(celda.column)))
+            if estado is None:
+                estado = (
+                    OK if texto.startswith("Sí")
+                    else FALTA if texto.startswith("No") else None
+                )
+            if estado in estilos:
+                fondo, letra = estilos[estado]
+                celda.fill = fondo
+                if letra is not None:
+                    celda.font = letra
     ws.freeze_panes = "C4"
+
+    # Leyenda, a la derecha de la matriz.
+    columna = ws.max_column + 2
+    ws.cell(2, columna, "Colores").font = Font(bold=True, color="244062")
+    for fila, (estado, texto) in enumerate((
+        (OK, "Se encontró"),
+        (AVISO, "No está, pero puede no estar"),
+        (FALTA, "No está y debería estar"),
+        (PENDIENTE, "Ese origen aún no se corre"),
+    ), start=3):
+        celda = ws.cell(fila, columna, texto)
+        fondo, letra = estilos[estado]
+        celda.fill = fondo
+        if letra is not None:
+            celda.font = letra
+    ws.column_dimensions[get_column_letter(columna)].width = 32
 
 
 def escribir_pagos_bess(
