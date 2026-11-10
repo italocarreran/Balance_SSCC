@@ -6219,3 +6219,33 @@ ventana con xvfb. 332 pruebas.
   cortan.
 - Pruebas: test_reporte (Log de 500 líneas en el control, sub tabla de 355
   renglones; las dos fallan con el código anterior).
+
+## 2026-11-10 (44) — Responsables en pesos del cambio de ingreso
+
+- Pedido: "que se entienda claramente el principal responsable del aumento o
+  bajada de ingresos por central [...] me preguntan por qué en sept eran 1000
+  y ahora son 1800".
+- `Script/nucleo/responsables.py`. El ingreso de cada lado es
+  Σ max(0, C1 − C2) por ciclo (E Costos) o ventana (RE545), y C1, C2 se
+  escriben como productos de factores, razones entre sumas de la planilla
+  (el producto da el total exacto):
+  - E Costos (descarga y carga): C1 = E_total·w·s·F·p1, C2 = E_total·w·s·p2
+    (energía medida, parte en E Costos por ofertas, parte en horas con Adj
+    SSCC, factor FD × prorrata, precio de la curva / CMg).
+  - RE545: C1 = A·w·φ·a·p1, C2 = A·w·φ·b·p2 (adjudicado en Subastas, parte en
+    RE545, factor FD × FMA, energía asignada / disponible por kWh de reserva,
+    precio).
+  Shapley entre los factores y el "reparto entre ciclos y ventanas" (los
+  ciclos de un mes o del otro); cada escenario escala C1 y C2 de cada ciclo y
+  aplica el max ciclo por ciclo, así no hay un "piso" artificial. Exacto por
+  construcción. Un factor 0/0 en un mes (C1 = 0 porque FD CPF = 0) toma el
+  valor del otro mes.
+- Con sept/oct reales: el mes +$772 MM = FD y prorrata +$329 MM,
+  adjudicación +$288 MM, CMg −$214 MM, FD y FMA +$175 MM, reparto +$127 MM,
+  ofertas −$99 MM, ... GABRIELA +$217 MM: FD y prorrata +$215 MM (factor 0,56
+  → 0,99: en sept tenía CPF adjudicado con FD CPF 0). Descuadre máximo por
+  central: 3e-8 pesos.
+- Reporte: Comparacion con "Principal responsable" y "Desglose en $" (hasta 5
+  líneas con % del cambio y lo que se movió); hoja "Responsables" (el del mes
+  con su total y el por central/lado, con filtro).
+- Pruebas: test_responsables (9).
