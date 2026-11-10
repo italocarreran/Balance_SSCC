@@ -27,6 +27,7 @@ from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, HOJA_CALCULO_ECOSTOS,
     HOJA_RESUMEN_BESS,
 )
+from .hojas_entrada import subastas_con_nombre_balance_bess
 from .lectura import ROL_FD
 from .utiles import normalizar
 
@@ -551,6 +552,12 @@ def completar_calculo_e_costos_grupos(
     """
 
     df = df_ecostos.reset_index(drop=True).copy()
+
+    # Subastas con el nombre Balance_BESS de la central (el de la hoja):
+    # sin esto, una central que en Subastas se llama distinto no cruza.
+    df_subastas = subastas_con_nombre_balance_bess(
+        df_subastas, diccionario, registrar=registrar
+    )
 
     df["L"] = calcular_l(df, df_subastas)
 
