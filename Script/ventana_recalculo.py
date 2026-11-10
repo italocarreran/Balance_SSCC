@@ -20,9 +20,9 @@ from .nucleo.recalculo import SECCIONES_RECALCULO, aamm_del_archivo, buscar_11, 
 from .nucleo.utiles import ErrorEntrada
 
 AVISO = (
-    "Al ejecutar se recalculan las hojas seleccionadas con los datos del "
+    "Al ejecutar se calculan las hojas seleccionadas con los datos del "
     "propio archivo 11_. El resultado queda en una copia "
-    "(…_recalculado.xlsx) al lado del archivo; el original no se modifica."
+    "(…_calculado.xlsx) al lado del archivo; el original no se modifica."
 )
 
 
@@ -31,7 +31,7 @@ def main(ruta_inicial=None):
     from tkinter import filedialog, messagebox
 
     root = tk.Tk()
-    root.title("Recalcular 11_PAGOS_BESS")
+    root.title("Calcular 11_PAGOS_BESS")
     root.geometry("760x620")
 
     var_ruta = tk.StringVar(value=str(ruta_inicial) if ruta_inicial else "")
@@ -66,9 +66,9 @@ def main(ruta_inicial=None):
     tk.Button(marco, text="Examinar...", command=examinar).pack(side="right")
 
     # --- que recalcular
-    seleccion = tk.LabelFrame(root, text="Qué recalcular", padx=10, pady=6)
+    seleccion = tk.LabelFrame(root, text="Qué calcular", padx=10, pady=6)
     seleccion.pack(fill="x", padx=14, pady=4)
-    var_libro = tk.StringVar(value="11_PAGOS_BESS_AAMM_recalculado.xlsx")
+    var_libro = tk.StringVar(value="11_PAGOS_BESS_AAMM_calculado.xlsx")
     tk.Label(seleccion, textvariable=var_libro, font=("Consolas", 9, "bold"),
              anchor="w").pack(fill="x")
     vars_hojas = {}
@@ -80,20 +80,15 @@ def main(ruta_inicial=None):
             seleccion, text=f"{rama} hoja '{hoja}'", variable=var,
             font=("Consolas", 9), anchor="w",
         ).pack(fill="x")
-    var_csv = tk.BooleanVar(value=True)
-    var_nombre_csv = tk.StringVar(value="SAE_AAMM_recalculado.csv")
-    tk.Checkbutton(
-        seleccion, textvariable=var_nombre_csv, variable=var_csv,
-        font=("Consolas", 9, "bold"), anchor="w",
-    ).pack(fill="x", pady=(4, 0))
+    # El SAE_AAMM.csv no va: es un reporte interno, los coordinados no lo
+    # regeneran (pedido del usuario 2026-11-10).
 
     def pintar_nombres():
         try:
             aamm = aamm_del_archivo(var_ruta.get())
         except ErrorEntrada:
             aamm = "AAMM"
-        var_libro.set(f"11_PAGOS_BESS_{aamm}_recalculado.xlsx")
-        var_nombre_csv.set(f"SAE_{aamm}_recalculado.csv")
+        var_libro.set(f"11_PAGOS_BESS_{aamm}_calculado.xlsx")
 
     pintar_nombres()
 
@@ -150,8 +145,8 @@ def main(ruta_inicial=None):
             messagebox.showwarning("Falta el archivo", "Elige el archivo 11_ con Examinar.")
             return
         secciones = [s for s, v in vars_hojas.items() if v.get()]
-        if not secciones and not var_csv.get():
-            messagebox.showwarning("Nada seleccionado", "Tilda al menos una hoja o el CSV.")
+        if not secciones:
+            messagebox.showwarning("Nada seleccionado", "Tilda al menos una hoja.")
             return
         estado.update(corriendo=True, inicio=time.time())
         boton.config(state="disabled")
@@ -160,7 +155,7 @@ def main(ruta_inicial=None):
         def trabajo():
             try:
                 resultado = recalcular(
-                    ruta, secciones, con_csv=var_csv.get(),
+                    ruta, secciones, con_csv=False,
                     registrar=lambda m: cola.put(("log", m)),
                 )
                 cola.put(("fin", (resultado, None)))
@@ -182,7 +177,7 @@ def ejecutar_desde(carpeta_del_codigo, argumentos=None):
     """
     Punto de entrada del archivo de antecedentes. Sin argumentos abre la
     ventana, con el 11_ de la carpeta de arriba (o de la misma) ya elegido.
-    'ruta.xlsx --sin-ventana' recalcula todo sin ventana (lo usan las
+    'ruta.xlsx --sin-ventana' calcula todo sin ventana (lo usan las
     pruebas).
     """
 
@@ -193,7 +188,7 @@ def ejecutar_desde(carpeta_del_codigo, argumentos=None):
         ruta = Path(argumentos[0]) if argumentos else buscar_11([carpeta.parent, carpeta])
         if ruta is None:
             raise SystemExit("Indica el archivo 11_PAGOS_BESS_AAMM.xlsx.")
-        recalcular(ruta, [s for s, _ in SECCIONES_RECALCULO], con_csv=True)
+        recalcular(ruta, [s for s, _ in SECCIONES_RECALCULO], con_csv=False)
         return
     main(Path(argumentos[0]) if argumentos else buscar_11([carpeta.parent, carpeta]))
 

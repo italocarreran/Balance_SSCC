@@ -2599,7 +2599,7 @@ def main():
     #
     # Pedido del usuario (2026-11-10): un boton que cree, al lado del
     # 11_, la carpeta "03 Antecedentes SAE" con el codigo para que los
-    # coordinados recalculen las hojas (y el SAE_AAMM.csv). Por defecto
+    # coordinados calculen las hojas (el SAE_AAMM.csv no). Por defecto
     # van esos dos; "Agregar otros archivos" despliega los archivos del
     # caso para sumar los que se quieran.
     # --------------------------------------------------------
@@ -2646,7 +2646,7 @@ def main():
         var_codigo = tk.BooleanVar(value=True)
         tk.Checkbutton(
             marco, variable=var_codigo, anchor="w",
-            text=f"Código de recálculo ({nucleo.nombre_recalculador(aamm)})",
+            text=f"Código de cálculo ({nucleo.nombre_recalculador(aamm)})",
         ).pack(fill="x")
         csv = rutas["csv_sae"]
         var_csv = tk.BooleanVar(value=csv.is_file())

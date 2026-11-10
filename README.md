@@ -40,12 +40,12 @@ python Balance_BESS.py
 
 **Antecedentes SAE** (botón *Generar antecedentes SAE* de la ventana): crea,
 al lado del 11_PAGOS_BESS_AAMM.xlsx, la carpeta `03 Antecedentes SAE` con
-`Recalcular_11_PAGOS_BESS_AAMM.py` y el `SAE_AAMM.csv` (por defecto; *Agregar
+`Calcular_11_PAGOS_BESS_AAMM.py` y el `SAE_AAMM.csv` (por defecto; *Agregar
 otros archivos* suma los del caso que se quieran). Ese código es uno solo,
 se genera desde el programa y lleva adentro, como texto, los módulos del
-cálculo (sin descargas ni APIs). Recalcula Calculo E Costos, Calculo RE545,
-COMPENSACION_CENTRAL, PRORRATA_RETIROS, Resumen y el CSV usando solo el 11_,
-en una copia `..._recalculado.xlsx`; el original no se toca. Corrido desde
+cálculo (sin descargas ni APIs). Calcula Calculo E Costos, Calculo RE545,
+COMPENSACION_CENTRAL, PRORRATA_RETIROS y Resumen usando solo el 11_ (el CSV
+no: es un reporte interno), en una copia `..._calculado.xlsx`; el original no se toca. Corrido desde
 esa carpeta toma solo el 11_ de arriba. Pide Python con pandas y openpyxl.
 
 **Herramientas sueltas** (carpeta `Herramientas/`, hermana de `Script/`; cada

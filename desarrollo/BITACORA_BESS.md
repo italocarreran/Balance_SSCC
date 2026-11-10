@@ -6175,3 +6175,14 @@ ventana con xvfb. 332 pruebas.
   `xlsx_rapido._poner_guardados` (ahora en una sola pasada) en las chicas.
 - Pruebas: test_reporte (+4, una con una hoja FD real con "No participó" y FD
   = 1; otra que las fórmulas traen su valor).
+
+## 2026-11-10 (32) — Antecedentes SAE: "Calcular" y sin el CSV
+
+- Pedido: en el .py de los antecedentes no debe existir la opcion de generar
+  SAE_AAMM.csv ("ese es un reporte que yo le doy a un companero") y que se
+  llame Calcular, no Recalcular.
+- El archivo es Calcular_11_PAGOS_BESS_AAMM.py; la ventana "Calcular
+  11_PAGOS_BESS", "Que calcular", sin la casilla del CSV; la copia es
+  11_..._calculado.xlsx. En tu ventana el boton dice "Codigo de calculo".
+  (Los modulos internos conservan sus nombres: recalculo.py,
+  ventana_recalculo.py.)

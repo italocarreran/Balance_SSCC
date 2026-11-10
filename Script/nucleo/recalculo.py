@@ -9,7 +9,8 @@ calculo". Es el mismo calculo del programa (generar_pagos_bess y
 generar_csv_sae), corrido sobre una COPIA del archivo:
 
   - el 11_ entregado no se toca: el resultado queda al lado, como
-    11_PAGOS_BESS_AAMM_recalculado.xlsx (y SAE_AAMM_recalculado.csv);
+    11_PAGOS_BESS_AAMM_calculado.xlsx (la ventana de los coordinados no
+    genera el SAE_AAMM.csv: es un reporte interno);
   - todo lo que el calculo necesita sale del propio 11_: las hojas de
     entrada (Centrales, Medidores, Ofertas SSCC, CMg, FD, FMA, Subastas)
     y, para PRORRATA_RETIROS y el Resumen, la prorrata de retiros, que
@@ -49,8 +50,10 @@ SECCIONES_RECALCULO = (
     ("resumen", HOJA_RESUMEN),
 )
 
-SUFIJO_RECALCULADO = "_recalculado"
-_PATRON_11 = re.compile(r"^11_PAGOS_BESS_(\d{4})(?!_recalculado)\.xlsx$", re.I)
+# La copia se llama ..._calculado (pedido del usuario: "Calcular", no
+# "Recalcular").
+SUFIJO_RECALCULADO = "_calculado"
+_PATRON_11 = re.compile(r"^11_PAGOS_BESS_(\d{4})\.xlsx$", re.I)
 
 
 def aamm_del_archivo(ruta):

@@ -66,7 +66,7 @@ class TestRecalculador(unittest.TestCase):
             ant = nucleo.generar_antecedentes(base, "2607", incluir_csv=False,
                                               registrar=lambda *_: None)
             self.assertEqual(ant.name, "03 Antecedentes SAE")
-            codigo = ant / "Recalcular_11_PAGOS_BESS_2607.py"
+            codigo = ant / "Calcular_11_PAGOS_BESS_2607.py"
             self.assertTrue(codigo.is_file())
 
             # Lo que recibe un coordinado: el 11_ y la carpeta, nada mas.
@@ -81,9 +81,8 @@ class TestRecalculador(unittest.TestCase):
                 cwd=tempfile.gettempdir(), env=entorno, capture_output=True, text=True,
                 timeout=600,
             )
-            # El caso chico no tiene pagos: el CSV falla al final, pero el
-            # libro recalculado ya quedo escrito.
-            recalculado = entrega / "11_PAGOS_BESS_2607_recalculado.xlsx"
+            recalculado = entrega / "11_PAGOS_BESS_2607_calculado.xlsx"
+            self.assertEqual(proceso.returncode, 0, proceso.stderr[-2000:])
             self.assertTrue(recalculado.is_file(), proceso.stderr[-2000:])
             original = hojas(entrega / nucleo.nombre_salida("2607"))
             nuevo = hojas(recalculado)
@@ -94,7 +93,7 @@ class TestRecalculador(unittest.TestCase):
             self.assertEqual(
                 sorted(p.name for p in entrega.iterdir()),
                 ["03 Antecedentes SAE", "11_PAGOS_BESS_2607.xlsx",
-                 "11_PAGOS_BESS_2607_recalculado.xlsx"],
+                 "11_PAGOS_BESS_2607_calculado.xlsx"],
             )
 
     def test_busca_el_11_en_la_carpeta_de_arriba(self):
@@ -102,7 +101,7 @@ class TestRecalculador(unittest.TestCase):
             raiz = Path(carpeta)
             (raiz / "03 Antecedentes SAE").mkdir()
             (raiz / "11_PAGOS_BESS_2609.xlsx").write_bytes(b"x")
-            (raiz / "11_PAGOS_BESS_2609_recalculado.xlsx").write_bytes(b"x")
+            (raiz / "11_PAGOS_BESS_2609_calculado.xlsx").write_bytes(b"x")
             self.assertEqual(
                 recalculo.buscar_11([raiz / "03 Antecedentes SAE" / "..", raiz]).name,
                 "11_PAGOS_BESS_2609.xlsx",

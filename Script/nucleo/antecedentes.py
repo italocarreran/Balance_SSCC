@@ -9,7 +9,7 @@ generado automatico, que abra una ventana "desde el punto de los
 calculos en adelante". Si se corre desde esa carpeta toma solo el 11_ de
 la carpeta de arriba; si no, se elige con Examinar.
 
-escribir_recalculador() arma ese codigo: UN archivo .py con los modulos
+escribir_recalculador() arma ese codigo (Calcular_11_PAGOS_BESS_AAMM.py): UN archivo .py con los modulos
 del calculo adentro, tal cual estan en el programa (como texto que se
 puede leer), y un cargador que los importa desde ahi. Va recortado: solo
 lleva lo que usa el calculo desde las hojas de entrada del 11_ en
@@ -214,7 +214,7 @@ def _primera_linea(fuente):
 
 
 def texto_recalculador(aamm=None):
-    """El contenido del archivo Recalcular_11_PAGOS_BESS_AAMM.py."""
+    """El contenido del archivo Calcular_11_PAGOS_BESS_AAMM.py."""
 
     fuentes = {}
     for modulo in modulos_del_calculo():
@@ -235,17 +235,17 @@ def texto_recalculador(aamm=None):
     lineas = [
         "# -*- coding: utf-8 -*-",
         '"""',
-        f"Recalcular 11_PAGOS_BESS_AAMM.xlsx{periodo} (antecedentes SAE).",
+        f"Calcular 11_PAGOS_BESS_AAMM.xlsx{periodo} (antecedentes SAE).",
         "",
-        "Recalcula las hojas de calculo (Calculo E Costos, Calculo RE545,",
-        "COMPENSACION_CENTRAL, PRORRATA_RETIROS, Resumen) y el SAE_AAMM.csv",
-        "con los datos del propio archivo 11_, en una copia",
-        "(..._recalculado.xlsx). El archivo original no se modifica.",
+        "Calcula las hojas de calculo (Calculo E Costos, Calculo RE545,",
+        "COMPENSACION_CENTRAL, PRORRATA_RETIROS, Resumen) con los datos del",
+        "propio archivo 11_, en una copia (..._calculado.xlsx). El archivo",
+        "original no se modifica.",
         "",
-        "Uso: doble clic, o 'python Recalcular_11_PAGOS_BESS_AAMM.py'. Si este",
+        "Uso: doble clic, o 'python Calcular_11_PAGOS_BESS_AAMM.py'. Si este",
         "archivo esta en la carpeta '03 Antecedentes SAE', toma solo el 11_ de",
         "la carpeta de arriba; si no, se elige con 'Examinar...'.",
-        "Sin ventana: python Recalcular_11_PAGOS_BESS_AAMM.py ruta_del_11.xlsx --sin-ventana",
+        "Sin ventana: python Calcular_11_PAGOS_BESS_AAMM.py ruta_del_11.xlsx --sin-ventana",
         "",
         "Requisitos: Python 3.10 o mas nuevo, con pandas y openpyxl",
         "(pip install pandas openpyxl). python-calamine es opcional (lee mas",
@@ -276,7 +276,8 @@ def texto_recalculador(aamm=None):
 
 
 def nombre_recalculador(aamm):
-    return f"Recalcular_11_PAGOS_BESS_{aamm}.py"
+    # "Calcular", no "Recalcular" (pedido del usuario 2026-11-10).
+    return f"Calcular_11_PAGOS_BESS_{aamm}.py"
 
 
 def escribir_recalculador(destino, aamm=None):
