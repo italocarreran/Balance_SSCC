@@ -302,6 +302,37 @@ class TestFormatoDeLasHojas(unittest.TestCase):
 
             compensacion = libro["COMPENSACION_CENTRAL"]
             self.assertIsNone(compensacion["B1"].value)
+            # Totales del mes en la fila 1 sobre cada columna de plata,
+            # cada cuadro con su largo (pedido del usuario).
+            nombres = {
+                c.column_letter: str(c.value) for c in compensacion[3] if c.value
+            }
+            plata = [l for l, n in nombres.items() if n.startswith("Compensación")]
+            self.assertTrue(plata)
+            filas = {
+                l: max(
+                    r for r in range(4, compensacion.max_row + 1)
+                    if compensacion[f"{l}{r}"].value is not None
+                )
+                for l in plata
+            }
+            for letra in plata:
+                self.assertEqual(
+                    compensacion[f"{letra}1"].value,
+                    f"=SUM({letra}4:{letra}{filas[letra]})", letra,
+                )
+                self.assertEqual(
+                    compensacion[f"{letra}1"].number_format, '"Total: "#,##0'
+                )
+            ultima_empresa = max(plata, key=lambda l: compensacion[f"{l}3"].column)
+            self.assertEqual(
+                compensacion[f"{ultima_empresa}1"].font.color.rgb[-6:], "375623"
+            )
+            self.assertEqual(
+                compensacion[f"{plata[0]}1"].font.color.rgb[-6:], "244062"
+            )
+            # Sin plata, sin total (Central, Empresa, Ciclo).
+            self.assertIsNone(compensacion["I1"].value)
             self.assertEqual(compensacion["B3"].value, "Central")
             self.assertEqual(compensacion["B3"].fill.fill_type, "solid")
             self.assertEqual(compensacion["H3"].value, "Central")

@@ -6088,3 +6088,13 @@ ventana con xvfb. 332 pruebas.
   hoja Subastas no cambia. Cada traducción se anota en el registro.
 - Pruebas: test_subastas_nombre_balance (5; las dos de cableado fallan con el
   código anterior).
+
+## 2026-11-10 (37) — Totales en COMPENSACION_CENTRAL
+
+- Pedido: los totales del mes arriba, como en el Resumen y las hojas de
+  cálculo. `escritura._totales_compensacion`: `=SUM` en la fila 1 sobre cada
+  columna "Compensación ..." de los tres cuadros (cada uno con su largo, de
+  `ws._balance_bloques`), formato `"Total: "#,##0`, en negrita; azul, salvo
+  el cuadro 3 (total por empresa) en verde. La columna se ensancha para el
+  total (`_ancho_para_total`).
+- Prueba: test_compensacion_central.test_titulos_y_comentarios_sin_filtro.
