@@ -76,7 +76,7 @@ from .parametros import (
     COLUMNAS_VACIAS,
     EXTENSIONES_EXCEL, HOJA_ALERTAS, HOJA_CALCULO_ECOSTOS,
     HOJA_CALCULO_RE545, HOJA_CMG, HOJA_EJECUCION, HOJA_FD, HOJA_LOG,
-    HOJA_MATRIZ_CENTRALES,
+    HOJA_MATRIZ_CENTRALES, HOJA_REPORTE,
     HOJA_MEDIDORES, HOJA_PRORRATA_RETIROS, HOJA_RESUMEN, HOJA_SUBASTAS,
     ORDEN_HOJAS_CONTROL, ORDEN_HOJAS_SALIDA,
     HOJA_CMG_ORIGEN, HOJA_CPF_HORARIO, HOJA_CSF_HORARIO,
@@ -114,6 +114,9 @@ from .rutas import (
     resolver_rutas, validar_aamm, nombre_salida, nombre_csv_sae,
 )
 from .csv_sae import construir_csv_sae, generar_csv_sae
+from .reporte import (
+    comparar_planillas, generar_reporte_corrida, resumen_por_central,
+)
 from .antecedentes import (
     CARPETA_ANTECEDENTES, escribir_recalculador, generar_antecedentes,
     nombre_recalculador,
@@ -281,6 +284,7 @@ __all__ = [
     "ARCHIVO_CSV_SAE", "ARCHIVO_REGISTRO", "ARCHIVO_SALIDA_ANTIGUO",
     "CARPETA_LOG", "nombre_salida", "nombre_csv_sae",
     "construir_csv_sae", "generar_csv_sae",
+    "comparar_planillas", "generar_reporte_corrida", "resumen_por_central",
     "CARPETA_ANTECEDENTES", "escribir_recalculador", "generar_antecedentes",
     "nombre_recalculador",
     "CARPETA_CMG", "CARPETA_DB_SUBASTAS", "CARPETA_FD_FMA",
@@ -296,7 +300,7 @@ __all__ = [
     "FIN_REGISTRO", "TAREAS", "TAREA_POR_ID", "dependientes",
     "ejecutar_plan", "planificar", "propagar_seleccion",
     "EXTENSIONES_EXCEL", "HOJA_CALCULO_ECOSTOS", "HOJA_ALERTAS",
-    "HOJA_EJECUCION", "HOJA_LOG", "HOJA_MATRIZ_CENTRALES", "HOJA_MEDIDORES", "HOJA_CMG",
+    "HOJA_EJECUCION", "HOJA_LOG", "HOJA_MATRIZ_CENTRALES", "HOJA_REPORTE", "HOJA_MEDIDORES", "HOJA_CMG",
     "HOJA_FD", "HOJA_SUBASTAS", "ORDEN_HOJAS_SALIDA",
     "ORDEN_HOJAS_CONTROL", "SECCIONES_SALIDA", "escribir_control",
     "HOJA_CALCULO_RE545", "HOJA_PRORRATA_RETIROS", "HOJA_RESUMEN",

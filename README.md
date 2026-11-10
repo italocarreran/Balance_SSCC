@@ -68,6 +68,19 @@ python Herramientas/Buscar_Barras_CMg.py
 python Herramientas/Buscar_Puntos_PRMTE.py
 ```
 
+- `Comparar_Meses.py`: compara dos planillas 11_PAGOS_BESS (el mes anterior
+  u otra versión del mismo mes). Por central: lo que recibe por E Costos,
+  RE545 y en total en las dos, la diferencia y una frase con lo que más se
+  movió en sus entradas (lo adjudicado en Subastas, el FD, los días con
+  oferta completa, la energía, el CMg). El reporte queda en
+  `<caso actual>/Log/Comparacion_<AAMM>_vs_<AAMM>.xlsx`. Esta herramienta sí
+  usa el programa (`Script/`), así que corre desde la carpeta del
+  repositorio.
+
+```bash
+python Herramientas/Comparar_Meses.py
+```
+
 0. **La configuración vive en `__config__/`**, la carpeta hermana de la de
    este programa (la misma del Revisor y los comparadores), nunca en las
    carpetas de trabajo:
@@ -235,6 +248,12 @@ para que no ensucien la planilla de trabajo:
   tamaño, fecha y `sha256` de cada archivo que alimentó el cálculo.
 - **`Log`** — los avisos e incidencias de la generación de las hojas de
   entrada (antes era una hoja más de `Consolidado_entradas.xlsx`).
+- **`Reporte`** — con el botón **Generar reporte** de la fila de
+  `Control_corrida.xlsx`: lo que recibe cada central (E Costos, RE545 y
+  total) y, si no recibe nada o solo por un lado, por qué en una frase (sin
+  energía medida, sin adjudicación en Subastas, adjudicada pero sin cruce
+  con Medidores, FD = 0, sin días con oferta completa, o valorización C1 ≤
+  C2).
 
 El catálogo de controles, con lo que está implementado y lo que falta, está en
 `docs/Alertas_y_Controles_Traspaso_Python_BESS.md`.

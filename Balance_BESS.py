@@ -1014,6 +1014,12 @@ def main():
         if id_fila == "sae_csv":
             return ("Generar", generar_csv_sae)
 
+        # Lo que recibe cada central y por que, en la hoja "Reporte" del
+        # control (pedido del usuario: un boton "Generar reporte" al
+        # lado de Control_corrida).
+        if id_fila == "control":
+            return ("Generar reporte", generar_reporte)
+
         if id_fila.startswith("consolidado:"):
             seccion = id_fila.split(":", 1)[1]
             return ("Actualizar", lambda s=seccion: actualizar_consolidado({s}))
@@ -1628,6 +1634,7 @@ def main():
         "generar_pagos_bess": "Balance_BESS.xlsx (calculo)",
         "ejecutar_plan": "Ejecutar todo",
         "generar_csv_sae": "Generar SAE_AAMM.csv",
+        "generar_reporte_corrida": "Generar reporte de la corrida",
         "generar_antecedentes": "Generar antecedentes SAE",
         "correr": "Balance_BESS.xlsx (entradas y calculo)",
     }
@@ -1881,6 +1888,31 @@ def main():
             nucleo.generar_csv_sae,
             dict(carpeta_base=ruta, aamm=aamm),
             nucleo.nombre_csv_sae(aamm),
+        )
+
+    def generar_reporte():
+        """
+        Hoja "Reporte" de Log/Control_corrida.xlsx: lo que recibe cada
+        central y, si no recibe nada (o solo por un lado), por que
+        (ver nucleo/reporte.py).
+        """
+
+        ruta = caso_listo()
+        if ruta is None:
+            return
+
+        aamm = var_aamm.get().strip()
+
+        try:
+            nucleo.validar_aamm(aamm)
+        except nucleo.ErrorEntrada as error:
+            messagebox.showwarning("Falta el periodo", str(error))
+            return
+
+        lanzar(
+            nucleo.generar_reporte_corrida,
+            dict(carpeta_base=ruta, aamm=aamm),
+            nucleo.ARCHIVO_CONTROL,
         )
 
     def generar_cmg():
