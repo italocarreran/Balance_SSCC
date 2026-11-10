@@ -74,6 +74,19 @@ def _nombres_de(central, fila_dic):
     return nombres
 
 
+def _col(df, nombre):
+    """
+    La columna 'nombre' como Serie, aunque venga repetida (la hoja FD
+    trae "Hora Mes" dos veces a proposito: df["Hora Mes"] da una tabla
+    de dos columnas y pd.to_numeric revienta). Se usa la primera.
+    """
+
+    columna = df[nombre]
+    if isinstance(columna, pd.DataFrame):
+        columna = columna.iloc[:, 0]
+    return columna
+
+
 def _si_no(cantidad, unidad, si_cero="No"):
     if cantidad:
         return f"Sí ({cantidad:,} {unidad})".replace(",", ".")
@@ -89,9 +102,9 @@ def _servicios_adjudicados(df_subastas, centrales, fila_de):
 
     if df_subastas is None or "Configuración" not in df_subastas:
         return {c: set() for c in centrales}
-    nombres = df_subastas["Configuración"].map(normalizar)
+    nombres = _col(df_subastas, "Configuración").map(normalizar)
     if "Concepto" in df_subastas:
-        servicio = df_subastas["Concepto"].map(
+        servicio = _col(df_subastas, "Concepto").map(
             lambda v: _texto_seguro(v)[:3].upper()
         )
     else:
@@ -138,9 +151,9 @@ def construir_matriz_centrales(
 
     centrales = []
     if tiene_resumen:
-        centrales += [_texto_seguro(v) for v in resumen[nombre_col] if _texto_seguro(v)]
+        centrales += [_texto_seguro(v) for v in _col(resumen, nombre_col) if _texto_seguro(v)]
     if df_medidores is not None and "clave" in df_medidores:
-        centrales += [_texto_seguro(v) for v in pd.unique(df_medidores["clave"]) if _texto_seguro(v)]
+        centrales += [_texto_seguro(v) for v in pd.unique(_col(df_medidores, "clave")) if _texto_seguro(v)]
     vistas = {}
     for central in centrales:
         vistas.setdefault(normalizar(central), central)
@@ -165,7 +178,7 @@ def construir_matriz_centrales(
 
     # --- maestro de centrales ----------------------------------------
     if tiene_resumen:
-        en_resumen = {normalizar(v) for v in resumen[nombre_col]}
+        en_resumen = {normalizar(v) for v in _col(resumen, nombre_col)}
         poner(COL_RESUMEN, [
             ("Sí", OK) if normalizar(c) in en_resumen else ("No", FALTA)
             for c in centrales
@@ -183,7 +196,7 @@ def construir_matriz_centrales(
 
     # --- medidas -------------------------------------------------------
     if df_medidores is not None and "clave" in df_medidores:
-        claves = df_medidores["clave"].map(normalizar)
+        claves = _col(df_medidores, "clave").map(normalizar)
         cuartos = claves.value_counts().to_dict()
         poner(COL_MEDIDORES, [
             si_o_falta(cuartos.get(normalizar(c), 0), "cuartos")
@@ -191,7 +204,7 @@ def construir_matriz_centrales(
         ])
         if "SoC" in df_medidores:
             con_soc = (
-                pd.to_numeric(df_medidores["SoC"], errors="coerce").notna()
+                pd.to_numeric(_col(df_medidores, "SoC"), errors="coerce").notna()
                 .groupby(claves).sum().to_dict()
             )
             poner(COL_SOC, [
@@ -214,7 +227,7 @@ def construir_matriz_centrales(
         if barra_col is not None:
             barra_de = {
                 normalizar(n): _texto_seguro(b)
-                for n, b in zip(resumen[nombre_col], resumen[barra_col])
+                for n, b in zip(_col(resumen, nombre_col), _col(resumen, barra_col))
             }
         con_cmg = df_cmg.iloc[:, 3].map(normalizar).value_counts().to_dict()
         celdas = []
@@ -240,7 +253,7 @@ def construir_matriz_centrales(
 
     filas_subastas = {c: 0 for c in centrales}
     if hay_subastas:
-        por_nombre = df_subastas["Configuración"].map(normalizar).value_counts().to_dict()
+        por_nombre = _col(df_subastas, "Configuración").map(normalizar).value_counts().to_dict()
         filas_subastas = {
             c: sum(
                 por_nombre.get(n, 0)
@@ -262,12 +275,12 @@ def construir_matriz_centrales(
 
     # --- ofertas -------------------------------------------------------
     if df_wxy is not None and "Central" in df_wxy and "Oferta completa" in df_wxy:
-        tabla = df_wxy.assign(_c=df_wxy["Central"].map(normalizar))
+        tabla = df_wxy.assign(_c=_col(df_wxy, "Central").map(normalizar).to_numpy())
         celdas = []
         for c in centrales:
             filas = tabla[tabla["_c"] == normalizar(c)]
             completos = (
-                int(pd.to_numeric(filas["Oferta completa"], errors="coerce").fillna(0).sum())
+                int(pd.to_numeric(_col(filas, "Oferta completa"), errors="coerce").fillna(0).sum())
                 if not filas.empty else 0
             )
             # Una central que no esta en el archivo de ofertas igual sale
@@ -275,7 +288,7 @@ def construir_matriz_centrales(
             en_archivo = not filas.empty and (
                 completos > 0
                 or ("Nombre" in filas
-                    and filas["Nombre"].map(normalizar).ne(normalizar(c)).any())
+                    and _col(filas, "Nombre").map(normalizar).ne(normalizar(c)).any())
             )
             if en_archivo:
                 celdas.append((
@@ -324,8 +337,8 @@ def construir_matriz_centrales(
         # cambio de hora queda en la hoja FD (en 0 y sin Hora Mes) y
         # no cuenta (septiembre: 719 horas, no 720).
         if "Hora Mes" in bloque:
-            bloque = bloque[pd.to_numeric(bloque["Hora Mes"], errors="coerce").notna()]
-        por_central = bloque["Central"].map(normalizar).value_counts().to_dict()
+            bloque = bloque[pd.to_numeric(_col(bloque, "Hora Mes"), errors="coerce").notna().to_numpy()]
+        por_central = _col(bloque, "Central").map(normalizar).value_counts().to_dict()
         poner(etiqueta, [
             (_si_no(por_central[normalizar(c)], "horas"), OK)
             if por_central.get(normalizar(c), 0)
@@ -335,7 +348,7 @@ def construir_matriz_centrales(
 
     tabla_cpf = None if tablas_fma is None else tablas_fma.get("cpf")
     if tabla_cpf is not None and "Central" in tabla_cpf:
-        por_nombre = tabla_cpf["Central"].map(normalizar).value_counts().to_dict()
+        por_nombre = _col(tabla_cpf, "Central").map(normalizar).value_counts().to_dict()
         celdas = []
         for c in centrales:
             horas = sum(

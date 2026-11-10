@@ -6044,3 +6044,15 @@ ventana con xvfb. 332 pruebas.
 - Comprobado con el caso grande: el codigo generado, corrido con Python
   aislado y solo con el 11_ (sin repo ni otros archivos), dio las 12 hojas
   con 0 celdas distintas y el SAE_2609.csv identico, con y sin calamine.
+
+## 2026-11-10 (34) — Matriz: columnas repetidas de la hoja FD
+
+- Con el libro real la matriz caía: "[AVISO] no se pudo armar la matriz de
+  centrales: arg must be a list, tuple, 1-d array, or Series". La hoja FD
+  trae "Hora Mes" dos veces a propósito; `bloque["Hora Mes"]` daba una tabla
+  y `pd.to_numeric` reventaba. `matriz_centrales._col` toma la primera
+  columna cuando viene repetida; se usa en todas las columnas que lee la
+  matriz.
+- Pruebas: test_columnas_repetidas_como_en_la_hoja_fd y
+  test_con_la_hoja_fd_real_del_libro (FD escrito y releído como en la
+  corrida); las dos fallan con el código anterior con el mismo error.
