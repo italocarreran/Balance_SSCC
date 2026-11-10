@@ -69,7 +69,15 @@ python Herramientas/Buscar_Puntos_PRMTE.py
 ```
 
 - `Comparar_Meses.py`: compara dos planillas 11_PAGOS_BESS (el mes anterior
-  u otra versión del mismo mes). Por central: lo que recibe por E Costos,
+  u otra versión del mismo mes). **Responsables en pesos**: el cambio de lo
+  que recibe cada central se reparte, exacto (la suma da la diferencia),
+  entre CMg, adjudicación en Subastas, ofertas completas, FD y prorrata,
+  FD y FMA, horas adjudicadas, energía medida, tope de energía disponible y
+  el reparto entre ciclos/ventanas (`Script/nucleo/responsables.py`: el
+  monto es max(0, C1 − C2) por ciclo o ventana, C1 y C2 como productos de
+  esos factores, y Shapley entre ellos). Hojas: Comparacion (principal
+  responsable y desglose por central), Responsables (el del mes y por
+  central) y Cambios por central (cada concepto, anterior y actual). Por central: lo que recibe por E Costos,
   RE545 y en total en las dos, la diferencia y una frase con lo que más se
   movió en sus entradas (lo adjudicado en Subastas, el FD, los días con
   oferta completa, la energía, el CMg). El reporte queda en

@@ -107,11 +107,10 @@ class TestComparacion(unittest.TestCase):
         lineas, tabla = r.comparar_resumenes(actual, anterior)
         uno = tabla.set_index(r.C_CENTRAL).loc["SAE-UNO"]
         self.assertEqual(uno["Qué pasó"], "RE545 sube $200.000 (+100 %).")
-        self.assertEqual(
-            uno["Lo que más cambió"],
-            "• adjudicado CPF 10 → 15 MW (+50 %)\n"
-            "• días con oferta completa 20 → 28 días (+40 %)",
-        )
+        # Los responsables en pesos van en sus columnas (test_responsables).
+        self.assertIn("Principal responsable", tabla.columns)
+        self.assertIn("Desglose en $", tabla.columns)
+        self.assertNotIn("Lo que más cambió", tabla.columns)
         # Lo que no cambio va en una sola linea, no en su fila.
         self.assertEqual(tabla.set_index(r.C_CENTRAL).loc["SAE-DOS", "Qué pasó"], "")
         self.assertIn("Sin cambios relevantes: SAE-DOS.", lineas)
@@ -141,20 +140,6 @@ class TestComparacion(unittest.TestCase):
             "E Costos sube $217 MM (+2.209 %): ciclos con monto 4 → 30 de 32; "
             "C1 $518 MM → $471 MM y C2 $653 MM → $244 MM.",
         )
-        self.assertIn("• adjudicado CPF 17.274 → 0 MW (-100 %)", tabla["Lo que más cambió"].iloc[0])
-
-    def test_el_cmg_general_va_arriba_y_no_en_cada_central(self):
-        def mes(cmg, montos):
-            return pd.DataFrame([
-                fila(**{r.C_CENTRAL: f"C{i}", r.C_RE545: m, r.C_TOTAL: m + 100.0,
-                        r.C_CMG: cmg}) for i, m in enumerate(montos)
-            ])
-
-        lineas, tabla = r.comparar_resumenes(
-            mes(6.8, [3e6, 4e6, 5e6]), mes(22.0, [1e6, 1e6, 1e6])
-        )
-        self.assertTrue(any(l.startswith("El CMg promedio bajó 69 %") for l in lineas), lineas)
-        self.assertFalse(any("CMg" in t for t in tabla["Lo que más cambió"]))
 
     def test_nueva_sin_ingreso_dice_por_que(self):
         """Caso real (SAE-LILE): adjudicada, pero FD = 0 todo el mes."""
@@ -326,7 +311,14 @@ class TestArchivos(unittest.TestCase):
             )
             self.assertEqual(destino, actual.parent / "Log" / "Comparacion_2610_vs_2609.xlsx")
             libro = openpyxl.load_workbook(destino)
-            self.assertEqual(libro.sheetnames, ["Comparacion", "Cambios por central"])
+            self.assertEqual(
+                libro.sheetnames, ["Comparacion", "Responsables", "Cambios por central"]
+            )
+            responsables = libro["Responsables"]
+            self.assertEqual(responsables["B3"].value, "Responsable")
+            nombres = [c.value for c in libro["Comparacion"][3] if c.value]
+            self.assertIn("Principal responsable", nombres)
+            self.assertIn("Desglose en $", nombres)
             sub = libro["Cambios por central"]
             self.assertEqual(
                 [c.value for c in sub[3] if c.value], list(r.COLUMNAS_CAMBIOS)
@@ -481,11 +473,6 @@ class TestNoParticipo(unittest.TestCase):
             r.C_ECOSTOS: 227.3e6, r.C_RE545: 0.0, r.C_TOTAL: 227.3e6,
             r.C_NP_CSF: 0.0, r.C_FDH_CSF: 744.0,
         })])
-        _, tabla = r.comparar_resumenes(actual, anterior)
-        self.assertIn(
-            "• horas FD CSF 'No participó' 700 → 0 h (-100 %)",
-            tabla["Lo que más cambió"].iloc[0],
-        )
         cambios = r.cambios_por_central(actual, anterior).set_index("Concepto")
         self.assertEqual(cambios.loc["FD CSF: horas 'No participó'", "Anterior"], 700.0)
         self.assertEqual(cambios.loc["FD CSF: horas 'No participó'", "Cambio"], r.BAJA)

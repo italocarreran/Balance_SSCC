@@ -410,11 +410,19 @@ def resumen_por_central(ruta_planilla, registrar=print):
         if nombre_col is not None:
             anotar(resumen_bess, nombre_col)
 
+    # Las sumas para la descomposicion en pesos (responsables.py).
+    from .responsables import AGREGADOS, agregados
+
+    datos.update(agregados(
+        ecostos, re545,
+        subastas if subastas is not None and _col(subastas, "Configuración") is not None else None,
+    ))
+
     centrales_norm = sorted(nombres, key=lambda c: nombres[c].upper())
     filas = []
     for c in centrales_norm:
         fila = {C_CENTRAL: nombres[c], C_EMPRESA: empresa_de.get(c, "")}
-        for columna in COLUMNAS_RESUMEN[2:]:
+        for columna in (*COLUMNAS_RESUMEN[2:], *AGREGADOS):
             if columna == C_TOTAL:
                 continue
             fila[columna] = datos[columna].get(c, 0.0) if columna in datos else math.nan
@@ -425,7 +433,7 @@ def resumen_por_central(ruta_planilla, registrar=print):
         )
         filas.append(fila)
 
-    return pd.DataFrame(filas, columns=list(COLUMNAS_RESUMEN))
+    return pd.DataFrame(filas, columns=[*COLUMNAS_RESUMEN, *AGREGADOS])
 
 
 # ------------------------------------------------------------
@@ -812,6 +820,21 @@ def comparar_resumenes(actual, anterior):
         })
 
     tabla = pd.DataFrame(filas)
+    # Los responsables en pesos (responsables.py): el principal y el
+    # desglose, en vez de solo lo que se movio.
+    from .responsables import tablas_responsables
+
+    responsables_mes, _, textos = tablas_responsables(actual, anterior)
+    if len(tabla):
+        tabla.insert(
+            tabla.columns.get_loc("Qué pasó"), "Principal responsable",
+            [textos.get(c, ("", ""))[0] for c in tabla[C_CENTRAL]],
+        )
+        tabla.insert(
+            tabla.columns.get_loc("Qué pasó"), "Desglose en $",
+            [textos.get(c, ("", ""))[1] for c in tabla[C_CENTRAL]],
+        )
+        tabla = tabla.drop(columns=["Lo que más cambió"])
     if len(tabla):
         tabla["Diferencia [%]"] = tabla["Diferencia [%]"].replace([math.inf], math.nan)
         # Lo que mas cambio, arriba; sin cambios, al final.
@@ -832,13 +855,15 @@ def comparar_resumenes(actual, anterior):
         for lado, col in (("RE545", C_RE545), ("E Costos", C_ECOSTOS)):
             va, vb = actual[col].sum(), anterior[col].sum()
             lineas.append(f"{lado}: {plata_corta(vb)} → {plata_corta(va)}.")
-    cmg = generales.get(C_CMG)
-    if _hay(cmg) and abs(cmg) >= CAMBIO_MINIMO_PCT:
-        lineas.append(
-            f"El CMg promedio {'subió' if cmg > 0 else 'bajó'} {_texto_pct(abs(cmg)).lstrip('+')} "
-            f"en casi todas las centrales: mueve a la vez el Total C1 y el Total C2 "
-            f"(no se repite en cada central)."
-        )
+    if len(responsables_mes):
+        principales = [
+            f"{'+' if fila['Aporte [CLP]'] >= 0 else '-'}{plata_corta(abs(fila['Aporte [CLP]']))} "
+            f"{fila['Responsable']}"
+            for _, fila in responsables_mes.head(4).iterrows()
+        ]
+        lineas.append("Responsables del cambio del mes: " + ", ".join(principales)
+                      + " (detalle en la hoja 'Responsables').")
+
     if len(tabla):
         cambio = tabla[tabla["Diferencia [CLP]"].abs() >= CAMBIO_MINIMO_CLP]
         if len(cambio):
@@ -873,9 +898,14 @@ def comparar_planillas(ruta_actual, ruta_anterior, registrar=print):
         f"Comparacion_{_periodo(ruta_actual)}_vs_{_periodo(ruta_anterior)}.xlsx"
     )
     cambios = cambios_por_central(actual, anterior, list(tabla[C_CENTRAL]))
+    from .responsables import tablas_responsables
+
+    mes, por_central, _ = tablas_responsables(actual, anterior, list(tabla[C_CENTRAL]))
     escribir_reporte(destino, [
         ("Comparacion", lineas, tabla,
          f"{ruta_actual.name} contra {ruta_anterior.name}"),
+        ("Responsables", mes, por_central,
+         "De dónde sale la diferencia del mes (la suma da la diferencia)"),
         ("Cambios por central", [], cambios,
          "Cada concepto de cada central: anterior, actual y si cambió"),
     ])
@@ -1091,10 +1121,13 @@ def escribir_hoja_reporte(writer, hoja, lineas, tabla, titulo):
 
     columna = 1
     numero = 1
-    if lineas:
+    # Cuadro 1: las lineas de resumen, o una tabla (hoja Responsables).
+    primera = lineas if isinstance(lineas, pd.DataFrame) else (
+        pd.DataFrame({"Resumen": lineas}) if lineas else None
+    )
+    if primera is not None and len(primera):
         _, columna = _escribir_tabla_con_titulo(
-            writer, hoja, pd.DataFrame({"Resumen": lineas}),
-            titulo_de_cuadro(1, titulo), fila_inicio=1,
+            writer, hoja, primera, titulo_de_cuadro(1, titulo), fila_inicio=1,
         )
         numero = 2
     _escribir_tabla_con_titulo(
@@ -1105,7 +1138,10 @@ def escribir_hoja_reporte(writer, hoja, lineas, tabla, titulo):
 
 FILA_ENCABEZADO_REPORTE = 3
 FILA_TITULOS_REPORTE = 2
-_TEXTOS_LARGOS = ("Resumen", "Observación", "Qué pasó", "Lo que más cambió")
+_TEXTOS_LARGOS = (
+    "Resumen", "Observación", "Qué pasó", "Principal responsable", "Desglose en $",
+    "Qué se movió",
+)
 
 
 def dar_formato_reporte(ws):
@@ -1128,7 +1164,8 @@ def dar_formato_reporte(ws):
         celdas = [ws.cell(f, celda_nombre.column) for f in range(fila_enc + 1, ws.max_row + 1)]
         if nombre in _TEXTOS_LARGOS:
             ws.column_dimensions[letra].width = {
-                "Resumen": 60, "Qué pasó": 75, "Lo que más cambió": 70,
+                "Resumen": 60, "Qué pasó": 70, "Principal responsable": 55,
+                "Desglose en $": 80, "Qué se movió": 60,
             }.get(nombre, 90)
             for celda in celdas:
                 celda.alignment = Alignment(
@@ -1137,6 +1174,12 @@ def dar_formato_reporte(ws):
                 if nombre == "Observación" and celda.value:
                     celda.fill = amarillo
             continue
+        if nombre == "Aporte [CLP]":
+            from openpyxl.styles import Font
+
+            for celda in celdas:
+                if isinstance(celda.value, (int, float)):
+                    celda.font = Font(bold=True, color="375623" if celda.value >= 0 else "9C0006")
         if "[%]" in nombre:
             formato = '0.0" %"'
         elif "FD" in nombre:
@@ -1146,6 +1189,13 @@ def dar_formato_reporte(ws):
         for celda in celdas:
             if isinstance(celda.value, (int, float)) and not isinstance(celda.value, bool):
                 celda.number_format = formato
+    # La tabla de responsables por central, con filtro (para mirar una
+    # central o un responsable).
+    nombres_enc = {str(c.value): c.column for c in ws[fila_enc] if c.value is not None}
+    if "Lado" in nombres_enc and "Qué se movió" in nombres_enc:
+        desde = ws.cell(fila_enc, nombres_enc["Lado"] - 1).coordinate
+        hasta = ws.cell(ws.max_row, nombres_enc["Qué se movió"]).coordinate
+        ws.auto_filter.ref = f"{desde}:{hasta}"
     # Todo arriba: con un texto largo en la fila, los numeros y el nombre
     # de la central quedan a la altura de su primera linea.
     for fila in ws.iter_rows(min_row=fila_enc + 1):
