@@ -195,6 +195,63 @@ class TestMatrizParcialYColores(unittest.TestCase):
         textos = [ws.cell(r, c).value for r in range(2, 8) for c in range(1, ws.max_column + 1)]
         self.assertIn("No está y debería estar", textos)
 
+    def test_columnas_repetidas_como_en_la_hoja_fd(self):
+        """
+        La hoja FD trae "Hora Mes" dos veces a proposito: con el libro
+        real la matriz entera caia con "arg must be a list, tuple, 1-d
+        array, or Series" (pd.to_numeric de una tabla de dos columnas).
+        """
+
+        from Script.nucleo import matriz_centrales as mc
+
+        fd = pd.DataFrame(
+            [[1, 1, "SAE-UNO"], [None, None, "SAE-UNO"], [2, 2, "SAE-DOS"]],
+            columns=["Hora Mes", "Hora Mes", "Central"],
+        )
+        medidores = pd.DataFrame(
+            [["SAE-UNO", 0.5, 0.5]], columns=["clave", "SoC", "SoC"]
+        )
+        m = construir_matriz_centrales(
+            resumen=RESUMEN, diccionario=DICCIONARIO,
+            df_medidores=medidores, df_subastas=self.subastas(),
+            df_fd_csf=fd, df_fd_cpf=fd,
+        )
+        e = m.attrs["estados"]
+        m = m.set_index("Central")
+        self.assertEqual(m.loc["SAE-UNO", "FD CPF"], "Sí (1 horas)")
+        self.assertEqual(e[("SAE-UNO", "FD CPF")], mc.OK)
+        self.assertEqual(m.loc["SAE-UNO", "SoC"], "Sí (1 cuartos)")
+
+    def test_con_la_hoja_fd_real_del_libro(self):
+        """El FD escrito y releido como en la corrida (leer_fd_consolidado)."""
+
+        from Script.nucleo import matriz_centrales as mc
+        from Script.nucleo.proceso import matriz_desde_consolidado
+
+        csf = pd.DataFrame({
+            k: [1.0, 2.0] for k in list(nucleo.NOMBRES_FD_CSF.values())[1:-1]
+        })
+        csf["Hora Mes"] = [1, 2]
+        csf["Unidad"] = "U"
+        csf["Central"] = "SAE-UNO"
+        cpf = pd.DataFrame({
+            k: [1.0] for k in list(nucleo.NOMBRES_FD_CPF.values())[1:-1]
+        })
+        cpf["Unidad"] = "U"
+        cpf["Central"] = "SAE-UNO"
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = Path(carpeta) / "Balance_BESS.xlsx"
+            nucleo.escribir_salida(
+                None, ruta, [], [], df_fd_csf=csf, df_fd_cpf=cpf,
+                centrales=(RESUMEN, DICCIONARIO),
+                hojas_regenerar={nucleo.HOJA_FD, nucleo.HOJA_CENTRALES},
+                registrar=lambda *a: None,
+            )
+            m = matriz_desde_consolidado(ruta, registrar=lambda *a: None)
+        e = m.attrs["estados"]
+        self.assertEqual(e[("SAE-UNO", "FD CSF")], mc.OK)
+        self.assertEqual(e[("SAE-UNO", "FD CPF")], mc.OK)
+
     def test_desde_una_planilla_que_solo_tiene_subastas(self):
         """Corrida parcial real: el libro tiene Centrales y Subastas."""
 
