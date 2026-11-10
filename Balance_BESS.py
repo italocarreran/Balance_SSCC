@@ -1627,6 +1627,8 @@ def main():
         "generar_consolidado": "Balance_BESS.xlsx (entradas)",
         "generar_pagos_bess": "Balance_BESS.xlsx (calculo)",
         "ejecutar_plan": "Ejecutar todo",
+        "generar_csv_sae": "Generar SAE_AAMM.csv",
+        "generar_antecedentes": "Generar antecedentes SAE",
         "correr": "Balance_BESS.xlsx (entradas y calculo)",
     }
 
@@ -2561,6 +2563,126 @@ def main():
         repintar()
 
     # --------------------------------------------------------
+    # ANTECEDENTES SAE
+    #
+    # Pedido del usuario (2026-11-10): un boton que cree, al lado del
+    # 11_, la carpeta "03 Antecedentes SAE" con el codigo para que los
+    # coordinados recalculen las hojas (y el SAE_AAMM.csv). Por defecto
+    # van esos dos; "Agregar otros archivos" despliega los archivos del
+    # caso para sumar los que se quieran.
+    # --------------------------------------------------------
+
+    def ventana_antecedentes():
+        ruta = caso_listo()
+        if ruta is None:
+            return
+        aamm = var_aamm.get().strip()
+        try:
+            nucleo.validar_aamm(aamm)
+        except nucleo.ErrorEntrada as error:
+            messagebox.showwarning("Falta el periodo", str(error))
+            return
+        try:
+            rutas, filas = nucleo.revisar_estructura(ruta, aamm)
+        except Exception as error:  # noqa: BLE001 - se muestra
+            mostrar_error("No se pudo revisar la carpeta", str(error))
+            return
+        if not rutas["salida"].is_file():
+            messagebox.showwarning(
+                "Falta la planilla",
+                f"No esta {rutas['salida'].name}: primero calcula la planilla.",
+            )
+            return
+
+        top = tk.Toplevel(root)
+        top.title("Generar antecedentes SAE")
+        top.transient(root)
+        top.geometry("720x260")
+
+        tk.Label(
+            top,
+            text=(
+                f"Se crea la carpeta '{nucleo.CARPETA_ANTECEDENTES}' al lado de "
+                f"{rutas['salida'].name} con lo tildado."
+            ),
+            anchor="w", justify="left", wraplength=680,
+            font=("Segoe UI", 9),
+        ).pack(fill="x", padx=14, pady=(12, 6))
+
+        marco = tk.LabelFrame(top, text="Por defecto", padx=10, pady=6)
+        marco.pack(fill="x", padx=14, pady=4)
+        var_codigo = tk.BooleanVar(value=True)
+        tk.Checkbutton(
+            marco, variable=var_codigo, anchor="w",
+            text=f"Código de recálculo ({nucleo.nombre_recalculador(aamm)})",
+        ).pack(fill="x")
+        csv = rutas["csv_sae"]
+        var_csv = tk.BooleanVar(value=csv.is_file())
+        tk.Checkbutton(
+            marco, variable=var_csv, anchor="w",
+            text=csv.name + ("" if csv.is_file() else "   (todavía no generado)"),
+            state="normal" if csv.is_file() else "disabled",
+        ).pack(fill="x")
+
+        # Los archivos del caso, para sumar los que se quieran.
+        excluir = {Path(rutas["salida"]), Path(csv)}
+        archivos = [
+            fila for fila in filas
+            if fila.get("ruta") and not fila.get("es_carpeta")
+            and Path(fila["ruta"]).is_file()
+            and Path(fila["ruta"]) not in excluir
+        ]
+        otros = tk.LabelFrame(top, text="Otros archivos del caso", padx=10, pady=6)
+        vars_otros = []
+        for fila in archivos:
+            var = tk.BooleanVar(value=False)
+            vars_otros.append((var, fila["ruta"]))
+            tk.Checkbutton(
+                otros, variable=var, anchor="w", font=("Consolas", 9),
+                text="    " * int(fila.get("nivel", 0)) + Path(fila["ruta"]).name,
+            ).pack(fill="x")
+        if not archivos:
+            tk.Label(otros, text="No hay otros archivos en la carpeta del caso.",
+                     fg=COLOR_NEUTRO).pack(anchor="w")
+
+        abajo = tk.Frame(top)
+        abajo.pack(side="bottom", fill="x", padx=14, pady=10)
+        desplegado = {"si": False}
+
+        def desplegar():
+            desplegado["si"] = not desplegado["si"]
+            if desplegado["si"]:
+                otros.pack(fill="both", expand=True, padx=14, pady=4, before=abajo)
+                boton_otros.config(text="Agregar otros archivos ▴")
+                top.geometry(f"720x{min(260 + 24 * max(len(archivos), 1), 760)}")
+            else:
+                otros.pack_forget()
+                boton_otros.config(text="Agregar otros archivos ▾")
+                top.geometry("720x260")
+
+        boton_otros = tk.Button(abajo, text="Agregar otros archivos ▾", command=desplegar)
+        boton_otros.pack(side="left")
+
+        def generar():
+            seleccion = [r for var, r in vars_otros if var.get()]
+            if not (var_codigo.get() or var_csv.get() or seleccion):
+                messagebox.showwarning("Nada seleccionado", "Tilda al menos un archivo.", parent=top)
+                return
+            top.destroy()
+            lanzar(
+                nucleo.generar_antecedentes,
+                dict(carpeta_base=ruta, aamm=aamm, incluir_codigo=var_codigo.get(),
+                     incluir_csv=var_csv.get(), otros=seleccion),
+                nucleo.CARPETA_ANTECEDENTES,
+            )
+
+        tk.Button(abajo, text="Cancelar", width=12, command=top.destroy).pack(side="right")
+        tk.Button(
+            abajo, text="Generar", width=12, bg="#1f5fa8", fg="white",
+            font=("Segoe UI", 9, "bold"), command=generar,
+        ).pack(side="right", padx=8)
+
+    # --------------------------------------------------------
     # BOTONES FIJOS ABAJO
     # --------------------------------------------------------
 
@@ -2579,6 +2701,12 @@ def main():
         font=("Segoe UI", 9, "bold"),
         bg="#fdf0d5",
         command=ventana_ejecutar_todo,
+    ).pack(side="left", padx=10, expand=True)
+
+    tk.Button(
+        frame_botones,
+        text="Generar antecedentes SAE",
+        command=ventana_antecedentes,
     ).pack(side="left", padx=10, expand=True)
 
     btn_abrir_salida = tk.Button(

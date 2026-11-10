@@ -114,6 +114,10 @@ from .rutas import (
     resolver_rutas, validar_aamm, nombre_salida, nombre_csv_sae,
 )
 from .csv_sae import construir_csv_sae, generar_csv_sae
+from .antecedentes import (
+    CARPETA_ANTECEDENTES, escribir_recalculador, generar_antecedentes,
+    nombre_recalculador,
+)
 from .origenes import ORIGENES, origen, ruta_origen
 from .estructura import (
     SECCIONES_CONSOLIDADO, SECCIONES_PAGOS, SECCIONES_SALIDA, _fila,
@@ -277,6 +281,8 @@ __all__ = [
     "ARCHIVO_CSV_SAE", "ARCHIVO_REGISTRO", "ARCHIVO_SALIDA_ANTIGUO",
     "CARPETA_LOG", "nombre_salida", "nombre_csv_sae",
     "construir_csv_sae", "generar_csv_sae",
+    "CARPETA_ANTECEDENTES", "escribir_recalculador", "generar_antecedentes",
+    "nombre_recalculador",
     "CARPETA_CMG", "CARPETA_DB_SUBASTAS", "CARPETA_FD_FMA",
     "CARPETA_FD_FMA_ANTIGUA", "CARPETA_MEDIDAS", "CARPETA_OFERTAS",
     "CARPETA_PRORRATA_RETIROS",

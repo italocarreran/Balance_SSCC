@@ -6022,3 +6022,25 @@ ventana con xvfb. 332 pruebas.
   falta en FD/FMA/Ofertas queda amarillo. Medidores, SoC, CMg, Diccionario y
   Resumen BESS que faltan, rojo.
 - Pruebas: test_matriz_centrales (5 nuevas).
+
+## 2026-11-10 (30) — Antecedentes SAE: codigo para que los coordinados recalculen
+
+- Pedido: adjuntar al 11_ un codigo que "al darle play se recalculen las
+  hojas de calculo", uno solo, generado automatico y recortado, con ventana
+  (aviso corto, 11_ automatico si se corre desde la carpeta, si no
+  Examinar) y que deje el resultado en una copia. En la ventana propia, un
+  boton "Generar antecedentes SAE" que cree '03 Antecedentes SAE' al lado del
+  11_ con el codigo y el SAE_AAMM.csv por defecto, y la opcion de sumar
+  otros archivos del caso. El zip lo arma otra persona.
+- `nucleo/recalculo.py`: recalcula sobre una copia en una carpeta temporal,
+  con el 11_ como unico dato; la prorrata de retiros sale del cuadro 2 de
+  PRORRATA_RETIROS. Resultado: 11_..._recalculado.xlsx y SAE_..._recalculado.csv
+  al lado del 11_.
+- `ventana_recalculo.py`: la ventana de los coordinados.
+- `nucleo/antecedentes.py`: arma Recalcular_11_PAGOS_BESS_AAMM.py con los
+  modulos del calculo como texto (46 de nucleo + Subastas/Fma,
+  Ofertas_Adjudicadas, Fd/Desempeno_Horario) y un externos recortado sin
+  APIs/descargas; un cargador los importa como paquete 'calculo_sae'.
+- Comprobado con el caso grande: el codigo generado, corrido con Python
+  aislado y solo con el 11_ (sin repo ni otros archivos), dio las 12 hojas
+  con 0 celdas distintas y el SAE_2609.csv identico, con y sin calamine.
