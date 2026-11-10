@@ -744,90 +744,6 @@ def _frase_lado(lado, nuevo, viejo, actual, anterior, motores, generales=None):
     return texto + ".", entradas
 
 
-# Las cifras que van en la columna "Datos", en este orden.
-_DATOS = (
-    (C_EC_CICLOS, "E Costos ciclos con monto", "", 0),
-    (C_EC_C1, "E Costos Total C1", "CLP", 0),
-    (C_EC_C2, "E Costos Total C2", "CLP", 0),
-    (C_RE_VENTANAS, "RE545 ventanas con monto", "", 0),
-    (C_RE_C1, "RE545 Total C1", "CLP", 0),
-    (C_RE_C2, "RE545 Total C2", "CLP", 0),
-    (C_DIAS, "Días en el mes", "", 0),
-    (C_HORAS_SUB, "Horas adjudicadas", "h", 0),
-    (C_ADJ_CPF, "Adjudicado CPF", "MW", 0),
-    (C_ADJ_CSF, "Adjudicado CSF", "MW", 0),
-    (C_OFERTA_DIAS, "Días con oferta completa", "", 0),
-    (C_FD_CPF, "FD CPF", "", 2),
-    (C_FD_CSF, "FD CSF", "", 2),
-    (C_NP_CPF, "Horas FD CPF 'No participó'", "", 0),
-    (C_NP_CSF, "Horas FD CSF 'No participó'", "", 0),
-    (C_DESCARGA, "Descarga", "kWh", 0),
-    (C_EC_AJUSTADA, "Descarga ajustada FD-prorrata", "kWh", 0),
-    (C_HORAS_ADJ, "Horas con Adj SSCC", "h", 0),
-)
-# El FD va siempre (pedido del usuario: "yo creo que tiene que ver con
-# los FD"): igual, o "sin dato" si ninguna planilla lo trae.
-_SIEMPRE = (C_FD_CPF, C_FD_CSF)
-# "28 de 31": los ciclos/ventanas con monto, sobre los del mes.
-_DE_TOTAL = {
-    C_EC_CICLOS: C_EC_CICLOS_MES, C_RE_VENTANAS: C_RE_VENTANAS_MES,
-    C_NP_CPF: C_FDH_CPF, C_NP_CSF: C_FDH_CSF,
-}
-
-
-def datos_lado_a_lado(actual, anterior):
-    """
-    "Días en el mes: 9 → 31; Adjudicado CPF: 900 → 4.300 MW; ..." (pedido
-    del usuario: "la adjudicacion fue tanto vs tanto"). Sin ruido: solo
-    las cifras que cambiaron (1 % o mas), y nunca las que son 0 en los dos
-    meses. Una central que no estaba en una de las dos planillas muestra
-    solo los valores de la otra ("Adjudicado CPF: 10 MW" / "antes ...").
-    """
-
-    nueva, ya_no = not anterior, not actual
-    partes = []
-    for columna, nombre, unidad, decimales in _DATOS:
-        nuevo, viejo = actual.get(columna), anterior.get(columna)
-        siempre = columna in _SIEMPRE and not nueva and not ya_no
-        if not _hay(nuevo) and not _hay(viejo):
-            if siempre:
-                partes.append(f"{nombre}: sin dato en las dos planillas")
-            continue
-        if (not _hay(nuevo) or nuevo == 0) and (not _hay(viejo) or viejo == 0) \
-                and not siempre:
-            continue
-        sufijo = f" {unidad}" if unidad and unidad != "CLP" else ""
-        total_de = _DE_TOTAL.get(columna)
-
-        def texto(valor, fila=None):
-            if not _hay(valor):
-                return "sin dato"
-            if unidad == "CLP":
-                return plata(valor)
-            base = numero(valor, decimales)
-            if total_de and fila is not None and _hay(fila.get(total_de)):
-                base += f" de {numero(fila.get(total_de))}"
-            return base
-
-        if siempre and _hay(nuevo) and _hay(viejo) and abs(_pct(nuevo, viejo)) < 1.0:
-            partes.append(f"{nombre}: {texto(nuevo)} (igual)")
-            continue
-
-        if nueva:
-            partes.append(f"{nombre}: {texto(nuevo, actual)}{sufijo}")
-            continue
-        if ya_no:
-            partes.append(f"{nombre}: antes {texto(viejo, anterior)}{sufijo}")
-            continue
-        pct = _pct(nuevo, viejo)
-        if _hay(pct) and not math.isinf(pct) and abs(pct) < 1.0:
-            continue
-        partes.append(
-            f"{nombre}: {texto(viejo, anterior)} → {texto(nuevo, actual)}{sufijo}"
-        )
-    return "; ".join(partes)
-
-
 def comparar_resumenes(actual, anterior):
     """
     (lineas de arriba, tabla por central con los dos meses y la
@@ -1000,7 +916,9 @@ CONCEPTOS_CAMBIO = (
     (C_ADJ_CPF, "Adjudicado CPF", "MW", False),
     (C_ADJ_CSF, "Adjudicado CSF", "MW", False),
     (C_OFERTA_DIAS, "Días con oferta completa", "días", False),
-    (C_HORAS_ADJ, "Horas con Adj SSCC", "h", False),
+    # Es lo mismo que "Horas adjudicadas" cuando el nombre de la central
+    # cruza bien entre Subastas y Medidores: va solo si no coincide.
+    (C_HORAS_ADJ, "Horas con Adj SSCC (no coincide con las adjudicadas)", "h", False),
     (C_DESCARGA, "Descarga", "kWh", False),
     (C_CARGA, "Carga", "kWh", False),
     (C_EC_AJUSTADA, "Descarga ajustada FD-prorrata", "kWh", False),
@@ -1054,6 +972,12 @@ def cambios_por_central(actual, anterior, orden=None):
         nombre = fila_a.get(C_CENTRAL) or fila_b.get(C_CENTRAL)
         for columna, concepto, unidad, siempre in CONCEPTOS_CAMBIO:
             nuevo, viejo = fila_a.get(columna, math.nan), fila_b.get(columna, math.nan)
+            if columna == C_HORAS_ADJ and all(
+                not _hay(fila.get(C_HORAS_ADJ)) or not _hay(fila.get(C_HORAS_SUB))
+                or abs(fila[C_HORAS_ADJ] - fila[C_HORAS_SUB]) < 1
+                for fila in (fila_a, fila_b) if fila
+            ):
+                continue
             vacio_a = not _hay(nuevo) or nuevo == 0
             vacio_b = not _hay(viejo) or viejo == 0
             if vacio_a and vacio_b and not siempre:
@@ -1240,7 +1164,10 @@ def escribir_reporte(destino, hojas):
     from .formato import formatear_libro
 
     destino = Path(destino)
+    from .escritura import escribir_entero
+
     with pd.ExcelWriter(destino, engine="openpyxl") as writer:
+        escribir_entero(writer)
         for nombre, lineas, tabla, titulo in hojas:
             escribir_hoja_reporte(writer, nombre, lineas, tabla, titulo)
         nombres = [nombre for nombre, *_ in hojas]
