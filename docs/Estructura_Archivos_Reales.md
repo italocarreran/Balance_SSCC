@@ -437,8 +437,8 @@ programa, en dos pasos, con sendos botones en esa carpeta del diagrama.
   `MES`, `DIA`, `HORA`, `BANDA`, `CANTIDAD MW`, `PRECIO USD/MW`, `CANTIDAD PONDERADA MW`.
 - **Equivalencias con la salida** (`Subastas!B:Q` del consolidado): ver
   `construir_subastas_desde_accdb()` en `Script/nucleo.py` — el documento de trazabilidad que
-  entregó el usuario (`subastas_AAMM.xlsx` → `DB!B:K`) confirma `B:K`; `L` (Propietario) sale de
-  `Centrales.xlsx`, `O` (Energía SSCC) de `CANTIDAD PONDERADA MW` (a confirmar) y `P`/`Q`
+  entregó el usuario (`subastas_AAMM.xlsx` → `DB!B:K`) confirma `B:K`; `L` (Propietario) ya no se
+  escribe (2026-11-10), `O` (Energía SSCC) sale de `CANTIDAD MW` (columna H, confirmado 2026-11-09) y `P`/`Q`
   (FD/FMA) quedan **pendientes**: venían pegadas en `DB!Y`/`DB!V` y no existen en el Access.
 - **Funciones que lo leen**: `Script/Subastas/Ofertas_Adjudicadas.py` (traer + leer) y
   `nucleo.construir_subastas_desde_accdb()` (transformar).

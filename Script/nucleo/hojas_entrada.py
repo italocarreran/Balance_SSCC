@@ -404,7 +404,6 @@ NOMBRES_SUBASTAS = {
     "I": "Hora_dia",
     "J": "Hora_mes",
     "K": "Configuración",
-    "L": "Propietario",
     "M": "Clave horaria",
     "N": "Ciclo",
     "O": "Energía SSCC",
@@ -505,8 +504,13 @@ def subastas_para_hoja(df_subastas):
 
     if df_subastas is None:
         return None
+    # "Propietario" ya no va (pedido del usuario 2026-11-10): una hoja de
+    # antes que la traiga la pierde al reescribirse.
     return df_subastas.drop(
-        columns=[c for c in COLUMNAS_SUBASTAS_AUXILIARES if c in df_subastas],
+        columns=[
+            c for c in (*COLUMNAS_SUBASTAS_AUXILIARES, "Propietario")
+            if c in df_subastas
+        ],
     )
 
 

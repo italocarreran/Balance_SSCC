@@ -70,9 +70,7 @@ from .rutas import (
     buscar_soc, periodo_desde_aamm, resolver_rutas, validar_aamm,
 )
 from .soc import extraer_soc
-from .subastas_accdb import (
-    construir_mapa_propietario, construir_subastas_desde_consolidado,
-)
+from .subastas_accdb import construir_subastas_desde_consolidado
 from .utiles import ErrorEntrada, _texto_seguro
 
 
@@ -381,22 +379,9 @@ def generar_consolidado(
             # La hoja se lleva del consolidado Subastas/subastas_AAMM.xlsx
             # (boton "Consolidar"): no se abren los Access. Ya no se
             # calculan ni FD ni FMA aca (se aplican en Calculo RE545).
-            mapa_propietarios = {}
-
-            try:
-                resumen_bess, _ = leer_centrales_una_vez()
-            except ErrorEntrada as error:
-                registrar(
-                    f"  [AVISO] {error} La columna Propietario de "
-                    f"Subastas queda vacia."
-                )
-            else:
-                mapa_propietarios = construir_mapa_propietario(resumen_bess)
-
             df_subastas = construir_subastas_desde_consolidado(
                 rutas["subastas_dir"],
                 aamm_val,
-                mapa_propietarios=mapa_propietarios,
                 registrar=registrar,
             )
 

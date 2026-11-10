@@ -32,7 +32,6 @@ def _subastas():
         "Año": [2026, 2026], "Mes": [7, 7], "Dia": [1, 1],
         "Hora_dia": [3, 4], "Hora_mes": [3, 4],
         "Configuración": ["BESS UNO", "SAE DOS"],
-        "Propietario": ["COLBUN", "ENGIE"],
         "Clave horaria": ["BESS UNO13", "SAE DOS14"],
         "Ciclo": [pd.NA, pd.NA],
         "Energía SSCC": [1.5, 2.5],
@@ -63,7 +62,7 @@ class TestHojaSubastas(unittest.TestCase):
         self.assertEqual(encabezado[0], "Concepto")
 
         repuesta = reponer_auxiliares_subastas(leida)
-        self.assertEqual(list(repuesta.columns), list(NOMBRES_SUBASTAS.values())[:14])
+        self.assertEqual(list(repuesta.columns), list(NOMBRES_SUBASTAS.values())[:13])
         for columna in ("Control", "Sub_Baj", "Clave horaria"):
             self.assertEqual(
                 repuesta[columna].tolist(), original[columna].tolist(), columna
@@ -79,8 +78,20 @@ class TestHojaSubastas(unittest.TestCase):
         self.assertEqual(
             list(subastas_para_hoja(_subastas()).columns),
             ["Concepto", "Fecha", "Año", "Mes", "Dia", "Hora_dia",
-             "Hora_mes", "Configuración", "Propietario", "Energía SSCC"],
+             "Hora_mes", "Configuración", "Energía SSCC"],
         )
+
+    def test_sin_propietario(self):
+        """
+        Pedido del usuario (2026-11-10): la hoja Subastas ya no lleva
+        Propietario (ningun calculo lo usaba; el propietario se busca
+        despues, en COMPENSACION_CENTRAL y el Resumen). Una hoja de antes
+        que lo traiga lo pierde al reescribirse.
+        """
+
+        self.assertNotIn("Propietario", NOMBRES_SUBASTAS.values())
+        de_antes = _subastas().assign(Propietario=["COLBUN", "ENGIE"])
+        self.assertNotIn("Propietario", subastas_para_hoja(de_antes).columns)
 
 
 class TestHoraMesSubastas(unittest.TestCase):
@@ -176,6 +187,7 @@ class TestSubastasConsolidadas(unittest.TestCase):
                 check_dtype=False,
             )
             self.assertEqual(hoja["Configuración"].tolist(), ["BESS UNO"] * 2)
+            self.assertNotIn("Propietario", hoja.columns)
             # 6-09 hora 2 = Hora_mes 121 (cambio de hora)
             self.assertEqual(int(hoja["Hora_mes"].iloc[0]), 121)
 
