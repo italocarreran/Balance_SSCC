@@ -383,21 +383,28 @@ class RellenoHoja:
             return f' s="{valor}"' if valor is not None else ""
 
         # Formula por fila: la plantilla se escapa una vez y solo cambia
-        # el numero de fila (el valor de la celda se reemplaza siempre).
+        # el numero de fila. Lleva como valor calculado el del programa
+        # (el mismo que da la formula): asi quien lee la hoja sin abrirla
+        # en Excel (el reporte, la compensacion) ve el numero y no vacio.
         if plantilla is not None:
             sn = a_s(estilo(False, "normal"))
             su = a_s(estilo(True, "normal"))
             cuerpo = escape(plantilla[1:])
+
+            def con_formula(fila, s_attr, valor):
+                t, v = valor_guardado_xml(_valor_pandas(valor)[0])
+                return (
+                    f'<c r="{letra}{fila}"{s_attr}{t}><f>'
+                    + cuerpo.replace(MARCA_FILA, str(fila)) + f"</f><v>{v}</v></c>"
+                )
+
             celdas = [
-                f'<c r="{letra}{fila}"{sn}><f>'
-                + cuerpo.replace(MARCA_FILA, str(fila)) + "</f><v></v></c>"
-                for fila in filas
+                con_formula(fila, sn, valor)
+                for fila, valor in zip(filas, valores.tolist())
             ]
             if indice_ultima is not None:
-                fila = filas[indice_ultima]
-                celdas[indice_ultima] = (
-                    f'<c r="{letra}{fila}"{su}><f>'
-                    + cuerpo.replace(MARCA_FILA, str(fila)) + "</f><v></v></c>"
+                celdas[indice_ultima] = con_formula(
+                    filas[indice_ultima], su, valores.iloc[indice_ultima]
                 )
             return celdas
 

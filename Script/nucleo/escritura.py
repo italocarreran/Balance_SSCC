@@ -918,6 +918,7 @@ def _terminar_cuadros(
     # relleno_rapido, que escribe todas. Los totales van con el alto real.
     ultima_esqueleto = 3 + _filas_del_esqueleto(ws, filas)
     extras = _extras(ws)
+    guardados = _guardados(ws)
     marcador = re.compile(r"\{(\w+)\}")
 
     for clave, plantilla in formulas.items():
@@ -927,7 +928,11 @@ def _terminar_cuadros(
             plantilla, letras
         )
         for fila in range(primera, ultima_esqueleto + 1):
-            ws[f"{letras[clave]}{fila}"].value = marcador.sub(
+            celda = ws[f"{letras[clave]}{fila}"]
+            # El valor del programa queda como valor calculado de la
+            # formula (en una hoja cortada lo pone relleno_rapido).
+            guardados[celda.coordinate] = celda.value
+            celda.value = marcador.sub(
                 lambda m: f"{letras[m.group(1)]}{fila}", plantilla
             )
 

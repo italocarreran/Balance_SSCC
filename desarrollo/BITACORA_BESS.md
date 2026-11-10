@@ -6150,3 +6150,28 @@ ventana con xvfb. 332 pruebas.
 - Una central nueva o que queda en $0 lleva el motivo de `explicar_central`
   ("Según FD no tuvo participación...").
 - Pruebas: test_reporte (+3, y días/horas leídos de una planilla completa).
+
+## 2026-11-10 (41) — Reporte: "No participó" del FD, Total C1/C2 y fórmulas con su valor
+
+- El caso de GABRIELA seguía "sin un cambio grande" con los días y las horas.
+  El usuario: "el valor de los FD puede ser 1 en L:M y AA:AB, pero en H y V
+  son 'No participó', ese 'No participó' explica que sea cero el monto". La
+  trazabilidad del FD lo confirma (sección 25: Respuesta = "No Participó" con
+  FD = 1), así que el promedio del FD no lo ve.
+- `resumen_por_central`: horas con "No participó" en las columnas Respuesta
+  de cada bloque del FD (CPF y CSF) sobre sus horas; Total C1 y C2, ciclos
+  (E Costos) y ventanas (RE545) con monto, y la descarga ajustada FD-prorrata.
+- `explicar_central`: adjudicada en un servicio y "No participó" en todas sus
+  horas -> "Según FD no tuvo participación en CSF (... aunque el FD diga 1)";
+  en la mitad o más, "casi no participó".
+- Comparación: esas cifras explican el cambio (las horas "No participó" y el
+  Total C2 empujan en contra del monto). "Datos" muestra siempre el FD (igual
+  / sin dato) y "N de M" en ciclos, ventanas y horas "No participó".
+- Las columnas con fórmula de E Costos y RE545 (Total C1/C2, descarga/carga
+  ajustada, Reserva con FD y FMA, ...) se escribían sin valor calculado: un
+  libro recién generado las leía vacías hasta abrirlo y guardarlo en Excel.
+  Ahora llevan el valor del programa (el mismo que da la fórmula):
+  `relleno_rapido` en las hojas grandes y `_terminar_cuadros` +
+  `xlsx_rapido._poner_guardados` (ahora en una sola pasada) en las chicas.
+- Pruebas: test_reporte (+4, una con una hoja FD real con "No participó" y FD
+  = 1; otra que las fórmulas traen su valor).

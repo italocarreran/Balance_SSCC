@@ -65,11 +65,32 @@ C_FD_CSF = "FD CSF promedio"
 C_OFERTA_DIAS = "Días con oferta completa"
 C_DIAS = "Días en el mes"
 C_HORAS_SUB = "Horas adjudicadas"
+# Como se arma el monto (por ciclo en E Costos, por ventana en RE545):
+# max(0, Total C1 - Total C2). C1 es la energia ajustada por FD y
+# prorrata, valorizada con la curva monotona; C2 la energia medida al
+# CMg. Ahi entra el FD: en la energia ajustada de C1.
+# Horas en que la Respuesta del FD dice "No participó" (con FD = 1
+# igual: el factor no lo muestra, pero el monto queda en cero).
+C_NP_CSF = "Horas FD CSF 'No participó'"
+C_NP_CPF = "Horas FD CPF 'No participó'"
+C_FDH_CSF = "Horas en FD CSF"
+C_FDH_CPF = "Horas en FD CPF"
+C_EC_C1 = "E Costos Total C1 [CLP]"
+C_EC_C2 = "E Costos Total C2 [CLP]"
+C_EC_AJUSTADA = "Descarga ajustada FD-prorrata [kWh]"
+C_EC_CICLOS = "Ciclos con monto"
+C_EC_CICLOS_MES = "Ciclos del mes"
+C_RE_C1 = "RE545 Total C1 [CLP]"
+C_RE_C2 = "RE545 Total C2 [CLP]"
+C_RE_VENTANAS = "Ventanas con monto"
+C_RE_VENTANAS_MES = "Ventanas del mes"
 
 COLUMNAS_RESUMEN = (
     C_CENTRAL, C_EMPRESA, C_ECOSTOS, C_RE545, C_TOTAL, C_DIAS, C_DESCARGA,
     C_CARGA, C_CMG, C_HORAS_ADJ, C_HORAS_SUB, C_ADJ_CPF, C_ADJ_CSF, C_RESERVA,
-    C_FD_CPF, C_FD_CSF, C_OFERTA_DIAS,
+    C_FD_CPF, C_FD_CSF, C_NP_CPF, C_NP_CSF, C_FDH_CPF, C_FDH_CSF, C_OFERTA_DIAS,
+    C_EC_C1, C_EC_C2, C_EC_AJUSTADA, C_EC_CICLOS, C_EC_CICLOS_MES,
+    C_RE_C1, C_RE_C2, C_RE_VENTANAS, C_RE_VENTANAS_MES,
 )
 
 # Un cambio menor a esto (en % y en plata) no se comenta.
@@ -200,6 +221,37 @@ def resumen_por_central(ruta_planilla, registrar=print):
     if re545 is not None:
         datos[C_RESERVA] = _por_central(re545, "Configuracion", "Reserva con FD y FMA")
 
+    # C1, C2 y cuantos ciclos/ventanas quedaron con monto.
+    for df, c1, c2, extra, grupo, con_monto, del_mes in (
+        (ecostos, C_EC_C1, C_EC_C2, (C_EC_AJUSTADA, "Descarga ajustada FD-prorrata kWh"),
+         "Ciclo de Carga del mes", C_EC_CICLOS, C_EC_CICLOS_MES),
+        (re545, C_RE_C1, C_RE_C2, None,
+         "Ventana de valorizacion", C_RE_VENTANAS, C_RE_VENTANAS_MES),
+    ):
+        if df is None:
+            continue
+        nombre_c1 = "Total [CLP]" if df is ecostos else "Total C1"
+        nombre_c2 = "Total" if df is ecostos else "Total C2"
+        datos[c1] = _por_central(df, "Configuracion", nombre_c1)
+        datos[c2] = _por_central(df, "Configuracion", nombre_c2)
+        if extra is not None:
+            datos[extra[0]] = _por_central(df, "Configuracion", extra[1])
+        central, ciclo, monto = (
+            _col(df, "Configuracion"), _col(df, grupo), _col(df, "Monto a compensar")
+        )
+        if central is not None and ciclo is not None and monto is not None:
+            por_ciclo = (
+                pd.DataFrame({"c": central.map(normalizar).to_numpy(),
+                              "g": ciclo.to_numpy(), "m": _num(monto).to_numpy()})
+                .dropna(subset=["g"]).groupby(["c", "g"])["m"].sum().reset_index()
+            )
+            por_ciclo = por_ciclo[por_ciclo["c"] != ""]
+            datos[del_mes] = por_ciclo.groupby("c").size().astype(float).to_dict()
+            datos[con_monto] = (
+                por_ciclo.assign(con=por_ciclo["m"] > 0).groupby("c")["con"].sum()
+                .astype(float).to_dict()
+            )
+
     # Dias del mes con medidas de la central: los de las dos hojas de
     # calculo juntas (cada cuarto de hora va a una o a la otra), o los de
     # Medidores si no hay calculo. Una central que entro a mitad de mes
@@ -256,6 +308,25 @@ def resumen_por_central(ruta_planilla, registrar=print):
             if horas is not None:
                 bloque = bloque[_num(horas).notna().to_numpy()]
             datos[columna] = _por_central(bloque, "Central", factor, "mean")
+            # "No participó" en la Respuesta (columnas H y V de la hoja):
+            # puede venir con FD = 1 (docs/Trazabilidad_FD_a_DB_Y_planilla3.md,
+            # seccion 25), asi que el promedio del FD no lo ve.
+            respuestas = [c for c in bloque.columns if "respuesta" in normalizar(c)]
+            if respuestas:
+                no_participo = pd.Series(False, index=range(len(bloque)))
+                for nombre in respuestas:
+                    no_participo |= (
+                        _col(bloque, nombre).reset_index(drop=True)
+                        .map(lambda v: normalizar(v).startswith("no particip"))
+                    )
+                central = _col(bloque, "Central").reset_index(drop=True).map(normalizar)
+                tabla_np = pd.DataFrame({"c": central, "np": no_participo})
+                tabla_np = tabla_np[tabla_np["c"] != ""]
+                sin, total = (
+                    (C_NP_CSF, C_FDH_CSF) if clave == "Fd_CSF" else (C_NP_CPF, C_FDH_CPF)
+                )
+                datos[sin] = tabla_np.groupby("c")["np"].sum().astype(float).to_dict()
+                datos[total] = tabla_np.groupby("c").size().astype(float).to_dict()
 
     # --- ofertas -------------------------------------------------------------
     if ofertas is not None and _col(ofertas, "Oferta completa") is not None:
@@ -336,6 +407,18 @@ def explicar_central(fila):
         if adjudicada and _hay(horas_adj) and horas_adj == 0:
             yield ("Adjudicada en Subastas, pero ninguna hora cruza con "
                    "Medidores (Adj SSCC = 0): revisar su nombre en el Diccionario.")
+        for nombre, adj, sin, total in (
+            ("CPF", adj_cpf, fila.get(C_NP_CPF), fila.get(C_FDH_CPF)),
+            ("CSF", adj_csf, fila.get(C_NP_CSF), fila.get(C_FDH_CSF)),
+        ):
+            if not (_hay(adj) and adj > 0 and _hay(sin) and _hay(total) and total > 0):
+                continue
+            if sin >= total:
+                yield (f"Según FD no tuvo participación en {nombre} ('No participó' "
+                       f"en todas sus {numero(total)} horas, aunque el FD diga 1).")
+            elif sin >= total / 2:
+                yield (f"Según FD casi no participó en {nombre} ('No participó' en "
+                       f"{numero(sin)} de {numero(total)} horas).")
         servicios_sin_fd = [
             nombre for nombre, adj, fd in (("CPF", adj_cpf, fd_cpf), ("CSF", adj_csf, fd_csf))
             if _hay(adj) and adj > 0 and _hay(fd) and fd == 0
@@ -396,6 +479,11 @@ def reporte_corrida(resumen):
 
 # Que mira cada lado para explicar un cambio, y como se dice.
 _MOTORES_RE545 = (
+    (C_NP_CPF, "las horas con 'No participó' en FD CPF", "h"),
+    (C_NP_CSF, "las horas con 'No participó' en FD CSF", "h"),
+    (C_RE_VENTANAS, "las ventanas con monto", ""),
+    (C_RE_C1, "el Total C1", "CLP"),
+    (C_RE_C2, "el Total C2", "CLP"),
     (C_DIAS, "los días en el mes", "días"),
     (C_HORAS_SUB, "las horas adjudicadas", "h"),
     (C_ADJ_CPF, "lo adjudicado en CPF", "MW"),
@@ -406,6 +494,12 @@ _MOTORES_RE545 = (
     (C_OFERTA_DIAS, "los días con oferta completa", "días"),
 )
 _MOTORES_ECOSTOS = (
+    (C_NP_CPF, "las horas con 'No participó' en FD CPF", "h"),
+    (C_NP_CSF, "las horas con 'No participó' en FD CSF", "h"),
+    (C_EC_CICLOS, "los ciclos con monto", ""),
+    (C_EC_C1, "el Total C1 (energía ajustada por FD y prorrata × curva monótona)", "CLP"),
+    (C_EC_C2, "el Total C2 (energía medida × CMg)", "CLP"),
+    (C_EC_AJUSTADA, "la descarga ajustada por FD y prorrata", "kWh"),
     (C_DIAS, "los días en el mes", "días"),
     (C_HORAS_SUB, "las horas adjudicadas", "h"),
     (C_DESCARGA, "la descarga", "kWh"),
@@ -413,6 +507,10 @@ _MOTORES_ECOSTOS = (
     (C_CMG, "el CMg promedio", "CLP/kWh"),
     (C_HORAS_ADJ, "las horas con Adj SSCC", "h"),
 )
+
+
+# Lo que se resta en el monto (Total C2): moverse en contra lo explica.
+_RESTAN = (C_EC_C2, C_RE_C2, C_NP_CPF, C_NP_CSF)
 
 
 def _pct(nuevo, viejo):
@@ -440,11 +538,15 @@ def _motores(actual, anterior, motores, sube):
             continue
         # La carga es negativa: "mas carga" es un numero mas chico.
         crece = (nuevo < viejo) if columna == C_CARGA else (nuevo > viejo)
-        if crece != sube:
+        # C2 se RESTA en el monto: si baja, el monto sube.
+        empuja_arriba = (not crece) if columna in _RESTAN else crece
+        if empuja_arriba != sube:
             continue
         decimales = 2 if columna in (C_FD_CPF, C_FD_CSF) else 0
         viejo_txt = numero(abs(viejo) if columna == C_CARGA else viejo, decimales)
         nuevo_txt = numero(abs(nuevo) if columna == C_CARGA else nuevo, decimales)
+        if unidad == "CLP":
+            viejo_txt, nuevo_txt, unidad = plata(viejo), plata(nuevo), ""
         detalle = f"{viejo_txt} → {nuevo_txt}{(' ' + unidad) if unidad else ''}"
         plural = nombre.startswith(("los ", "las "))
         verbo = ("subieron" if crece else "bajaron") if plural else (
@@ -474,6 +576,12 @@ def _frase_lado(lado, nuevo, viejo, actual, anterior, motores):
 
 # Las cifras que van en la columna "Datos", en este orden.
 _DATOS = (
+    (C_EC_CICLOS, "E Costos ciclos con monto", "", 0),
+    (C_EC_C1, "E Costos Total C1", "CLP", 0),
+    (C_EC_C2, "E Costos Total C2", "CLP", 0),
+    (C_RE_VENTANAS, "RE545 ventanas con monto", "", 0),
+    (C_RE_C1, "RE545 Total C1", "CLP", 0),
+    (C_RE_C2, "RE545 Total C2", "CLP", 0),
     (C_DIAS, "Días en el mes", "", 0),
     (C_HORAS_SUB, "Horas adjudicadas", "h", 0),
     (C_ADJ_CPF, "Adjudicado CPF", "MW", 0),
@@ -481,9 +589,20 @@ _DATOS = (
     (C_OFERTA_DIAS, "Días con oferta completa", "", 0),
     (C_FD_CPF, "FD CPF", "", 2),
     (C_FD_CSF, "FD CSF", "", 2),
+    (C_NP_CPF, "Horas FD CPF 'No participó'", "", 0),
+    (C_NP_CSF, "Horas FD CSF 'No participó'", "", 0),
     (C_DESCARGA, "Descarga", "kWh", 0),
+    (C_EC_AJUSTADA, "Descarga ajustada FD-prorrata", "kWh", 0),
     (C_HORAS_ADJ, "Horas con Adj SSCC", "h", 0),
 )
+# El FD va siempre (pedido del usuario: "yo creo que tiene que ver con
+# los FD"): igual, o "sin dato" si ninguna planilla lo trae.
+_SIEMPRE = (C_FD_CPF, C_FD_CSF)
+# "28 de 31": los ciclos/ventanas con monto, sobre los del mes.
+_DE_TOTAL = {
+    C_EC_CICLOS: C_EC_CICLOS_MES, C_RE_VENTANAS: C_RE_VENTANAS_MES,
+    C_NP_CPF: C_FDH_CPF, C_NP_CSF: C_FDH_CSF,
+}
 
 
 def datos_lado_a_lado(actual, anterior):
@@ -499,25 +618,43 @@ def datos_lado_a_lado(actual, anterior):
     partes = []
     for columna, nombre, unidad, decimales in _DATOS:
         nuevo, viejo = actual.get(columna), anterior.get(columna)
+        siempre = columna in _SIEMPRE and not nueva and not ya_no
         if not _hay(nuevo) and not _hay(viejo):
+            if siempre:
+                partes.append(f"{nombre}: sin dato en las dos planillas")
             continue
-        if (not _hay(nuevo) or nuevo == 0) and (not _hay(viejo) or viejo == 0):
+        if (not _hay(nuevo) or nuevo == 0) and (not _hay(viejo) or viejo == 0) \
+                and not siempre:
             continue
-        sufijo = f" {unidad}" if unidad else ""
+        sufijo = f" {unidad}" if unidad and unidad != "CLP" else ""
+        total_de = _DE_TOTAL.get(columna)
 
-        def texto(valor):
-            return numero(valor, decimales) if _hay(valor) else "sin dato"
+        def texto(valor, fila=None):
+            if not _hay(valor):
+                return "sin dato"
+            if unidad == "CLP":
+                return plata(valor)
+            base = numero(valor, decimales)
+            if total_de and fila is not None and _hay(fila.get(total_de)):
+                base += f" de {numero(fila.get(total_de))}"
+            return base
+
+        if siempre and _hay(nuevo) and _hay(viejo) and abs(_pct(nuevo, viejo)) < 1.0:
+            partes.append(f"{nombre}: {texto(nuevo)} (igual)")
+            continue
 
         if nueva:
-            partes.append(f"{nombre}: {texto(nuevo)}{sufijo}")
+            partes.append(f"{nombre}: {texto(nuevo, actual)}{sufijo}")
             continue
         if ya_no:
-            partes.append(f"{nombre}: antes {texto(viejo)}{sufijo}")
+            partes.append(f"{nombre}: antes {texto(viejo, anterior)}{sufijo}")
             continue
         pct = _pct(nuevo, viejo)
         if _hay(pct) and not math.isinf(pct) and abs(pct) < 1.0:
             continue
-        partes.append(f"{nombre}: {texto(viejo)} → {texto(nuevo)}{sufijo}")
+        partes.append(
+            f"{nombre}: {texto(viejo, anterior)} → {texto(nuevo, actual)}{sufijo}"
+        )
     return "; ".join(partes)
 
 
