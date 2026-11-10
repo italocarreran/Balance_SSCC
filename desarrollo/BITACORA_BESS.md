@@ -6203,3 +6203,19 @@ ventana con xvfb. 332 pruebas.
     (▲ Sube, ▼ Baja, Igual, Sin dato, Nuevo, Ya no está), con filtro, franja
     por central, verde/rojo solo en la plata y flechas en gris para el resto.
 - Pruebas: test_reporte reescrito (28).
+
+## 2026-11-10 (43) — "Horas con Adj SSCC" solo si no coincide; tablas enteras en el control
+
+- El usuario: "horas adjudicadas y horas con adjudicación es lo mismo". En
+  sept/oct coinciden en todas las centrales. La sub tabla muestra solo "Horas
+  adjudicadas"; "Horas con Adj SSCC" va únicamente cuando no coincide (la
+  central no cruza con Medidores: el caso del nombre distinto en el
+  Diccionario). Fuera el código muerto de la columna "Datos".
+- Bug encontrado al contar la sub tabla real (355 renglones; el archivo tenía
+  200): `_volcar` corta las tablas a FILAS_MUESTRA y solo `_pegar_en_salida`
+  repone el resto. `escribir_control` (Alertas, Log, la matriz, Reporte) y
+  los reportes guardan el libro tal cual, así que quedaban en 200 filas desde
+  el commit bf6ccab. `escritura.escribir_entero(writer)`: esos libros no se
+  cortan.
+- Pruebas: test_reporte (Log de 500 líneas en el control, sub tabla de 355
+  renglones; las dos fallan con el código anterior).

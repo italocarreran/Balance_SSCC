@@ -375,6 +375,8 @@ def escribir_control(
     escritas = set()
 
     with pd.ExcelWriter(ruta_control, engine="openpyxl") as writer:
+        # Se guarda tal cual: las tablas van enteras (Alertas, Log...).
+        escribir_entero(writer)
 
         if registro is not None:
 
@@ -1289,6 +1291,16 @@ COLUMNA_MARGEN = 1
 ESCRITURA_RAPIDA = True
 
 
+def escribir_entero(writer):
+    """
+    Marca un pd.ExcelWriter cuyo libro se guarda tal cual, sin pasar por
+    _pegar_en_salida: _volcar no le corta las tablas (ver _volcar).
+    """
+
+    writer._balance_entero = True
+    return writer
+
+
 def _volcar(writer, hoja, df, startrow, startcol=0):
     """
     df.to_excel(writer, hoja, index=False, startrow, startcol), cortado a
@@ -1297,7 +1309,14 @@ def _volcar(writer, hoja, df, startrow, startcol=0):
     todas las filas de datos de la hoja.
     """
 
-    cortar = ESCRITURA_RAPIDA and len(df) > FILAS_MUESTRA
+    # Solo se corta si despues se pegan las filas que faltan (escribir_salida,
+    # escribir_pagos_bess, escribir_tabla_rapida). Un libro que se guarda
+    # tal cual (Control_corrida, los reportes) marca su writer con
+    # escribir_entero(): si no, sus tablas quedaban en 200 filas.
+    cortar = (
+        ESCRITURA_RAPIDA and len(df) > FILAS_MUESTRA
+        and not getattr(writer, "_balance_entero", False)
+    )
     (df.head(FILAS_MUESTRA) if cortar else df).to_excel(
         writer, sheet_name=hoja, index=False, startrow=startrow,
         startcol=startcol,

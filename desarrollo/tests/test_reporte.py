@@ -31,7 +31,7 @@ def fila(**valores):
         r.C_CENTRAL: "SAE-UNO", r.C_EMPRESA: "EMPRESA",
         r.C_ECOSTOS: 100.0, r.C_RE545: 200.0, r.C_TOTAL: 300.0,
         r.C_DESCARGA: 500.0, r.C_CARGA: 600.0, r.C_CMG: 50.0,
-        r.C_HORAS_ADJ: 100.0, r.C_ADJ_CPF: 10.0, r.C_ADJ_CSF: 5.0,
+        r.C_HORAS_ADJ: 300.0, r.C_ADJ_CPF: 10.0, r.C_ADJ_CSF: 5.0,
         r.C_RESERVA: 1000.0, r.C_FD_CPF: 0.9, r.C_FD_CSF: 0.8,
         r.C_OFERTA_DIAS: 20.0, r.C_DIAS: 31.0, r.C_HORAS_SUB: 300.0,
     }
@@ -267,6 +267,22 @@ class TestCambiosPorCentral(unittest.TestCase):
             ["Recibe total", "Recibe E Costos", "Recibe RE545"],
         )
 
+    def test_horas_con_adj_sscc_solo_si_no_coinciden(self):
+        """
+        El usuario: "horas adjudicadas y horas con adjudicacion es lo
+        mismo". Lo son cuando el nombre cruza bien; si no coinciden (la
+        central no cruza con Medidores) si va, como alerta.
+        """
+
+        iguales = fila(**{r.C_HORAS_SUB: 300.0, r.C_HORAS_ADJ: 300.0})
+        cambios = r.cambios_por_central(
+            pd.DataFrame([iguales]), pd.DataFrame([fila(**{r.C_HORAS_ADJ: 300.0})])
+        )
+        self.assertFalse(cambios["Concepto"].str.startswith("Horas con Adj SSCC").any())
+        no_cruza = fila(**{r.C_HORAS_SUB: 300.0, r.C_HORAS_ADJ: 0.0})
+        cambios = r.cambios_por_central(pd.DataFrame([no_cruza]), pd.DataFrame([iguales]))
+        self.assertTrue(cambios["Concepto"].str.startswith("Horas con Adj SSCC").any())
+
     def test_sin_ruido_y_sin_dato(self):
         anterior = pd.DataFrame([fila(**{r.C_ADJ_CSF: 0.0})])
         actual = pd.DataFrame([fila(**{r.C_ADJ_CSF: 0.0, r.C_FD_CSF: math.nan})])
@@ -362,6 +378,39 @@ class TestArchivos(unittest.TestCase):
         with tempfile.TemporaryDirectory() as carpeta:
             with self.assertRaises(nucleo.ErrorEntrada):
                 nucleo.generar_reporte_corrida(carpeta, "2610", registrar=lambda *a: None)
+
+
+class TestTablasEnteras(unittest.TestCase):
+    """
+    El control y los reportes se guardan sin pasar por el pegado de las
+    filas: sus tablas quedaban cortadas en 200 filas (la sub tabla real de
+    sept/oct tiene 355 renglones; el Log de una corrida, cientos).
+    """
+
+    def test_control_con_un_log_largo(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = Path(carpeta) / nucleo.ARCHIVO_CONTROL
+            nucleo.escribir_control(
+                ruta, df_log=pd.DataFrame({"mensaje": [f"linea {i}" for i in range(500)]})
+            )
+            ws = openpyxl.load_workbook(ruta)[nucleo.HOJA_LOG]
+        mensajes = [c.value for c in ws["B"][3:] if c.value]
+        self.assertEqual(len(mensajes), 500)
+        self.assertEqual(mensajes[-1], "linea 499")
+
+    def test_reporte_con_una_sub_tabla_larga(self):
+        tabla = pd.DataFrame({
+            r.C_CENTRAL: [f"C{i // 20}" for i in range(355)],
+            "Concepto": ["Recibe total"] * 355, "Unidad": ["CLP"] * 355,
+            "Anterior": [1.0] * 355, "Actual": [2.0] * 355, "Diferencia": [1.0] * 355,
+            "Variación [%]": [100.0] * 355, "Cambio": [r.SUBE] * 355,
+        })
+        with tempfile.TemporaryDirectory() as carpeta:
+            destino = r.escribir_reporte(
+                Path(carpeta) / "reporte.xlsx", [("Cambios por central", [], tabla, "x")]
+            )
+            ws = openpyxl.load_workbook(destino)["Cambios por central"]
+        self.assertEqual(ws.max_row, 3 + 355)
 
 
 class TestNoParticipo(unittest.TestCase):
