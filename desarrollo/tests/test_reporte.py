@@ -33,7 +33,7 @@ def fila(**valores):
         r.C_DESCARGA: 500.0, r.C_CARGA: -600.0, r.C_CMG: 50.0,
         r.C_HORAS_ADJ: 100.0, r.C_ADJ_CPF: 10.0, r.C_ADJ_CSF: 5.0,
         r.C_RESERVA: 1000.0, r.C_FD_CPF: 0.9, r.C_FD_CSF: 0.8,
-        r.C_OFERTA_DIAS: 20.0,
+        r.C_OFERTA_DIAS: 20.0, r.C_DIAS: 31.0, r.C_HORAS_SUB: 300.0,
     }
     base.update(valores)
     return base
@@ -117,6 +117,59 @@ class TestComparacion(unittest.TestCase):
         # Lo que mas cambio, arriba.
         self.assertEqual(tabla[r.C_CENTRAL].iloc[0], "SAE-UNO")
 
+    def test_central_que_estuvo_parte_del_mes_anterior(self):
+        """
+        Caso real (SAE-CRCA-PFV-GABRIELA): E Costos +2.209 % y el reporte
+        decia "sin un cambio grande en sus entradas". El mes anterior
+        estuvo solo una parte del mes: eso tiene que salir, y la columna
+        Datos muestra lo adjudicado "tanto vs tanto".
+        """
+
+        anterior = pd.DataFrame([fila(**{
+            r.C_ECOSTOS: 9.8e6, r.C_RE545: 0.0, r.C_TOTAL: 9.8e6,
+            r.C_DIAS: 9.0, r.C_HORAS_SUB: 150.0, r.C_ADJ_CPF: 900.0,
+        })])
+        actual = pd.DataFrame([fila(**{
+            r.C_ECOSTOS: 227.3e6, r.C_RE545: 0.0, r.C_TOTAL: 227.3e6,
+            r.C_ADJ_CPF: 4300.0, r.C_HORAS_SUB: 700.0,
+        })])
+        _, tabla = r.comparar_resumenes(actual, anterior)
+        texto = tabla["Explicación"].iloc[0]
+        self.assertIn("los días en el mes subieron (9 → 31 días)", texto)
+        self.assertIn("las horas adjudicadas subieron (150 → 700 h)", texto)
+        datos = tabla["Datos (anterior → actual)"].iloc[0]
+        self.assertIn("Adjudicado CPF: 900 → 4.300 MW", datos)
+        # Sin ruido: lo que no cambio no va.
+        self.assertNotIn("FD CPF", datos)
+        self.assertNotIn("Días con oferta completa", datos)
+
+    def test_nueva_sin_ingreso_dice_por_que(self):
+        """Caso real (SAE-LILE): adjudicada, pero FD = 0 todo el mes."""
+
+        anterior = pd.DataFrame([fila(**{r.C_CENTRAL: "OTRA"})])
+        actual = pd.DataFrame([
+            fila(**{r.C_CENTRAL: "OTRA"}),
+            fila(**{r.C_CENTRAL: "SAE-LILE", r.C_ECOSTOS: 0.0, r.C_RE545: 0.0,
+                    r.C_TOTAL: 0.0, r.C_FD_CPF: 0.0, r.C_FD_CSF: 0.0}),
+        ])
+        _, tabla = r.comparar_resumenes(actual, anterior)
+        lile = tabla.set_index(r.C_CENTRAL).loc["SAE-LILE"]
+        self.assertEqual(
+            lile["Explicación"],
+            "Nueva: no estaba en la planilla anterior. Recibe $0. Según FD "
+            "no tuvo participación (FD CPF y CSF = 0 en todo el mes).",
+        )
+        self.assertIn("Adjudicado CPF: 10 MW", lile["Datos (anterior → actual)"])
+        self.assertNotIn("sin dato", lile["Datos (anterior → actual)"])
+
+    def test_queda_en_cero_dice_por_que(self):
+        anterior = pd.DataFrame([fila(**{r.C_RE545: 2e6, r.C_TOTAL: 2.1e6})])
+        actual = pd.DataFrame([fila(**{r.C_ECOSTOS: 0.0, r.C_RE545: 0.0,
+                                       r.C_TOTAL: 0.0, r.C_FD_CPF: 0.0})])
+        _, tabla = r.comparar_resumenes(actual, anterior)
+        self.assertIn("Queda en $0: Según FD no tuvo participación",
+                      tabla["Explicación"].iloc[0])
+
     def test_central_nueva_y_que_ya_no_esta(self):
         anterior = pd.DataFrame([fila(**{r.C_CENTRAL: "VIEJA"})])
         actual = pd.DataFrame([fila(**{r.C_CENTRAL: "NUEVA"})])
@@ -134,6 +187,8 @@ def _planilla(carpeta, nombre, multiplicar=1.0):
     from desarrollo.tests import test_relleno_rapido as t
 
     d = t._datos(60)
+    # Como la hoja Subastas real (columna J): la hora del mes.
+    d["sub"] = d["sub"].assign(Hora_mes=np.arange(len(d["sub"])) % 24 + 1)
     for clave in ("ec", "re545"):
         d[clave] = d[clave].copy()
         d[clave]["Monto a compensar"] = (
@@ -163,6 +218,10 @@ class TestArchivos(unittest.TestCase):
             self.assertEqual(ws["B3"].value, "Resumen")
             self.assertTrue(lineas[0].startswith("Total del mes:"))
             self.assertTrue(any("RE545 sube" in e for e in tabla["Explicación"]))
+            # Los dias y las horas adjudicadas salen de la planilla.
+            resumen = nucleo.resumen_por_central(actual, registrar=lambda *a: None)
+            self.assertTrue((resumen[r.C_DIAS].dropna() > 0).any())
+            self.assertTrue((resumen[r.C_HORAS_SUB].dropna() > 0).any())
 
     def test_la_hoja_reporte_del_control_y_el_resto_se_preserva(self):
         from Script.nucleo.rutas import resolver_rutas

@@ -6133,3 +6133,20 @@ ventana con xvfb. 332 pruebas.
   usada en `_escribir_hoja_centrales`. Ningún cálculo la busca (todo se lee
   por nombre de columna).
 - Prueba: test_unidades.test_tampoco_trae_nup.
+
+## 2026-11-10 (40) — Comparación: días en el mes, horas adjudicadas y "Datos"
+
+- Casos reales del usuario: SAE-CRCA-PFV-GABRIELA (E Costos +2.209 %, "sin un
+  cambio grande en sus entradas": el mes anterior estuvo solo una parte del
+  mes) y SAE-LILE ("Nueva... Recibe $0": adjudicada, pero FD = 0 todo el mes).
+- `resumen_por_central`: "Días en el mes" (días con medidas en las dos hojas
+  de cálculo, o en Medidores) y "Horas adjudicadas" (horas distintas en
+  Subastas). Las dos entran primero en lo que explica un cambio (RE545 y E
+  Costos).
+- Columna "Datos (anterior → actual)": las cifras clave que cambiaron (≥1 %;
+  días, horas adjudicadas, adjudicado CPF/CSF, días con oferta completa, FD,
+  descarga, horas con Adj SSCC). Nueva / ya no está: solo los valores de la
+  planilla que la tiene.
+- Una central nueva o que queda en $0 lleva el motivo de `explicar_central`
+  ("Según FD no tuvo participación...").
+- Pruebas: test_reporte (+3, y días/horas leídos de una planilla completa).

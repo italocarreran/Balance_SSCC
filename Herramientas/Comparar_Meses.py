@@ -248,6 +248,9 @@ def main():
         for _, fila in tabla.iterrows():
             if fila["Explicación"]:
                 escribir(f"• {fila['Central']}: {fila['Explicación']}")
+                datos = fila.get("Datos (anterior → actual)")
+                if datos:
+                    escribir(f"    {datos}")
         avisos = [a.strip() for a in avisos if "[AVISO]" in a]
         if avisos:
             escribir("")
