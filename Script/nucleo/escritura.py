@@ -697,6 +697,8 @@ def escribir_pagos_bess(
             _terminar_e_costos(ws_e_costos, letras_e_costos, len(df_ecostos))
             # Formulas sin valor guardado: que Excel las calcule al abrir.
             writer.book.calculation.fullCalcOnLoad = True
+        if HOJA_COMPENSACION_CENTRAL in escritas:
+            _totales_compensacion(writer.sheets[HOJA_COMPENSACION_CENTRAL])
         if HOJA_RESUMEN in escritas:
             _totales_resumen(writer.sheets[HOJA_RESUMEN], len(df_resumen))
         if HOJA_CALCULO_RE545 in escritas:
@@ -1166,6 +1168,42 @@ def _totales_resumen(ws, filas):
             celda.value = f"=SUM({letra}4:{letra}{ultima})"
             celda.number_format = '"Total: "#,##0'
             celda.font = Font(bold=True, color="244062")
+
+
+def _totales_compensacion(ws):
+    """
+    Hoja COMPENSACION_CENTRAL: el total del mes en la fila 1 sobre cada
+    columna de plata ("Compensación ...") de sus tres cuadros, como en
+    el Resumen y las hojas de calculo (pedido del usuario). Cada cuadro
+    tiene su propio largo (ws._balance_bloques, ver _volcar). El total
+    por empresa (cuadro 3, lo que recibe cada una) va en verde, como el
+    Monto a compensar; los demas en azul.
+    """
+
+    from openpyxl.styles import Font
+    from openpyxl.utils import get_column_letter
+
+    bloques = getattr(ws, "_balance_bloques", ())
+    # El cuadro por empresa es el de mas a la derecha.
+    col_empresa = max((col0 for _, col0, _ in bloques), default=None)
+    for fila0, col0, df in bloques:
+        if not len(df):
+            continue
+        ultima = fila0 + len(df) - 1
+        for j, nombre in enumerate(df.columns):
+            if not str(nombre).startswith("Compensación"):
+                continue
+            letra = get_column_letter(col0 + j)
+            celda = ws[f"{letra}1"]
+            celda.value = f"=SUM({letra}{fila0}:{letra}{ultima})"
+            celda.number_format = '"Total: "#,##0'
+            celda.font = Font(
+                bold=True,
+                color=COLOR_MONTO if col0 == col_empresa else "244062",
+            )
+            _ancho_para_total(
+                ws, letra, _suma_de_columna(ws, letra, fila0, ultima)
+            )
 
 
 # Columnas que quedan fijas al moverse a la derecha en las hojas de
