@@ -384,30 +384,36 @@ def _remapear_estilos(xml, mapa):
 # PEGAR
 # ============================================================
 
+_CELDA_FORMULA = re.compile(
+    rb'<c r="([A-Z]+[0-9]+)"([^>]*)>(<f[^>]*>[^<]*</f>)(?:<v\s*/>|<v></v>)?</c>'
+)
+
+
 def _poner_guardados(xml, guardados):
     """
     Agrega a las celdas con formula de 'guardados' (ref -> valor) su
-    valor calculado: openpyxl las escribe con <v></v> vacio.
+    valor calculado: openpyxl las escribe con <v></v> vacio. Una sola
+    pasada sobre la hoja, aunque sean miles de celdas.
     """
 
     from .relleno_rapido import valor_guardado_xml
 
-    for ref, valor in guardados.items():
-        t, v = valor_guardado_xml(valor)
+    if not guardados:
+        return xml
+
+    def poner(m):
+        ref = m.group(1).decode()
+        if ref not in guardados:
+            return m.group(0)
+        t, v = valor_guardado_xml(guardados[ref])
         if not v:
-            continue
-        patron = re.compile(
-            rb'<c r="' + ref.encode() + rb'"([^>]*)>(<f[^>]*>.*?</f>)'
-            rb'(?:<v\s*/>|<v></v>)?</c>', re.S
+            return m.group(0)
+        return (
+            b'<c r="' + m.group(1) + b'"' + m.group(2) + t.encode()
+            + b">" + m.group(3) + b"<v>" + v.encode("utf-8") + b"</v></c>"
         )
-        xml = patron.sub(
-            lambda m: (
-                b'<c r="' + ref.encode() + b'"' + m.group(1) + t.encode()
-                + b">" + m.group(2) + b"<v>" + v.encode("utf-8") + b"</v></c>"
-            ),
-            xml, count=1,
-        )
-    return xml
+
+    return _CELDA_FORMULA.sub(poner, xml)
 
 
 def pegar_hojas(ruta_destino, ruta_nuevas, orden=(), ignorar=(), rellenos=None,

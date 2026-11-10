@@ -219,6 +219,17 @@ class TestArchivos(unittest.TestCase):
             self.assertEqual(ws["B3"].value, "Resumen")
             self.assertTrue(lineas[0].startswith("Total del mes:"))
             self.assertTrue(any("RE545 sube" in e for e in tabla["Explicación"]))
+            # Las columnas con formula (Total C1, Total C2...) llevan el
+            # valor del programa: se leen sin abrir el libro en Excel.
+            self.assertTrue((resumen_tmp := nucleo.resumen_por_central(
+                actual, registrar=lambda *a: None))[r.C_EC_C1].abs().sum() > 0)
+            self.assertTrue(resumen_tmp[r.C_RESERVA].abs().sum() > 0)
+            con_formula = openpyxl.load_workbook(actual)["Calculo E Costos"]
+            valores = openpyxl.load_workbook(actual, data_only=True)["Calculo E Costos"]
+            letra = next(c.column_letter for c in con_formula[3]
+                         if str(c.value).startswith("Total C1"))
+            self.assertTrue(str(con_formula[f"{letra}10"].value).startswith("="))
+            self.assertIsInstance(valores[f"{letra}10"].value, (int, float))
             # Los dias y las horas adjudicadas salen de la planilla.
             resumen = nucleo.resumen_por_central(actual, registrar=lambda *a: None)
             self.assertTrue((resumen[r.C_DIAS].dropna() > 0).any())
@@ -249,6 +260,85 @@ class TestArchivos(unittest.TestCase):
         with tempfile.TemporaryDirectory() as carpeta:
             with self.assertRaises(nucleo.ErrorEntrada):
                 nucleo.generar_reporte_corrida(carpeta, "2610", registrar=lambda *a: None)
+
+
+class TestNoParticipo(unittest.TestCase):
+    """
+    El usuario: "el valor de los FD puede ser 1 en las columnas L:M y
+    AA:AB, pero en las columnas H y V son 'No participó', ese 'No
+    participó' explica que sea cero el monto final".
+    """
+
+    def _planilla_fd(self, carpeta, respuesta_csf):
+        csf = pd.DataFrame({
+            k: [1.0, 1.0] for k in list(nucleo.NOMBRES_FD_CSF.values())[1:-1]
+        })
+        csf["Hora Mes"] = [1, 2]
+        respuesta = next(c for c in csf.columns if c.startswith("Respuesta CSF"))
+        csf[respuesta] = respuesta_csf
+        csf["Unidad"] = "U"
+        csf["Central"] = "SAE-UNO"
+        cpf = pd.DataFrame({
+            k: [1.0] for k in list(nucleo.NOMBRES_FD_CPF.values())[1:-1]
+        })
+        cpf["Unidad"] = "U"
+        cpf["Central"] = "SAE-UNO"
+        subastas = pd.DataFrame({
+            "Concepto": ["CSF(+)", "CSF(-)"], "Fecha": ["2026-10-01"] * 2,
+            "Año": [2026] * 2, "Mes": [10] * 2, "Dia": [1] * 2,
+            "Hora_dia": [1, 2], "Hora_mes": [1, 2],
+            "Configuración": ["SAE-UNO"] * 2, "Energía SSCC": [5.0, 5.0],
+        })
+        resumen = pd.DataFrame({"Nombre activo": ["SAE-UNO"], "Propietario": ["E1"]})
+        diccionario = pd.DataFrame([["Balance_BESS", "FD"], ["SAE-UNO", "U"]])
+        ruta = Path(carpeta) / "11_PAGOS_BESS_2610.xlsx"
+        nucleo.escribir_salida(
+            None, ruta, [], [], df_fd_csf=csf, df_fd_cpf=cpf,
+            df_subastas=subastas, centrales=(resumen, diccionario),
+            hojas_regenerar={nucleo.HOJA_FD, nucleo.HOJA_SUBASTAS,
+                             nucleo.HOJA_CENTRALES},
+            registrar=lambda *a: None,
+        )
+        return nucleo.resumen_por_central(ruta, registrar=lambda *a: None)
+
+    def test_cuenta_las_horas_aunque_el_fd_diga_1(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            resumen = self._planilla_fd(carpeta, ["No Participó", "No participo"])
+        uno = resumen.set_index(r.C_CENTRAL).loc["SAE-UNO"]
+        self.assertEqual(uno[r.C_FD_CSF], 1.0)        # el factor no lo ve
+        self.assertEqual(uno[r.C_NP_CSF], 2.0)
+        self.assertEqual(uno[r.C_FDH_CSF], 2.0)
+        fila_cero = dict(uno)
+        fila_cero.update({r.C_ECOSTOS: 0.0, r.C_RE545: 0.0, r.C_TOTAL: 0.0})
+        self.assertEqual(
+            r.explicar_central(fila_cero),
+            "Según FD no tuvo participación en CSF ('No participó' en todas "
+            "sus 2 horas, aunque el FD diga 1).",
+        )
+
+    def test_participo_no_cuenta(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            resumen = self._planilla_fd(carpeta, [0.95, "No participó"])
+        self.assertEqual(resumen.set_index(r.C_CENTRAL).loc["SAE-UNO", r.C_NP_CSF], 1.0)
+
+    def test_la_comparacion_lo_usa(self):
+        anterior = pd.DataFrame([fila(**{
+            r.C_ECOSTOS: 9.8e6, r.C_RE545: 0.0, r.C_TOTAL: 9.8e6,
+            r.C_NP_CSF: 700.0, r.C_FDH_CSF: 720.0,
+        })])
+        actual = pd.DataFrame([fila(**{
+            r.C_ECOSTOS: 227.3e6, r.C_RE545: 0.0, r.C_TOTAL: 227.3e6,
+            r.C_NP_CSF: 0.0, r.C_FDH_CSF: 744.0,
+        })])
+        _, tabla = r.comparar_resumenes(actual, anterior)
+        self.assertIn(
+            "las horas con 'No participó' en FD CSF bajaron (700 → 0 h)",
+            tabla["Explicación"].iloc[0],
+        )
+        self.assertIn(
+            "Horas FD CSF 'No participó': 700 de 720 → 0 de 744",
+            tabla["Datos (anterior → actual)"].iloc[0],
+        )
 
 
 class TestHerramienta(unittest.TestCase):

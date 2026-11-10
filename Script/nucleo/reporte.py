@@ -69,6 +69,12 @@ C_HORAS_SUB = "Horas adjudicadas"
 # max(0, Total C1 - Total C2). C1 es la energia ajustada por FD y
 # prorrata, valorizada con la curva monotona; C2 la energia medida al
 # CMg. Ahi entra el FD: en la energia ajustada de C1.
+# Horas en que la Respuesta del FD dice "No participó" (con FD = 1
+# igual: el factor no lo muestra, pero el monto queda en cero).
+C_NP_CSF = "Horas FD CSF 'No participó'"
+C_NP_CPF = "Horas FD CPF 'No participó'"
+C_FDH_CSF = "Horas en FD CSF"
+C_FDH_CPF = "Horas en FD CPF"
 C_EC_C1 = "E Costos Total C1 [CLP]"
 C_EC_C2 = "E Costos Total C2 [CLP]"
 C_EC_AJUSTADA = "Descarga ajustada FD-prorrata [kWh]"
@@ -82,7 +88,7 @@ C_RE_VENTANAS_MES = "Ventanas del mes"
 COLUMNAS_RESUMEN = (
     C_CENTRAL, C_EMPRESA, C_ECOSTOS, C_RE545, C_TOTAL, C_DIAS, C_DESCARGA,
     C_CARGA, C_CMG, C_HORAS_ADJ, C_HORAS_SUB, C_ADJ_CPF, C_ADJ_CSF, C_RESERVA,
-    C_FD_CPF, C_FD_CSF, C_OFERTA_DIAS,
+    C_FD_CPF, C_FD_CSF, C_NP_CPF, C_NP_CSF, C_FDH_CPF, C_FDH_CSF, C_OFERTA_DIAS,
     C_EC_C1, C_EC_C2, C_EC_AJUSTADA, C_EC_CICLOS, C_EC_CICLOS_MES,
     C_RE_C1, C_RE_C2, C_RE_VENTANAS, C_RE_VENTANAS_MES,
 )
@@ -302,6 +308,25 @@ def resumen_por_central(ruta_planilla, registrar=print):
             if horas is not None:
                 bloque = bloque[_num(horas).notna().to_numpy()]
             datos[columna] = _por_central(bloque, "Central", factor, "mean")
+            # "No participó" en la Respuesta (columnas H y V de la hoja):
+            # puede venir con FD = 1 (docs/Trazabilidad_FD_a_DB_Y_planilla3.md,
+            # seccion 25), asi que el promedio del FD no lo ve.
+            respuestas = [c for c in bloque.columns if "respuesta" in normalizar(c)]
+            if respuestas:
+                no_participo = pd.Series(False, index=range(len(bloque)))
+                for nombre in respuestas:
+                    no_participo |= (
+                        _col(bloque, nombre).reset_index(drop=True)
+                        .map(lambda v: normalizar(v).startswith("no particip"))
+                    )
+                central = _col(bloque, "Central").reset_index(drop=True).map(normalizar)
+                tabla_np = pd.DataFrame({"c": central, "np": no_participo})
+                tabla_np = tabla_np[tabla_np["c"] != ""]
+                sin, total = (
+                    (C_NP_CSF, C_FDH_CSF) if clave == "Fd_CSF" else (C_NP_CPF, C_FDH_CPF)
+                )
+                datos[sin] = tabla_np.groupby("c")["np"].sum().astype(float).to_dict()
+                datos[total] = tabla_np.groupby("c").size().astype(float).to_dict()
 
     # --- ofertas -------------------------------------------------------------
     if ofertas is not None and _col(ofertas, "Oferta completa") is not None:
@@ -382,6 +407,18 @@ def explicar_central(fila):
         if adjudicada and _hay(horas_adj) and horas_adj == 0:
             yield ("Adjudicada en Subastas, pero ninguna hora cruza con "
                    "Medidores (Adj SSCC = 0): revisar su nombre en el Diccionario.")
+        for nombre, adj, sin, total in (
+            ("CPF", adj_cpf, fila.get(C_NP_CPF), fila.get(C_FDH_CPF)),
+            ("CSF", adj_csf, fila.get(C_NP_CSF), fila.get(C_FDH_CSF)),
+        ):
+            if not (_hay(adj) and adj > 0 and _hay(sin) and _hay(total) and total > 0):
+                continue
+            if sin >= total:
+                yield (f"Según FD no tuvo participación en {nombre} ('No participó' "
+                       f"en todas sus {numero(total)} horas, aunque el FD diga 1).")
+            elif sin >= total / 2:
+                yield (f"Según FD casi no participó en {nombre} ('No participó' en "
+                       f"{numero(sin)} de {numero(total)} horas).")
         servicios_sin_fd = [
             nombre for nombre, adj, fd in (("CPF", adj_cpf, fd_cpf), ("CSF", adj_csf, fd_csf))
             if _hay(adj) and adj > 0 and _hay(fd) and fd == 0
@@ -442,6 +479,8 @@ def reporte_corrida(resumen):
 
 # Que mira cada lado para explicar un cambio, y como se dice.
 _MOTORES_RE545 = (
+    (C_NP_CPF, "las horas con 'No participó' en FD CPF", "h"),
+    (C_NP_CSF, "las horas con 'No participó' en FD CSF", "h"),
     (C_RE_VENTANAS, "las ventanas con monto", ""),
     (C_RE_C1, "el Total C1", "CLP"),
     (C_RE_C2, "el Total C2", "CLP"),
@@ -455,6 +494,8 @@ _MOTORES_RE545 = (
     (C_OFERTA_DIAS, "los días con oferta completa", "días"),
 )
 _MOTORES_ECOSTOS = (
+    (C_NP_CPF, "las horas con 'No participó' en FD CPF", "h"),
+    (C_NP_CSF, "las horas con 'No participó' en FD CSF", "h"),
     (C_EC_CICLOS, "los ciclos con monto", ""),
     (C_EC_C1, "el Total C1 (energía ajustada por FD y prorrata × curva monótona)", "CLP"),
     (C_EC_C2, "el Total C2 (energía medida × CMg)", "CLP"),
@@ -469,7 +510,7 @@ _MOTORES_ECOSTOS = (
 
 
 # Lo que se resta en el monto (Total C2): moverse en contra lo explica.
-_RESTAN = (C_EC_C2, C_RE_C2)
+_RESTAN = (C_EC_C2, C_RE_C2, C_NP_CPF, C_NP_CSF)
 
 
 def _pct(nuevo, viejo):
@@ -548,6 +589,8 @@ _DATOS = (
     (C_OFERTA_DIAS, "Días con oferta completa", "", 0),
     (C_FD_CPF, "FD CPF", "", 2),
     (C_FD_CSF, "FD CSF", "", 2),
+    (C_NP_CPF, "Horas FD CPF 'No participó'", "", 0),
+    (C_NP_CSF, "Horas FD CSF 'No participó'", "", 0),
     (C_DESCARGA, "Descarga", "kWh", 0),
     (C_EC_AJUSTADA, "Descarga ajustada FD-prorrata", "kWh", 0),
     (C_HORAS_ADJ, "Horas con Adj SSCC", "h", 0),
@@ -556,7 +599,10 @@ _DATOS = (
 # los FD"): igual, o "sin dato" si ninguna planilla lo trae.
 _SIEMPRE = (C_FD_CPF, C_FD_CSF)
 # "28 de 31": los ciclos/ventanas con monto, sobre los del mes.
-_DE_TOTAL = {C_EC_CICLOS: C_EC_CICLOS_MES, C_RE_VENTANAS: C_RE_VENTANAS_MES}
+_DE_TOTAL = {
+    C_EC_CICLOS: C_EC_CICLOS_MES, C_RE_VENTANAS: C_RE_VENTANAS_MES,
+    C_NP_CPF: C_FDH_CPF, C_NP_CSF: C_FDH_CSF,
+}
 
 
 def datos_lado_a_lado(actual, anterior):
