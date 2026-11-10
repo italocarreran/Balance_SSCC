@@ -27,7 +27,7 @@ from .estructura import SECCIONES_CONSOLIDADO, SECCIONES_PAGOS
 from .fma import cargar_tablas_fma
 from .hojas_entrada import (
     construir_fd, leer_cmg, leer_cmg_consolidado, leer_fd_consolidado,
-    reponer_auxiliares_subastas,
+    reponer_auxiliares_subastas, subastas_con_nombre_balance_bess,
 )
 from .lectura import (
     construir_homologacion, leer_centrales, leer_centrales_planilla,
@@ -722,6 +722,11 @@ def calcular_hoja_re545(
     df_subastas_re545 = subastas_con_fd_y_fma(
         df_subastas, df_fd_csf, df_fd_cpf, tablas_fma, diccionario,
         registrar=registrar,
+    )
+    # L y las reservas cruzan con la central de la hoja (nombre
+    # Balance_BESS); el FD y el FMA de arriba necesitan el de Subastas.
+    df_subastas_re545 = subastas_con_nombre_balance_bess(
+        df_subastas_re545, diccionario, registrar=registrar
     )
     df_re545_base = completar_calculo_re545(
         df_re545, df_subastas_re545, dic_capacidad,

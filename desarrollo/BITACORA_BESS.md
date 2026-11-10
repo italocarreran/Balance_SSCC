@@ -6071,3 +6071,20 @@ ventana con xvfb. 332 pruebas.
   `proceso.generar_consolidado` ya no lee Centrales para esto.
 - Pruebas: test_subastas_hoja_y_cambio_hora (test_sin_propietario y la hoja
   del consolidado sin la columna).
+
+## 2026-11-10 (36) — Subastas con otro nombre que Balance_BESS
+
+- Pedido: salió una central que en Subastas se llama distinto que en la
+  columna Balance_BESS del Diccionario (hasta ahora siempre iguales), y el
+  cálculo la buscaba en Subastas con el nombre Balance BESS. Los cruces
+  contra Subastas que comparaban `Configuración` directo con la central de la
+  hoja: L (Adj SSCC) de E Costos y RE545, la prorrata SSCC de E Costos y las
+  reservas (AC:AT) de RE545.
+- `hojas_entrada.subastas_con_nombre_balance_bess`: copia de Subastas con
+  `Configuración` traducida por el Diccionario (Subastas -> Balance_BESS);
+  sin entrada en el Diccionario queda igual. Se aplica al entrar a
+  `completar_calculo_e_costos_grupos` y en `calcular_hoja_re545` DESPUÉS de
+  `subastas_con_fd_y_fma` (FD y FMA traducen desde el nombre de Subastas). La
+  hoja Subastas no cambia. Cada traducción se anota en el registro.
+- Pruebas: test_subastas_nombre_balance (5; las dos de cableado fallan con el
+  código anterior).

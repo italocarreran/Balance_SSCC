@@ -11,7 +11,10 @@ from .parametros import (
     COLUMNA_CENTRAL, HOJA_CMG_ORIGEN, HOJA_CPF_HORARIO, HOJA_CSF_HORARIO,
 )
 from .lector import abrir_excel, leer_excel
-from .lectura import fila_de_encabezado, leer_hoja_con_fila_vacia
+from .lectura import (
+    ROL_BALANCE_BESS, ROL_SUBASTAS, fila_de_encabezado,
+    leer_hoja_con_fila_vacia, mapa_diccionario,
+)
 from .utiles import ErrorEntrada, _entero_a_texto, _texto_seguro
 
 
@@ -512,6 +515,53 @@ def subastas_para_hoja(df_subastas):
             if c in df_subastas
         ],
     )
+
+
+def subastas_con_nombre_balance_bess(df_subastas, diccionario, registrar=print):
+    """
+    Copia de Subastas con 'Configuración' traducida al nombre
+    Balance_BESS de la central, por el Diccionario (columna Subastas ->
+    columna Balance_BESS). Es el nombre con que la central esta en
+    Medidores y en las dos hojas de calculo, asi que los cruces contra
+    Subastas (L Adj SSCC, la prorrata SSCC de E Costos y las reservas
+    de RE545) tienen que usar este.
+
+    Pedido del usuario (2026-11-10): "hay una central que en la columna
+    Balance_BESS se llama diferente a como se llama en subasta y la
+    esta buscando en subastas con el nombre de Balance BESS". Hasta ese
+    mes se llamaban siempre igual. Un nombre que no esta en el
+    Diccionario queda tal cual (como antes). La hoja Subastas no cambia:
+    se traduce solo para el calculo. FD y FMA NO deben recibir esta
+    copia: ellos traducen desde el nombre de Subastas.
+    """
+
+    if (
+        df_subastas is None or diccionario is None
+        or "Configuración" not in df_subastas
+    ):
+        return df_subastas
+    mapa = mapa_diccionario(diccionario, ROL_SUBASTAS, ROL_BALANCE_BESS)
+    if not mapa:
+        return df_subastas
+
+    from .utiles import normalizar
+
+    originales = df_subastas["Configuración"]
+    traducidos = originales.map(
+        lambda nombre: _texto_seguro(mapa.get(normalizar(nombre), "")) or nombre
+    )
+    cambios = sorted({
+        (str(a), str(b)) for a, b in zip(originales, traducidos)
+        if normalizar(a) != normalizar(b)
+    })
+    for de, a in cambios:
+        registrar(
+            f"  Subastas: '{de}' se cruza como '{a}' (Diccionario, nombre "
+            f"Balance_BESS)."
+        )
+    if not cambios:
+        return df_subastas
+    return df_subastas.assign(**{"Configuración": traducidos})
 
 
 def reponer_auxiliares_subastas(df_subastas):
