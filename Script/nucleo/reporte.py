@@ -63,11 +63,13 @@ C_RESERVA = "Reserva con FD y FMA [kWh]"
 C_FD_CPF = "FD CPF promedio"
 C_FD_CSF = "FD CSF promedio"
 C_OFERTA_DIAS = "Días con oferta completa"
+C_DIAS = "Días en el mes"
+C_HORAS_SUB = "Horas adjudicadas"
 
 COLUMNAS_RESUMEN = (
-    C_CENTRAL, C_EMPRESA, C_ECOSTOS, C_RE545, C_TOTAL, C_DESCARGA, C_CARGA,
-    C_CMG, C_HORAS_ADJ, C_ADJ_CPF, C_ADJ_CSF, C_RESERVA, C_FD_CPF, C_FD_CSF,
-    C_OFERTA_DIAS,
+    C_CENTRAL, C_EMPRESA, C_ECOSTOS, C_RE545, C_TOTAL, C_DIAS, C_DESCARGA,
+    C_CARGA, C_CMG, C_HORAS_ADJ, C_HORAS_SUB, C_ADJ_CPF, C_ADJ_CSF, C_RESERVA,
+    C_FD_CPF, C_FD_CSF, C_OFERTA_DIAS,
 )
 
 # Un cambio menor a esto (en % y en plata) no se comenta.
@@ -198,6 +200,25 @@ def resumen_por_central(ruta_planilla, registrar=print):
     if re545 is not None:
         datos[C_RESERVA] = _por_central(re545, "Configuracion", "Reserva con FD y FMA")
 
+    # Dias del mes con medidas de la central: los de las dos hojas de
+    # calculo juntas (cada cuarto de hora va a una o a la otra), o los de
+    # Medidores si no hay calculo. Una central que entro a mitad de mes
+    # tiene menos (pedido del usuario: "este mes estuvo todo el mes y el
+    # mes pasado solo una parte").
+    dias_de = {}
+    for df, columna_central in ((ecostos, "Configuracion"), (re545, "Configuracion"),
+                                (medidores, "clave")):
+        central, dia = _col(df, columna_central), _col(df, "Dia")
+        if central is None or dia is None:
+            continue
+        mes = _col(df, "Mes")
+        clave_dia = dia.astype(str) if mes is None else mes.astype(str) + "-" + dia.astype(str)
+        for c, d in zip(central.map(normalizar), clave_dia):
+            if c:
+                dias_de.setdefault(c, set()).add(d)
+    if dias_de:
+        datos[C_DIAS] = {c: float(len(d)) for c, d in dias_de.items()}
+
     # --- lo adjudicado en Subastas, con el nombre Balance_BESS ---------------
     if subastas is not None and _col(subastas, "Configuración") is not None:
         subastas = subastas_con_nombre_balance_bess(
@@ -206,6 +227,16 @@ def resumen_por_central(ruta_planilla, registrar=print):
         anotar(subastas, "Configuración")
         servicio = _col(subastas, "Concepto").map(lambda v: _texto_seguro(v)[:3].upper()) \
             if _col(subastas, "Concepto") is not None else None
+        horas = _col(subastas, "Hora_mes")
+        if horas is not None:
+            # Horas distintas con algo adjudicado (cualquier servicio).
+            tabla_horas = pd.DataFrame({
+                "c": _col(subastas, "Configuración").map(normalizar).to_numpy(),
+                "h": horas.to_numpy(),
+            }).dropna()
+            datos[C_HORAS_SUB] = (
+                tabla_horas.drop_duplicates().groupby("c")["h"].size().astype(float).to_dict()
+            )
         energia = _col(subastas, "Energía SSCC")
         if servicio is not None and energia is not None:
             for codigo, columna in (("CPF", C_ADJ_CPF), ("CSF", C_ADJ_CSF)):
@@ -365,6 +396,8 @@ def reporte_corrida(resumen):
 
 # Que mira cada lado para explicar un cambio, y como se dice.
 _MOTORES_RE545 = (
+    (C_DIAS, "los días en el mes", "días"),
+    (C_HORAS_SUB, "las horas adjudicadas", "h"),
     (C_ADJ_CPF, "lo adjudicado en CPF", "MW"),
     (C_ADJ_CSF, "lo adjudicado en CSF", "MW"),
     (C_RESERVA, "la reserva con FD y FMA", "kWh"),
@@ -373,6 +406,8 @@ _MOTORES_RE545 = (
     (C_OFERTA_DIAS, "los días con oferta completa", "días"),
 )
 _MOTORES_ECOSTOS = (
+    (C_DIAS, "los días en el mes", "días"),
+    (C_HORAS_SUB, "las horas adjudicadas", "h"),
     (C_DESCARGA, "la descarga", "kWh"),
     (C_CARGA, "la carga", "kWh"),
     (C_CMG, "el CMg promedio", "CLP/kWh"),
@@ -434,7 +469,56 @@ def _frase_lado(lado, nuevo, viejo, actual, anterior, motores):
     razones = _motores(actual, anterior, motores, sube)
     if razones:
         return f"{cabeza}: {' y '.join(razones)}."
-    return f"{cabeza}, sin un cambio grande en sus entradas."
+    return f"{cabeza}, sin un cambio grande en sus entradas (ver Datos)."
+
+
+# Las cifras que van en la columna "Datos", en este orden.
+_DATOS = (
+    (C_DIAS, "Días en el mes", "", 0),
+    (C_HORAS_SUB, "Horas adjudicadas", "h", 0),
+    (C_ADJ_CPF, "Adjudicado CPF", "MW", 0),
+    (C_ADJ_CSF, "Adjudicado CSF", "MW", 0),
+    (C_OFERTA_DIAS, "Días con oferta completa", "", 0),
+    (C_FD_CPF, "FD CPF", "", 2),
+    (C_FD_CSF, "FD CSF", "", 2),
+    (C_DESCARGA, "Descarga", "kWh", 0),
+    (C_HORAS_ADJ, "Horas con Adj SSCC", "h", 0),
+)
+
+
+def datos_lado_a_lado(actual, anterior):
+    """
+    "Días en el mes: 9 → 31; Adjudicado CPF: 900 → 4.300 MW; ..." (pedido
+    del usuario: "la adjudicacion fue tanto vs tanto"). Sin ruido: solo
+    las cifras que cambiaron (1 % o mas), y nunca las que son 0 en los dos
+    meses. Una central que no estaba en una de las dos planillas muestra
+    solo los valores de la otra ("Adjudicado CPF: 10 MW" / "antes ...").
+    """
+
+    nueva, ya_no = not anterior, not actual
+    partes = []
+    for columna, nombre, unidad, decimales in _DATOS:
+        nuevo, viejo = actual.get(columna), anterior.get(columna)
+        if not _hay(nuevo) and not _hay(viejo):
+            continue
+        if (not _hay(nuevo) or nuevo == 0) and (not _hay(viejo) or viejo == 0):
+            continue
+        sufijo = f" {unidad}" if unidad else ""
+
+        def texto(valor):
+            return numero(valor, decimales) if _hay(valor) else "sin dato"
+
+        if nueva:
+            partes.append(f"{nombre}: {texto(nuevo)}{sufijo}")
+            continue
+        if ya_no:
+            partes.append(f"{nombre}: antes {texto(viejo)}{sufijo}")
+            continue
+        pct = _pct(nuevo, viejo)
+        if _hay(pct) and not math.isinf(pct) and abs(pct) < 1.0:
+            continue
+        partes.append(f"{nombre}: {texto(viejo)} → {texto(nuevo)}{sufijo}")
+    return "; ".join(partes)
 
 
 def comparar_resumenes(actual, anterior):
@@ -460,6 +544,12 @@ def comparar_resumenes(actual, anterior):
         if not fila_b:
             explicacion = f"Nueva: no estaba en la planilla anterior. Recibe {plata(total_a)}." \
                 if _hay(total_a) else "Nueva: no estaba en la planilla anterior."
+            # Si no recibe (o solo por un lado), el porque, como en el
+            # reporte de la corrida (pedido del usuario: "tenia
+            # adjudicacion, pero en todos los FD salia que no participa").
+            motivo = explicar_central(fila_a)
+            if motivo:
+                explicacion += f" {motivo}"
         elif not fila_a:
             explicacion = (f"Ya no está en esta planilla (antes recibía "
                            f"{plata(total_b)}).") if _hay(total_b) else "Ya no está en esta planilla."
@@ -471,16 +561,24 @@ def comparar_resumenes(actual, anterior):
                             fila_a, fila_b, _MOTORES_ECOSTOS),
             ]
             frases = [f for f in frases if f]
+            if frases and _hay(total_a) and total_a == 0:
+                # Quedo en cero: el porque.
+                frases.append(f"Queda en $0: {explicar_central(fila_a)}")
             if not frases:
                 sin_cambios.append(nombre)
             explicacion = " ".join(frases)
 
         delta = (total_a if _hay(total_a) else 0.0) - (total_b if _hay(total_b) else 0.0)
+        datos = (
+            datos_lado_a_lado(fila_a, fila_b)
+            if explicacion or abs(delta) >= CAMBIO_MINIMO_CLP else ""
+        )
         filas.append({
             C_CENTRAL: nombre, C_EMPRESA: empresa,
             "Total anterior [CLP]": total_b, "Total actual [CLP]": total_a,
             "Diferencia [CLP]": delta, "Diferencia [%]": _pct(total_a, total_b),
             "Explicación": explicacion,
+            "Datos (anterior → actual)": datos,
         })
 
     tabla = pd.DataFrame(filas)
@@ -603,7 +701,7 @@ def escribir_hoja_reporte(writer, hoja, lineas, tabla, titulo):
 
 FILA_ENCABEZADO_REPORTE = 3
 FILA_TITULOS_REPORTE = 2
-_TEXTOS_LARGOS = ("Resumen", "Observación", "Explicación")
+_TEXTOS_LARGOS = ("Resumen", "Observación", "Explicación", "Datos (anterior → actual)")
 
 
 def dar_formato_reporte(ws):
