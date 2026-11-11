@@ -12,10 +12,23 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
-- **Ventana más rápida (2026-11-11 (47)):** ejecutar
-  `desarrollo/PLAN_OPTIMIZACION_VENTANAS_BESS.md` (fases 1 a 5; la 6 solo si
-  el usuario lo pide). Antes, que el usuario conteste las decisiones D1 a D5
-  del §6 del plan, y que pruebe en Windows lo que acá no se pudo ver.
+- **Ventana más rápida (2026-11-11 (48)):** fases 1 a 5 del
+  `desarrollo/PLAN_OPTIMIZACION_VENTANAS_BESS.md` hechas, con los valores
+  por defecto de las decisiones D1–D5 (§6). Falta, del usuario:
+  - probar en **Windows** lo que acá no se puede ver: arranque en frío (que
+    "Cargando…" aparezca enseguida y después el árbol), que "Actualizar" ya
+    no haga parpadear el árbol, la rueda con touchpad (si no se nota
+    diferencia, se revierte la 4.2), que los diálogos aparezcan armados y
+    centrados, y una corrida completa de "Ejecutar todo" (registro y
+    `Registro_ultima_corrida.txt` completos);
+  - correr `python -X importtime Balance_BESS.py 2> importtime.txt` y mirar
+    si existe `Script/nucleo/__pycache__/` (si la carpeta del programa es de
+    solo lectura o está en red, Python recompila ~80 módulos en cada
+    arranque: `python -m compileall Script` o instalar en disco local);
+  - contestar D1/D2: si la carpeta del caso está en red u OneDrive y la
+    ventana se sigue congelando, hacer la Fase 6 (revisar en segundo plano).
+  - Fase 7 (opcionales: hojas sin abrir el libro, acciones repetidas) sin
+    hacer.
 
 - **Reliquidación enero 2601 — observaciones (2026-10-21, revisión con el
   usuario, sin cambios de código todavía):**
@@ -6336,3 +6349,61 @@ ventana con xvfb. 332 pruebas.
 - El cálculo no entra en el plan: ya se optimizó en (15), (16) y (19).
 
 **Verificación:** 437 pruebas, 0 salteadas (con tkinter y xvfb), sin cambios.
+
+## 2026-11-11 (48) — Ventana más rápida: fases 1 a 5 del plan
+
+- Pedido: "hay un plan de optimización en el repo para que lo tomes y
+  apliques". Se ejecutaron las fases 1 a 5 de
+  `desarrollo/PLAN_OPTIMIZACION_VENTANAS_BESS.md`, un commit por fase. Las
+  decisiones D1–D5 no se preguntaron: van sus valores por defecto (fase 6
+  sin hacer, cartel "Cargando…", diálogos centrados, `Balance_CRA.py` sin
+  tocar). Fase 7 (opcional) sin hacer.
+- **Fase 1** (`Ofertas_Adjudicadas.py`, `estructura.py`, `vigencia.py`):
+  `accdb_presentes` lee `DB subastas/` con un `os.scandir` (nombres con
+  `casefold` en Windows, tal cual en el resto: igual que `is_file()`);
+  `accdb_presentes_con_fecha` da además el `st_mtime` del más nuevo, que
+  `revisar_estructura` deja en `rutas["accdb_subastas_mtime"]` y
+  `vigencia._fechas` usa en vez de un `stat` por Access. Sin `is_file()`
+  repetidos en `revisar_estructura`.
+- **Fase 2** (`Balance_BESS.py`): `nucleo` ya no se importa arriba; `main()`
+  muestra la ventana con "Cargando…" y lo importa en un hilo
+  (`_importar_con_la_ventana_viva`, con `root.update()` mientras tanto:
+  `main()` sigue síncrona). Se usó el hilo (no el plan B). Cerrar la ventana
+  durante la carga termina sin traceback (ojo: tras un `destroy`, un
+  `root.update()` no siempre falla; se mira `winfo_exists`); si la carga
+  falla, `mostrar_error`. `ARCHIVO_REGISTRO` por `__getattr__` (PEP 562).
+- **Fase 3**: `pintar_arbol` reusa las filas si la forma del árbol es la
+  misma (`filas_vivas`, `_actualizar_fila`); `terminar` rehabilita los
+  botones. La jerarquía de widgets de la fila no cambió.
+- **Fase 4**: `ajustar` partido en dos (ancho solo si cambió / región);
+  la rueda hace un `yview_scroll` por cuadro (`after_idle`); el registro
+  escribe la cola por tandas de 400 (`MENSAJES_POR_TANDA`), baja al final
+  solo si ya estaba al final, y `terminar` la vacía entera
+  (`vaciar_cola_log(todo=True)`) antes de cerrar y guardar.
+- **Fase 5**: `presentar()` (y `_centrar` en `Script/dialogos.py`); "Ejecutar
+  todo" revisa la carpeta antes de abrir su ventana; instancia única de
+  "Ejecutar todo" y "Generar antecedentes SAE"; `filas_plan` /
+  `COLOR_ESTADO_PLAN`; `recordar_carpeta(..., ademas=)` no escribe si no
+  cambió nada y `usar_carpeta` escribe una vez; títulos "Planilla
+  11_PAGOS_BESS".
+- Pruebas nuevas: `test_accdb_presentes` (5), `test_arranque_liviano` (4),
+  `test_config_carpetas` (5), y en `test_ventana_actualizar` (3),
+  `test_ventana_registro` (1) y `test_ventana_ejecutar_todo` (2). Las clases
+  que heredan de `TestVentanaActualizar` anulan las 3 nuevas para no
+  correrlas dos veces. A mano bajo xvfb: "Crear la carpeta del caso",
+  "Carpeta del periodo" y `mostrar_error` aparecen visibles, centrados y con
+  el grab puesto (no hay prueba automática de esos tres).
+
+| Qué (`medir_ventana.py`, caso sintético, Linux) | Antes (47) | Después |
+|---|---|---|
+| `import Balance_BESS` (`-X importtime`) | 490–760 ms | ~34 ms, sin pandas |
+| Llamadas al disco por `revisar()` | 877 | 89 |
+| `revisar()` con 3 ms simulados por llamada | 2,85 s | 0,29 s |
+| Botón "Actualizar" (revisar + pintar) | 66 ms | 4 ms |
+| Widgets recreados al "Actualizar" sin cambios | 396 | 0 |
+| Abrir "Ejecutar todo" | 42–53 ms | 31 ms |
+
+**Verificación:** `py_compile` OK; 457 pruebas, OK, 0 salteadas (Python 3.12
++ tkinter + xvfb; antes 437). No se pudo probar en Windows: queda en
+"Pendientes abiertos".
+

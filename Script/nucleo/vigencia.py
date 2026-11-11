@@ -77,9 +77,13 @@ def _fechas(rutas, filas):
             ]
             fecha = max(selladas) if selladas else None
         elif id_fila == "db_subastas":
-            accdb = [_mtime(r) for r in rutas.get("accdb_subastas") or []]
-            accdb = [f for f in accdb if f is not None]
-            fecha = max(accdb) if accdb else None
+            if "accdb_subastas_mtime" in rutas:
+                # Ya la saco revisar_estructura de su lectura de la carpeta.
+                fecha = rutas["accdb_subastas_mtime"]
+            else:
+                accdb = [_mtime(r) for r in rutas.get("accdb_subastas") or []]
+                accdb = [f for f in accdb if f is not None]
+                fecha = max(accdb) if accdb else None
         elif fila.get("es_carpeta"):
             fecha = None
         elif fila.get("ruta"):

@@ -355,21 +355,22 @@ def revisar_estructura(carpeta_base, aamm=None):
 
     # Medidas_SAE.xlsx ya no se deja a mano: lo arma el programa desde
     # las dos APIs del Coordinador (ver generar_medidas_sae).
+    hay_medidas_sae = rutas["medidas_sae"].is_file()
     filas.append(
         _fila(
             "medidas_sae",
             ARCHIVO_MEDIDAS_SAE,
             1,
-            "ok" if rutas["medidas_sae"].is_file() else "falta",
+            "ok" if hay_medidas_sae else "falta",
             (
                 "se regenera con el boton ->"
-                if rutas["medidas_sae"].is_file()
+                if hay_medidas_sae
                 else "se genera con el boton -> (baja las medidas del mes)"
             ),
             ruta=rutas["medidas_sae"],
             aviso=(
                 aviso_puntos_fallidos(rutas["puntos_fallidos"])
-                if rutas["medidas_sae"].is_file() else None
+                if hay_medidas_sae else None
             ),
         )
     )
@@ -565,15 +566,16 @@ def revisar_estructura(carpeta_base, aamm=None):
             )
         )
     else:
+        hay_cmg_csv = rutas["cmg_csv"].is_file()
         filas.append(
             _fila(
                 "cmg_csv",
                 rutas["cmg_csv"].name,
                 1,
-                "ok" if rutas["cmg_csv"].is_file() else "falta",
+                "ok" if hay_cmg_csv else "falta",
                 (
                     f"en {CARPETA_CMG}/"
-                    if rutas["cmg_csv"].is_file()
+                    if hay_cmg_csv
                     else "se baja de la unidad de red con el boton ->"
                 ),
                 ruta=rutas["cmg_csv"],
@@ -581,15 +583,16 @@ def revisar_estructura(carpeta_base, aamm=None):
             )
         )
 
+    hay_cmg = rutas["cmg"].is_file()
     filas.append(
         _fila(
             "cmg_xlsx",
             ARCHIVO_CMG,
             1,
-            "ok" if rutas["cmg"].is_file() else "pendiente",
+            "ok" if hay_cmg else "pendiente",
             (
                 "se regenera desde el CSV de arriba ->"
-                if rutas["cmg"].is_file()
+                if hay_cmg
                 else "se genera desde el CSV de arriba ->"
             ),
             ruta=rutas["cmg"],
@@ -699,14 +702,18 @@ def revisar_estructura(carpeta_base, aamm=None):
     if rutas["subastas_dir"].is_dir():
         ofertas_adj.asegurar_carpeta_db(rutas["subastas_dir"])
 
-    accdb = (
-        ofertas_adj.accdb_presentes(rutas["subastas_dir"], aamm_valido)
-        if aamm_valido and rutas["db_subastas_dir"].is_dir()
-        else []
+    hay_db_subastas = rutas["db_subastas_dir"].is_dir()
+    accdb, accdb_mtime = (
+        ofertas_adj.accdb_presentes_con_fecha(rutas["subastas_dir"], aamm_valido)
+        if aamm_valido and hay_db_subastas
+        else ([], None)
     )
     rutas["accdb_subastas"] = [ruta for _, _, ruta in accdb]
+    # La fecha del Access mas nuevo sale de la misma lectura de la
+    # carpeta: vigencia.py la usa sin volver a preguntarle al disco.
+    rutas["accdb_subastas_mtime"] = accdb_mtime
 
-    if not rutas["db_subastas_dir"].is_dir():
+    if not hay_db_subastas:
         detalle_db = "no se pudo crear; revisa permisos"
         estado_db = "falta"
     elif accdb:
@@ -741,7 +748,8 @@ def revisar_estructura(carpeta_base, aamm=None):
             rutas["subastas_dir"], aamm_valido
         )
         rutas["subastas_xlsx"] = consolidado
-        if consolidado.is_file():
+        hay_consolidado = consolidado.is_file()
+        if hay_consolidado:
             estado_consolidado = "ok"
             detalle_consolidado = (
                 f"consolidado de los Access de {CARPETA_DB_SUBASTAS}/ - "
@@ -762,8 +770,8 @@ def revisar_estructura(carpeta_base, aamm=None):
             _fila(
                 "subastas_xlsx", consolidado.name, 1, estado_consolidado,
                 detalle_consolidado,
-                ruta=consolidado if consolidado.is_file() else rutas["subastas_dir"],
-                es_carpeta=not consolidado.is_file(),
+                ruta=consolidado if hay_consolidado else rutas["subastas_dir"],
+                es_carpeta=not hay_consolidado,
             )
         )
     else:
@@ -817,7 +825,8 @@ def revisar_estructura(carpeta_base, aamm=None):
     # todavia no se generaron vacias).
     completas = all(fila["estado"] == "ok" for fila in filas_hojas)
 
-    if not rutas["salida"].is_file():
+    hay_salida = rutas["salida"].is_file()
+    if not hay_salida:
         detalle_salida = "salida: se crea al actualizar la primera hoja ->"
     elif completas:
         detalle_salida = "salida: se actualiza hoja por hoja ->"
@@ -827,7 +836,7 @@ def revisar_estructura(carpeta_base, aamm=None):
     filas.append(
         _fila(
             "salida", rutas["salida"].name, 0,
-            "ok" if (rutas["salida"].is_file() and completas) else "pendiente",
+            "ok" if (hay_salida and completas) else "pendiente",
             detalle_salida,
             ruta=rutas["salida"],
         )

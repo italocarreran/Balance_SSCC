@@ -43,7 +43,7 @@ Script/nucleo/orquestador.py; esta ventana solo los dibuja.
             (fma_cft_<AAMM>.xlsx: oculto, FMA_CON_CTF = False)
         Subastas/
             DB subastas/                   [Traer]
-        Balance_BESS.xlsx                  [Actualizar]
+        11_PAGOS_BESS_AAMM.xlsx            [Actualizar]
             hoja 'Resumen'                 [Asignar]
             hoja 'PRORRATA_RETIROS'        [Traer]
             hoja 'COMPENSACION_CENTRAL'    [Resumir]
@@ -113,9 +113,100 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from Script import config, nucleo
+from Script import config
 from Script.arbol import _prefijos_arbol
 from Script.dialogos import mostrar_error
+
+# Script.nucleo (pandas, openpyxl y ~60 modulos: medio segundo o mas, en
+# Windows varias veces eso) NO se importa aca arriba: se carga en main()
+# con la ventana ya a la vista y respondiendo (cartel "Cargando..."). El
+# resto del archivo escribe nucleo.algo dentro de funciones que corren
+# despues de cargarlo. Ver PLAN_OPTIMIZACION_VENTANAS_BESS.md, Fase 2.
+nucleo = None
+
+
+def _cargar_nucleo():
+    """Importa Script.nucleo (una vez) y lo deja en el nombre `nucleo`."""
+
+    global nucleo
+    if nucleo is None:
+        from Script import nucleo as _nucleo
+        nucleo = _nucleo
+    return nucleo
+
+
+def __getattr__(nombre):
+    """Lo que antes se copiaba de nucleo al importar (PEP 562)."""
+
+    if nombre == "ARCHIVO_REGISTRO":
+        return _cargar_nucleo().ARCHIVO_REGISTRO
+    raise AttributeError(f"module {__name__!r} has no attribute {nombre!r}")
+
+
+# El hilo de verdad, aunque una prueba parchee threading.Thread para
+# correr los procesos en el mismo hilo.
+_HiloDeCarga = threading.Thread
+
+TEXTO_CARGANDO = "Cargando\u2026"
+
+
+def _ventana_viva(root):
+    """False si la ventana ya se cerro (un update() despues no siempre falla)."""
+
+    try:
+        return bool(root.winfo_exists())
+    except tk.TclError:
+        return False
+
+
+def _importar_con_la_ventana_viva(root):
+    """
+    Carga nucleo en un hilo mientras la ventana sigue respondiendo (se
+    puede mover, no queda "No responde"). Devuelve False si la cerraron
+    mientras cargaba o si la carga fallo (en ese caso ya se mostro el
+    error y se cerro la ventana).
+    """
+
+    if nucleo is not None:
+        return True
+
+    resultado = {}
+
+    def cargar():
+        try:
+            _cargar_nucleo()
+        except BaseException as error:  # se muestra en el hilo principal
+            resultado["error"] = error
+
+    hilo = _HiloDeCarga(target=cargar, name="cargar-nucleo", daemon=True)
+    hilo.start()
+
+    while hilo.is_alive():
+        try:
+            root.update()
+        except tk.TclError:
+            return False  # cerraron la ventana mientras cargaba
+        if not _ventana_viva(root):
+            return False
+        time.sleep(0.01)
+
+    if not _ventana_viva(root):
+        return False
+
+    if "error" in resultado:
+        error = resultado["error"]
+        try:
+            mostrar_error(
+                "No se pudo cargar el programa",
+                "".join(traceback.format_exception(error)),
+                parent=root,
+            )
+            root.destroy()
+        except tk.TclError:
+            pass
+        return False
+
+    return True
 
 
 COLOR_OK = "#1a6b1a"
@@ -148,8 +239,8 @@ COLOR_REGISTRO = {
 }
 
 # Donde queda el registro de la ultima corrida, en la carpeta Log/ del
-# caso (para poder mandarlo sin copiar a mano).
-ARCHIVO_REGISTRO = nucleo.ARCHIVO_REGISTRO
+# caso (para poder mandarlo sin copiar a mano): nucleo.ARCHIVO_REGISTRO,
+# que tambien se lee como Balance_BESS.ARCHIVO_REGISTRO (ver __getattr__).
 
 _PATRON_ERROR = re.compile(
     r"\bERROR\b|Traceback|\bNO se corre\b|: error\b|termino con problemas",
@@ -228,6 +319,10 @@ LINEAS_POR_MUESCA = 3      # cuantas lineas baja el registro por muesca
 # Windows/macOS mandan <MouseWheel>; X11 manda los botones 4 y 5.
 EVENTOS_RUEDA = ("<MouseWheel>", "<Button-4>", "<Button-5>")
 
+# Cuantos mensajes del hilo de trabajo se escriben en el registro por
+# pasada (ver vaciar_cola_log): una rafaga grande no congela la ventana.
+MENSAJES_POR_TANDA = 400
+
 
 # ============================================================
 # CONFIG POR PC/USUARIO
@@ -298,26 +393,34 @@ def carpeta_recordada(aamm):
         return ""
 
 
-def recordar_carpeta(aamm, ruta):
+def recordar_carpeta(aamm, ruta, ademas=None):
     """
     Deja anotado que 'ruta' es la carpeta del periodo 'aamm'. Si esa
     carpeta estaba anotada como la de OTRO periodo, se le saca: una
     carpeta pertenece a un solo periodo.
+
+    Si ya estaba anotada asi, no se escribe nada (config.json es
+    compartido y puede estar en red). 'ademas' son otras claves a
+    guardar en la MISMA escritura (usar_carpeta guarda tambien la
+    carpeta base).
     """
 
-    if not aamm or not ruta:
-        return
+    datos = dict(ademas or {})
 
-    ruta = str(ruta)
+    if aamm and ruta:
+        ruta = str(ruta)
+        actuales = carpetas_por_periodo()
+        carpetas = {
+            periodo: otra
+            for periodo, otra in actuales.items()
+            if periodo == str(aamm) or otra != ruta
+        }
+        carpetas[str(aamm)] = ruta
+        if carpetas != actuales:
+            datos[CLAVE_CARPETAS_PERIODO] = carpetas
 
-    carpetas = {
-        periodo: otra
-        for periodo, otra in carpetas_por_periodo().items()
-        if periodo == str(aamm) or otra != ruta
-    }
-    carpetas[str(aamm)] = ruta
-
-    guardar_config({CLAVE_CARPETAS_PERIODO: carpetas})
+    if datos:
+        guardar_config(datos)
 
 
 def carpeta_a_abrir(ruta, es_archivo=False):
@@ -423,26 +526,46 @@ def formato_tiempo(segundos):
 
 def main():
 
-    # Los tokens de las APIs pasan solos a __config__/tks.json la primera
-    # vez (antes estaban en "claves_api" del config.json local).
-    config.migrar_tokens()
-    cfg = leer_config()
-
+    # La ventana primero, con un cartel: lo pesado (nucleo) se importa
+    # con ella ya a la vista.
     root = tk.Tk()
     root.title("Balance BESS / SSCC")
     root.geometry("1180x820")
+    cartel = tk.Label(
+        root, text=TEXTO_CARGANDO, font=("Segoe UI", 11), fg=COLOR_NEUTRO,
+    )
+    cartel.pack(expand=True)
+    try:
+        root.update()                      # la ventana ya se ve
+    except tk.TclError:
+        return
+    if not _ventana_viva(root):
+        return
+
+    if not _importar_con_la_ventana_viva(root):
+        return                             # la cerraron mientras cargaba
+    cartel.destroy()
+
+    # Los tokens de las APIs pasan solos a __config__/tks.json la primera
+    # vez (antes estaban en "claves_api" del config.json local). Va
+    # despues de mostrar la ventana: __config__ puede estar en red.
+    config.migrar_tokens()
+    cfg = leer_config()
 
     var_base = tk.StringVar(value=cfg.get("carpeta_base", ""))
     var_aamm = tk.StringVar(value=cfg.get("aamm", ""))
     var_estado = tk.StringVar(value="Listo")
     var_tiempo = tk.StringVar(value="00:00:00")
 
-    # Los botones viven DENTRO de las filas del arbol, que se repinta
-    # entero en cada revisar(): se guardan por id de fila para poder
-    # deshabilitarlos mientras corre algo, y se renuevan en cada
-    # pintado.
+    # Los botones viven DENTRO de las filas del arbol: se guardan por id
+    # de fila para poder deshabilitarlos mientras corre algo, y se
+    # renuevan cada vez que el arbol se rehace entero.
     botones_arbol = {}
     corriendo = {"activo": False}
+    # Las filas ya dibujadas (por id) y lo ultimo que se pinto: con eso
+    # pintar_arbol cambia solo lo que cambio (ver pintar_arbol).
+    filas_vivas = {}
+    arbol_pintado = {"forma": None, "contenido": {}}
 
     # --------------------------------------------------------
     # BOTONES FIJOS ABAJO (primero, para que no los tape nada)
@@ -469,12 +592,24 @@ def main():
     contenedor = tk.Frame(canvas)
     ventana_canvas = canvas.create_window((0, 0), window=contenedor, anchor="nw")
 
+    # Dos ataduras separadas: el canvas que cambia de tamaño solo ajusta
+    # el ancho de lo de adentro (y solo si cambio), y lo de adentro que
+    # cambia solo ajusta la region desplazable. Antes las dos hacian las
+    # dos cosas y una disparaba a la otra.
+    ancho_pintado = {}
+
+    def ajustar_ancho(lienzo, ventana_interna, event):
+        if ancho_pintado.get(str(lienzo)) != event.width:
+            ancho_pintado[str(lienzo)] = event.width
+            lienzo.itemconfig(ventana_interna, width=event.width)
+
     def ajustar(event=None):
         canvas.configure(scrollregion=canvas.bbox("all"))
-        canvas.itemconfig(ventana_canvas, width=canvas.winfo_width())
 
     contenedor.bind("<Configure>", ajustar)
-    canvas.bind("<Configure>", ajustar)
+    canvas.bind(
+        "<Configure>", lambda e: ajustar_ancho(canvas, ventana_canvas, e)
+    )
 
     # --------------------------------------------------------
     # RUEDA DEL MOUSE
@@ -525,6 +660,29 @@ def main():
         resto_rueda[clave] = total - entero
         return entero
 
+    # Un desplazamiento por cuadro, no por evento: un touchpad de
+    # precision manda decenas de eventos por segundo y cada yview_scroll
+    # redibuja el arbol. Los pixeles se suman y se aplican de una vez
+    # cuando Tk queda libre (after_idle: en el mismo update()).
+    desplazamiento_pendiente = {}
+
+    def _desplazar_por_cuadro(lienzo, pixeles):
+        clave = str(lienzo)
+        if clave in desplazamiento_pendiente:
+            desplazamiento_pendiente[clave] += pixeles
+            return
+        desplazamiento_pendiente[clave] = pixeles
+
+        def aplicar():
+            total = desplazamiento_pendiente.pop(clave, 0)
+            if total:
+                try:
+                    lienzo.yview_scroll(total, "units")
+                except tk.TclError:
+                    pass  # se cerro la ventana del lienzo
+
+        root.after_idle(aplicar)
+
     def _desplazar_ventana(muescas):
         # scrollregion mas chica que lo visible = no hay nada que
         # desplazar; sin esto la ventana "tiembla" con la rueda.
@@ -533,7 +691,7 @@ def main():
             return
         pixeles = _acumular("ventana", muescas * PIXELES_POR_MUESCA)
         if pixeles:
-            canvas.yview_scroll(pixeles, "units")
+            _desplazar_por_cuadro(canvas, pixeles)
 
     def _muescas(event):
         """Muescas de rueda de este evento (negativo = hacia arriba)."""
@@ -788,6 +946,46 @@ def main():
         celda.pack_propagate(False)
         return celda
 
+    def presentar(top, modal=False, ancho=None, alto=None):
+        """
+        Muestra un Toplevel ya construido (se crea con withdraw()),
+        centrado sobre la ventana principal: asi aparece de una vez, en
+        vez de verse armarse. Una ventana oculta todavia no tiene tamaño
+        real: se usa el pedido, o el que se le fijo (ancho, alto).
+        """
+
+        top.update_idletasks()
+        ancho = ancho or top.winfo_reqwidth()
+        alto = alto or top.winfo_reqheight()
+        x = root.winfo_rootx() + (root.winfo_width() - ancho) // 2
+        y = root.winfo_rooty() + (root.winfo_height() - alto) // 3
+        top.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+        top.deiconify()
+        if modal:
+            # En este orden: un grab_set sobre una ventana oculta falla
+            # ("grab failed: window not viewable").
+            top.wait_visibility()
+            top.grab_set()
+
+    # "Ejecutar todo" y "Generar antecedentes SAE" son de una sola
+    # instancia: un segundo click trae al frente la que ya esta abierta.
+    dialogos_abiertos = {}
+
+    def traer_al_frente(clave):
+        """True si ya habia una ventana abierta de esas (y quedo al frente)."""
+
+        top = dialogos_abiertos.get(clave)
+        try:
+            if top is not None and top.winfo_exists():
+                top.deiconify()
+                top.lift()
+                top.focus_set()
+                return True
+        except tk.TclError:
+            pass
+        dialogos_abiertos.pop(clave, None)
+        return False
+
     def ventana_aviso(aviso):
         """
         El cuadro que abre el simbolo de aviso de una fila: el mensaje,
@@ -796,6 +994,7 @@ def main():
         """
 
         ventana = tk.Toplevel(root)
+        ventana.withdraw()
         ventana.title(aviso.get("titulo", "Aviso"))
         ventana.transient(root)
         ventana.resizable(False, False)
@@ -837,7 +1036,7 @@ def main():
         ).pack(side="right", padx=6)
 
         ventana.bind("<Escape>", lambda e: ventana.destroy())
-        ventana.grab_set()
+        presentar(ventana, modal=True)
         ventana.focus_set()
         return ventana
 
@@ -898,13 +1097,14 @@ def main():
 
         celda_estado = _celda(fila, ANCHO_ESTADO, alto)
 
-        tk.Label(
+        lbl_estado = tk.Label(
             celda_estado,
             text=SIMBOLO.get(estado, estado) if estado is not None else "",
             anchor="w",
             fg=COLOR_ESTADO.get(estado, COLOR_NEUTRO),
             font=("Segoe UI", 9, "bold"),
-        ).pack(side="left")
+        )
+        lbl_estado.pack(side="left")
 
         celda_accion = _celda(fila, ANCHO_ACCION, alto)
 
@@ -927,13 +1127,7 @@ def main():
         celda_origen.pack(side="left", fill="x", expand=True)
 
         # El aviso va primero, pegado al boton: es lo que hay que ver.
-        if aviso:
-            simbolo = tk.Label(
-                celda_origen, text=SIMBOLO_AVISO, fg=COLOR_AVISO,
-                cursor="hand2", font=("Segoe UI", 12, "bold"),
-            )
-            simbolo.pack(side="left", padx=(0, 8))
-            simbolo.bind("<Button-1>", lambda e, a=aviso: ventana_aviso(a))
+        simbolo = _simbolo_aviso(celda_origen, aviso) if aviso else None
 
         if origen:
 
@@ -959,7 +1153,67 @@ def main():
                 lambda e, i=origen["id"]: abrir_origen(i),
             )
 
+        if id_fila is not None:
+            # Lo que puede cambiar sin rehacer la fila (ver pintar_arbol).
+            filas_vivas[id_fila] = {
+                "etiqueta": etiqueta, "estado": lbl_estado,
+                "celda_origen": celda_origen, "simbolo": simbolo,
+                "estilo": estilo,
+            }
+
         return fila
+
+    def _simbolo_aviso(celda_origen, aviso):
+        """El simbolo de aviso de una fila, primero en su celda de origen."""
+
+        simbolo = tk.Label(
+            celda_origen, text=SIMBOLO_AVISO, fg=COLOR_AVISO,
+            cursor="hand2", font=("Segoe UI", 12, "bold"),
+        )
+        hermanos = celda_origen.pack_slaves()
+        if hermanos:
+            simbolo.pack(side="left", padx=(0, 8), before=hermanos[0])
+        else:
+            simbolo.pack(side="left", padx=(0, 8))
+        simbolo.bind("<Button-1>", lambda e, a=aviso: ventana_aviso(a))
+        return simbolo
+
+    def _actualizar_fila(id_fila, fila):
+        """Cambia en el lugar lo que cambio de una fila ya dibujada."""
+
+        piezas = filas_vivas[id_fila]
+        ruta = fila.get("ruta", "")
+        es_carpeta = fila.get("es_carpeta", False)
+        estilo = piezas["estilo"]
+
+        etiqueta = piezas["etiqueta"]
+        etiqueta.config(
+            text=fila["etiqueta"],
+            font=("Consolas", 9, f"{estilo} underline" if ruta else estilo),
+            fg=COLOR_LINK if ruta else "black",
+            cursor="hand2" if ruta else "",
+        )
+        if ruta:
+            etiqueta.bind(
+                "<Button-1>",
+                lambda e, r=ruta, c=es_carpeta: abrir_ruta_de_fila(r, c),
+            )
+        else:
+            etiqueta.unbind("<Button-1>")
+
+        estado = fila["estado"]
+        piezas["estado"].config(
+            text=SIMBOLO.get(estado, estado) if estado is not None else "",
+            fg=COLOR_ESTADO.get(estado, COLOR_NEUTRO),
+        )
+
+        if piezas["simbolo"] is not None:
+            piezas["simbolo"].destroy()
+            piezas["simbolo"] = None
+        if fila.get("aviso"):
+            piezas["simbolo"] = _simbolo_aviso(
+                piezas["celda_origen"], fila["aviso"]
+            )
 
     def _boton_de_fila(id_fila):
         """
@@ -1030,12 +1284,48 @@ def main():
 
         return None
 
+    def _contenido(fila):
+        """Lo de una fila que se puede cambiar sin rehacerla."""
+
+        return (
+            fila["etiqueta"], fila["estado"], str(fila.get("ruta", "")),
+            fila.get("es_carpeta", False), fila.get("aviso"),
+        )
+
     def pintar_arbol(filas):
+        """
+        Dibuja el arbol. Si tiene la misma FORMA que el que ya esta (las
+        mismas filas, en el mismo orden y con el mismo origen), solo se
+        cambia lo que cambio de cada una: sin destruir y recrear los
+        ~400 widgets en cada "Actualizar" (en Windows eso parpadea). Si
+        la forma cambio, se rehace entero.
+        """
+
+        prefijos = _prefijos_arbol([fila["nivel"] for fila in filas]) if filas else []
+        forma = tuple(
+            (
+                fila["id"], fila["nivel"], prefijo,
+                tuple(sorted((fila.get("origen") or {}).items())),
+            )
+            for fila, prefijo in zip(filas, prefijos)
+        ) if filas and all(fila["id"] != "error" for fila in filas) else None
+
+        if forma is not None and forma == arbol_pintado["forma"]:
+            for fila in filas:
+                contenido = _contenido(fila)
+                if contenido != arbol_pintado["contenido"].get(fila["id"]):
+                    _actualizar_fila(fila["id"], fila)
+                    arbol_pintado["contenido"][fila["id"]] = contenido
+            habilitar_botones(not corriendo["activo"])
+            return
 
         for hijo in filas_arbol.winfo_children():
             hijo.destroy()
 
         botones_arbol.clear()
+        filas_vivas.clear()
+        arbol_pintado["forma"] = forma
+        arbol_pintado["contenido"] = {}
 
         if not filas:
             tk.Label(
@@ -1046,9 +1336,8 @@ def main():
             ).pack(fill="x")
             return
 
-        prefijos = _prefijos_arbol([fila["nivel"] for fila in filas])
-
         for fila, prefijo in zip(filas, prefijos):
+            arbol_pintado["contenido"][fila["id"]] = _contenido(fila)
             _fila_arbol(
                 filas_arbol,
                 prefijo,
@@ -1159,22 +1448,44 @@ def main():
         txt_log.see("end")
 
     # Los mensajes del hilo de trabajo llegan a esta cola y se escriben de
-    # a tandas cada 100 ms (antes, un root.after por mensaje).
+    # a tandas cada 100 ms (antes, un root.after por mensaje). Cada tanda
+    # tiene tope: una rafaga de miles de lineas se escribe en varias
+    # pasadas seguidas (cada 10 ms) en vez de congelar la ventana.
     cola_log = queue.Queue()
+    sondeo_log = {"programado": None}
 
-    def vaciar_cola_log():
-        hubo = False
-        while True:
+    def vaciar_cola_log(todo=False):
+        """
+        Escribe en el registro lo que llego por la cola. todo=True la
+        vacia entera (al terminar un proceso, antes de la linea de
+        cierre y de guardar el registro); si no, como mucho
+        MENSAJES_POR_TANDA por pasada.
+        """
+
+        if sondeo_log["programado"] is not None:
+            try:
+                root.after_cancel(sondeo_log["programado"])
+            except tk.TclError:
+                pass
+            sondeo_log["programado"] = None
+
+        # Solo se baja al final si ya se estaba al final: asi se puede
+        # leer hacia arriba durante una corrida.
+        al_final = txt_log.yview()[1] >= 0.999
+        escritos = 0
+        while todo or escritos < MENSAJES_POR_TANDA:
             try:
                 ahora, mensaje = cola_log.get_nowait()
             except queue.Empty:
                 break
             _insertar_log(mensaje, ahora)
-            hubo = True
-        if hubo:
+            escritos += 1
+        if escritos and al_final:
             txt_log.see("end")
-        if corriendo["activo"] or not cola_log.empty():
-            root.after(100, vaciar_cola_log)
+        if not cola_log.empty():
+            sondeo_log["programado"] = root.after(10, vaciar_cola_log)
+        elif corriendo["activo"]:
+            sondeo_log["programado"] = root.after(100, vaciar_cola_log)
 
     def registrar_desde_hilo(mensaje):
         cola_log.put((time.time(), mensaje))
@@ -1186,7 +1497,7 @@ def main():
         if not base or not os.path.isdir(base):
             return None
         carpeta_log = os.path.join(base, nucleo.CARPETA_LOG)
-        ruta = os.path.join(carpeta_log, ARCHIVO_REGISTRO)
+        ruta = os.path.join(carpeta_log, nucleo.ARCHIVO_REGISTRO)
         try:
             os.makedirs(carpeta_log, exist_ok=True)
             with open(ruta, "w", encoding="utf-8") as archivo:
@@ -1276,7 +1587,6 @@ def main():
         ruta = str(ruta)
 
         var_base.set(ruta)
-        guardar_config({"carpeta_base": ruta})
 
         aamm = var_aamm.get().strip()
 
@@ -1285,8 +1595,10 @@ def main():
         except nucleo.ErrorEntrada:
             aamm = ""
 
+        # Una sola escritura de config.json: la carpeta base y, si hay
+        # periodo, la carpeta de ese periodo.
+        recordar_carpeta(aamm, ruta, ademas={"carpeta_base": ruta})
         if aamm:
-            recordar_carpeta(aamm, ruta)
             log(f"Carpeta del periodo {aamm}: {ruta}")
         else:
             log(f"Carpeta base: {ruta}")
@@ -1407,6 +1719,7 @@ def main():
         base = var_base.get()
 
         top = tk.Toplevel(root)
+        top.withdraw()
         top.title(f"Carpeta del periodo {aamm}")
         top.transient(root)
         top.resizable(False, False)
@@ -1482,7 +1795,7 @@ def main():
 
         top.protocol("WM_DELETE_WINDOW", lambda: cerrar(False))
 
-        top.grab_set()
+        presentar(top, modal=True)
         root.wait_window(top)
 
         # Sin carpeta para el periodo nuevo se vuelve al anterior: la
@@ -1630,13 +1943,13 @@ def main():
         "consolidar_subastas": "Consolidar subastas",
         "generar_cmg": "Generar cmg.xlsx",
         "generar_medidas_sae": "Actualizar Medidas_SAE",
-        "generar_consolidado": "Balance_BESS.xlsx (entradas)",
-        "generar_pagos_bess": "Balance_BESS.xlsx (calculo)",
+        "generar_consolidado": "Planilla 11_PAGOS_BESS (entradas)",
+        "generar_pagos_bess": "Planilla 11_PAGOS_BESS (calculo)",
         "ejecutar_plan": "Ejecutar todo",
         "generar_csv_sae": "Generar SAE_AAMM.csv",
         "generar_reporte_corrida": "Generar reporte de la corrida",
         "generar_antecedentes": "Generar antecedentes SAE",
-        "correr": "Balance_BESS.xlsx (entradas y calculo)",
+        "correr": "Planilla 11_PAGOS_BESS (entradas y calculo)",
     }
 
     def titulo_de(funcion, kwargs):
@@ -1701,7 +2014,7 @@ def main():
         def terminar(res):
             timer["corriendo"] = False
             corriendo["activo"] = False
-            vaciar_cola_log()
+            vaciar_cola_log(todo=True)
 
             duracion = time.time() - timer["inicio"]
             log("")
@@ -1715,8 +2028,9 @@ def main():
                 log(f"Registro guardado en {guardado}")
             inicio_log["t"] = None
 
-            # revisar() repinta el arbol entero (y con el, todos los
-            # botones): no hace falta rehabilitarlos a mano.
+            # El arbol ya no se rehace entero en cada revisar() (reusa
+            # las filas): los botones se rehabilitan aca.
+            habilitar_botones(True)
             revisar()
 
             if res["ok"]:
@@ -2109,6 +2423,7 @@ def main():
             nombre_inicial = base_actual.name if base_actual else "Caso nuevo"
 
         top = tk.Toplevel(root)
+        top.withdraw()
         top.title("Crear la carpeta del caso")
         top.geometry("760x460")
         top.transient(root)
@@ -2229,7 +2544,7 @@ def main():
             side="right", padx=8
         )
 
-        top.grab_set()
+        presentar(top, modal=True, ancho=760, alto=460)
         root.wait_window(top)
 
         return resultado["ok"]
@@ -2249,6 +2564,9 @@ def main():
         dibuja y devuelve la seleccion.
         """
 
+        if traer_al_frente("ejecutar_todo"):
+            return
+
         ruta = caso_listo()
         if ruta is None:
             return
@@ -2262,10 +2580,25 @@ def main():
         # ser el set que el usuario va tildando.
         seleccion = {"ids": None}
 
+        # La lista se arma UNA vez y despues solo se actualizan sus
+        # valores (pedido del usuario: "cuando selecciono una casilla hace
+        # un parpadeo"). Antes cada tilde borraba y volvia a crear todas
+        # las filas -y volvia a revisar la carpeta entera-, y la lista
+        # quedaba en blanco un instante. La estructura de la carpeta no
+        # cambia mientras la ventana esta abierta: se revisa al abrirla,
+        # ANTES de crear la ventana (si falla no queda una vacia abierta).
+        try:
+            _, filas_plan = nucleo.revisar_estructura(ruta, aamm)
+        except Exception as error:  # noqa: BLE001 - se muestra
+            mostrar_error("No se pudo revisar la carpeta", str(error))
+            return
+
         top = tk.Toplevel(root)
+        top.withdraw()
         top.title("Ejecutar todo")
         top.geometry("900x640")
         top.transient(root)
+        dialogos_abiertos["ejecutar_todo"] = top
 
         tk.Label(
             top,
@@ -2295,10 +2628,11 @@ def main():
 
         def ajustar_lista(event=None):
             lienzo.configure(scrollregion=lienzo.bbox("all"))
-            lienzo.itemconfig(ventana_lista, width=lienzo.winfo_width())
 
         lista.bind("<Configure>", ajustar_lista)
-        lienzo.bind("<Configure>", ajustar_lista)
+        lienzo.bind(
+            "<Configure>", lambda e: ajustar_ancho(lienzo, ventana_lista, e)
+        )
 
         frame_avisos = tk.LabelFrame(
             top, text="Para poder ejecutar", padx=8, pady=6
@@ -2318,7 +2652,7 @@ def main():
                 return
             pixeles = _acumular("ejecutar_todo", muescas * PIXELES_POR_MUESCA)
             if pixeles:
-                lienzo.yview_scroll(pixeles, "units")
+                _desplazar_por_cuadro(lienzo, pixeles)
 
         def desplazar_avisos(muescas):
             lineas = _acumular("ejecutar_todo_avisos", muescas * LINEAS_POR_MUESCA)
@@ -2348,13 +2682,6 @@ def main():
 
         estado_plan = {"plan": None}
 
-        # La lista se arma UNA vez y despues solo se actualizan sus
-        # valores (pedido del usuario: "cuando selecciono una casilla hace
-        # un parpadeo"). Antes cada tilde borraba y volvia a crear todas
-        # las filas -y volvia a revisar la carpeta entera-, y la lista
-        # quedaba en blanco un instante. La estructura de la carpeta no
-        # cambia mientras la ventana esta abierta: se revisa al abrirla.
-        _, filas_arbol = nucleo.revisar_estructura(ruta, aamm)
         vista = {
             "armada": False,
             "seleccionadas": set(),
@@ -2362,7 +2689,7 @@ def main():
             "libro": None,    # (var, cuadro, contador, ids)
         }
 
-        COLOR_ESTADO = {
+        COLOR_ESTADO_PLAN = {
             "al dia": COLOR_OK,
             "se genera": COLOR_BASE_OK,
             "se rehace": COLOR_PENDIENTE,
@@ -2450,12 +2777,12 @@ def main():
             pintadas = set()
             titulo_pendiente = None
 
-            for fila_arbol in filas_arbol:
+            for fila_arbol in filas_plan:
                 id_fila = fila_arbol["id"]
 
                 if id_fila == "salida":
                     hojas = [
-                        tarea_de_fila[f["id"]] for f in filas_arbol
+                        tarea_de_fila[f["id"]] for f in filas_plan
                         if f["id"] in tarea_de_fila
                         and f["id"].split(":", 1)[0] in ("consolidado", "pagos")
                     ]
@@ -2492,7 +2819,7 @@ def main():
         def repintar():
 
             plan = nucleo.planificar(
-                ruta, aamm, seleccion["ids"], filas=filas_arbol
+                ruta, aamm, seleccion["ids"], filas=filas_plan
             )
             estado_plan["plan"] = plan
 
@@ -2513,7 +2840,7 @@ def main():
                 var.set(tarea["seleccionada"])
                 cuadro.config(state=deshabilitado)
                 estado.config(
-                    text=tarea["estado"], fg=COLOR_ESTADO[tarea["estado"]]
+                    text=tarea["estado"], fg=COLOR_ESTADO_PLAN[tarea["estado"]]
                 )
                 faltan = ", ".join(
                     tarea["faltan_requisitos"] + tarea["faltan_dependencias"]
@@ -2593,6 +2920,7 @@ def main():
         btn_ejecutar.pack(side="right", padx=8)
 
         repintar()
+        presentar(top, ancho=900, alto=640)
 
     # --------------------------------------------------------
     # ANTECEDENTES SAE
@@ -2605,6 +2933,8 @@ def main():
     # --------------------------------------------------------
 
     def ventana_antecedentes():
+        if traer_al_frente("antecedentes"):
+            return
         ruta = caso_listo()
         if ruta is None:
             return
@@ -2627,9 +2957,11 @@ def main():
             return
 
         top = tk.Toplevel(root)
+        top.withdraw()
         top.title("Generar antecedentes SAE")
         top.transient(root)
         top.geometry("720x260")
+        dialogos_abiertos["antecedentes"] = top
 
         tk.Label(
             top,
@@ -2713,6 +3045,8 @@ def main():
             abajo, text="Generar", width=12, bg="#1f5fa8", fg="white",
             font=("Segoe UI", 9, "bold"), command=generar,
         ).pack(side="right", padx=8)
+
+        presentar(top, ancho=720, alto=260)
 
     # --------------------------------------------------------
     # BOTONES FIJOS ABAJO
