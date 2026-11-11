@@ -232,5 +232,82 @@ class TestVentanaActualizar(unittest.TestCase):
         ))
 
 
+    # ---- El arbol se actualiza sin destruirse (plan de la ventana, Fase 3)
+
+    def _widgets_del_arbol(self):
+        marco = next(
+            w for w in self._todos(self.root)
+            if w.winfo_class() == "Labelframe"
+            and w.cget("text") == "Estructura del caso"
+        )
+        return [str(w) for w in self._todos(marco)]
+
+    def _actualizar(self):
+        self._boton("Actualizar", self._marco_carpeta()).invoke()
+        self.root.update()
+
+    def test_actualizar_sin_cambios_no_rehace_el_arbol(self):
+        self._actualizar()
+        antes = self._widgets_del_arbol()
+        self._actualizar()
+        self._actualizar()
+        self.assertEqual(self._widgets_del_arbol(), antes)
+
+    def test_cambia_el_estado_sin_rehacer_las_filas(self):
+        rutas = self.nucleo.resolver_rutas(self.caso)
+        self._actualizar()
+        antes = self._widgets_del_arbol()
+        estado = self._estado_de_fila(self.nucleo.ARCHIVO_MEDIDAS_SAE)
+        self.assertEqual(estado, self.app.SIMBOLO["falta"])
+        rutas["medidas_sae"].write_bytes(b"x")
+        try:
+            self._actualizar()
+            self.assertEqual(
+                self._estado_de_fila(self.nucleo.ARCHIVO_MEDIDAS_SAE),
+                self.app.SIMBOLO["ok"],
+            )
+            self.assertEqual(self._widgets_del_arbol(), antes)
+        finally:
+            rutas["medidas_sae"].unlink()
+            self._actualizar()
+        self.assertEqual(
+            self._estado_de_fila(self.nucleo.ARCHIVO_MEDIDAS_SAE),
+            self.app.SIMBOLO["falta"],
+        )
+
+    def test_despues_de_un_proceso_los_botones_quedan_habilitados(self):
+        class HiloEnElMismo:
+            def __init__(self, target, daemon=None, **_):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        self._actualizar()
+        antes = self._widgets_del_arbol()
+        with mock.patch.object(
+            self.nucleo, "generar_medidas_sae", lambda **kwargs: None
+        ), mock.patch.object(self.app.threading, "Thread", HiloEnElMismo), \
+                mock.patch.object(self.app.messagebox, "showinfo"), \
+                mock.patch.object(self.app, "mostrar_error"):
+            fila = self._fila(self.nucleo.ARCHIVO_MEDIDAS_SAE)
+            next(
+                w for w in self._todos(fila) if w.winfo_class() == "Button"
+            ).invoke()
+            for _ in range(5):
+                self.root.update()
+
+        # Se reusaron las filas y aun asi ningun boton quedo apagado.
+        self.assertEqual(self._widgets_del_arbol(), antes)
+        marco = next(
+            w for w in self._todos(self.root)
+            if w.winfo_class() == "Labelframe"
+            and w.cget("text") == "Estructura del caso"
+        )
+        botones = [w for w in self._todos(marco) if w.winfo_class() == "Button"]
+        self.assertTrue(botones)
+        self.assertEqual({str(b.cget("state")) for b in botones}, {"normal"})
+
+
 if __name__ == "__main__":
     unittest.main()

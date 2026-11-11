@@ -545,12 +545,15 @@ def main():
     var_estado = tk.StringVar(value="Listo")
     var_tiempo = tk.StringVar(value="00:00:00")
 
-    # Los botones viven DENTRO de las filas del arbol, que se repinta
-    # entero en cada revisar(): se guardan por id de fila para poder
-    # deshabilitarlos mientras corre algo, y se renuevan en cada
-    # pintado.
+    # Los botones viven DENTRO de las filas del arbol: se guardan por id
+    # de fila para poder deshabilitarlos mientras corre algo, y se
+    # renuevan cada vez que el arbol se rehace entero.
     botones_arbol = {}
     corriendo = {"activo": False}
+    # Las filas ya dibujadas (por id) y lo ultimo que se pinto: con eso
+    # pintar_arbol cambia solo lo que cambio (ver pintar_arbol).
+    filas_vivas = {}
+    arbol_pintado = {"forma": None, "contenido": {}}
 
     # --------------------------------------------------------
     # BOTONES FIJOS ABAJO (primero, para que no los tape nada)
@@ -1006,13 +1009,14 @@ def main():
 
         celda_estado = _celda(fila, ANCHO_ESTADO, alto)
 
-        tk.Label(
+        lbl_estado = tk.Label(
             celda_estado,
             text=SIMBOLO.get(estado, estado) if estado is not None else "",
             anchor="w",
             fg=COLOR_ESTADO.get(estado, COLOR_NEUTRO),
             font=("Segoe UI", 9, "bold"),
-        ).pack(side="left")
+        )
+        lbl_estado.pack(side="left")
 
         celda_accion = _celda(fila, ANCHO_ACCION, alto)
 
@@ -1035,13 +1039,7 @@ def main():
         celda_origen.pack(side="left", fill="x", expand=True)
 
         # El aviso va primero, pegado al boton: es lo que hay que ver.
-        if aviso:
-            simbolo = tk.Label(
-                celda_origen, text=SIMBOLO_AVISO, fg=COLOR_AVISO,
-                cursor="hand2", font=("Segoe UI", 12, "bold"),
-            )
-            simbolo.pack(side="left", padx=(0, 8))
-            simbolo.bind("<Button-1>", lambda e, a=aviso: ventana_aviso(a))
+        simbolo = _simbolo_aviso(celda_origen, aviso) if aviso else None
 
         if origen:
 
@@ -1067,7 +1065,67 @@ def main():
                 lambda e, i=origen["id"]: abrir_origen(i),
             )
 
+        if id_fila is not None:
+            # Lo que puede cambiar sin rehacer la fila (ver pintar_arbol).
+            filas_vivas[id_fila] = {
+                "etiqueta": etiqueta, "estado": lbl_estado,
+                "celda_origen": celda_origen, "simbolo": simbolo,
+                "estilo": estilo,
+            }
+
         return fila
+
+    def _simbolo_aviso(celda_origen, aviso):
+        """El simbolo de aviso de una fila, primero en su celda de origen."""
+
+        simbolo = tk.Label(
+            celda_origen, text=SIMBOLO_AVISO, fg=COLOR_AVISO,
+            cursor="hand2", font=("Segoe UI", 12, "bold"),
+        )
+        hermanos = celda_origen.pack_slaves()
+        if hermanos:
+            simbolo.pack(side="left", padx=(0, 8), before=hermanos[0])
+        else:
+            simbolo.pack(side="left", padx=(0, 8))
+        simbolo.bind("<Button-1>", lambda e, a=aviso: ventana_aviso(a))
+        return simbolo
+
+    def _actualizar_fila(id_fila, fila):
+        """Cambia en el lugar lo que cambio de una fila ya dibujada."""
+
+        piezas = filas_vivas[id_fila]
+        ruta = fila.get("ruta", "")
+        es_carpeta = fila.get("es_carpeta", False)
+        estilo = piezas["estilo"]
+
+        etiqueta = piezas["etiqueta"]
+        etiqueta.config(
+            text=fila["etiqueta"],
+            font=("Consolas", 9, f"{estilo} underline" if ruta else estilo),
+            fg=COLOR_LINK if ruta else "black",
+            cursor="hand2" if ruta else "",
+        )
+        if ruta:
+            etiqueta.bind(
+                "<Button-1>",
+                lambda e, r=ruta, c=es_carpeta: abrir_ruta_de_fila(r, c),
+            )
+        else:
+            etiqueta.unbind("<Button-1>")
+
+        estado = fila["estado"]
+        piezas["estado"].config(
+            text=SIMBOLO.get(estado, estado) if estado is not None else "",
+            fg=COLOR_ESTADO.get(estado, COLOR_NEUTRO),
+        )
+
+        if piezas["simbolo"] is not None:
+            piezas["simbolo"].destroy()
+            piezas["simbolo"] = None
+        if fila.get("aviso"):
+            piezas["simbolo"] = _simbolo_aviso(
+                piezas["celda_origen"], fila["aviso"]
+            )
 
     def _boton_de_fila(id_fila):
         """
@@ -1138,12 +1196,48 @@ def main():
 
         return None
 
+    def _contenido(fila):
+        """Lo de una fila que se puede cambiar sin rehacerla."""
+
+        return (
+            fila["etiqueta"], fila["estado"], str(fila.get("ruta", "")),
+            fila.get("es_carpeta", False), fila.get("aviso"),
+        )
+
     def pintar_arbol(filas):
+        """
+        Dibuja el arbol. Si tiene la misma FORMA que el que ya esta (las
+        mismas filas, en el mismo orden y con el mismo origen), solo se
+        cambia lo que cambio de cada una: sin destruir y recrear los
+        ~400 widgets en cada "Actualizar" (en Windows eso parpadea). Si
+        la forma cambio, se rehace entero.
+        """
+
+        prefijos = _prefijos_arbol([fila["nivel"] for fila in filas]) if filas else []
+        forma = tuple(
+            (
+                fila["id"], fila["nivel"], prefijo,
+                tuple(sorted((fila.get("origen") or {}).items())),
+            )
+            for fila, prefijo in zip(filas, prefijos)
+        ) if filas and all(fila["id"] != "error" for fila in filas) else None
+
+        if forma is not None and forma == arbol_pintado["forma"]:
+            for fila in filas:
+                contenido = _contenido(fila)
+                if contenido != arbol_pintado["contenido"].get(fila["id"]):
+                    _actualizar_fila(fila["id"], fila)
+                    arbol_pintado["contenido"][fila["id"]] = contenido
+            habilitar_botones(not corriendo["activo"])
+            return
 
         for hijo in filas_arbol.winfo_children():
             hijo.destroy()
 
         botones_arbol.clear()
+        filas_vivas.clear()
+        arbol_pintado["forma"] = forma
+        arbol_pintado["contenido"] = {}
 
         if not filas:
             tk.Label(
@@ -1154,9 +1248,8 @@ def main():
             ).pack(fill="x")
             return
 
-        prefijos = _prefijos_arbol([fila["nivel"] for fila in filas])
-
         for fila, prefijo in zip(filas, prefijos):
+            arbol_pintado["contenido"][fila["id"]] = _contenido(fila)
             _fila_arbol(
                 filas_arbol,
                 prefijo,
@@ -1823,8 +1916,9 @@ def main():
                 log(f"Registro guardado en {guardado}")
             inicio_log["t"] = None
 
-            # revisar() repinta el arbol entero (y con el, todos los
-            # botones): no hace falta rehabilitarlos a mano.
+            # El arbol ya no se rehace entero en cada revisar() (reusa
+            # las filas): los botones se rehabilitan aca.
+            habilitar_botones(True)
             revisar()
 
             if res["ok"]:
