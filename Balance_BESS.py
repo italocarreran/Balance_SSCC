@@ -113,9 +113,100 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from Script import config, nucleo
+from Script import config
 from Script.arbol import _prefijos_arbol
 from Script.dialogos import mostrar_error
+
+# Script.nucleo (pandas, openpyxl y ~60 modulos: medio segundo o mas, en
+# Windows varias veces eso) NO se importa aca arriba: se carga en main()
+# con la ventana ya a la vista y respondiendo (cartel "Cargando..."). El
+# resto del archivo escribe nucleo.algo dentro de funciones que corren
+# despues de cargarlo. Ver PLAN_OPTIMIZACION_VENTANAS_BESS.md, Fase 2.
+nucleo = None
+
+
+def _cargar_nucleo():
+    """Importa Script.nucleo (una vez) y lo deja en el nombre `nucleo`."""
+
+    global nucleo
+    if nucleo is None:
+        from Script import nucleo as _nucleo
+        nucleo = _nucleo
+    return nucleo
+
+
+def __getattr__(nombre):
+    """Lo que antes se copiaba de nucleo al importar (PEP 562)."""
+
+    if nombre == "ARCHIVO_REGISTRO":
+        return _cargar_nucleo().ARCHIVO_REGISTRO
+    raise AttributeError(f"module {__name__!r} has no attribute {nombre!r}")
+
+
+# El hilo de verdad, aunque una prueba parchee threading.Thread para
+# correr los procesos en el mismo hilo.
+_HiloDeCarga = threading.Thread
+
+TEXTO_CARGANDO = "Cargando\u2026"
+
+
+def _ventana_viva(root):
+    """False si la ventana ya se cerro (un update() despues no siempre falla)."""
+
+    try:
+        return bool(root.winfo_exists())
+    except tk.TclError:
+        return False
+
+
+def _importar_con_la_ventana_viva(root):
+    """
+    Carga nucleo en un hilo mientras la ventana sigue respondiendo (se
+    puede mover, no queda "No responde"). Devuelve False si la cerraron
+    mientras cargaba o si la carga fallo (en ese caso ya se mostro el
+    error y se cerro la ventana).
+    """
+
+    if nucleo is not None:
+        return True
+
+    resultado = {}
+
+    def cargar():
+        try:
+            _cargar_nucleo()
+        except BaseException as error:  # se muestra en el hilo principal
+            resultado["error"] = error
+
+    hilo = _HiloDeCarga(target=cargar, name="cargar-nucleo", daemon=True)
+    hilo.start()
+
+    while hilo.is_alive():
+        try:
+            root.update()
+        except tk.TclError:
+            return False  # cerraron la ventana mientras cargaba
+        if not _ventana_viva(root):
+            return False
+        time.sleep(0.01)
+
+    if not _ventana_viva(root):
+        return False
+
+    if "error" in resultado:
+        error = resultado["error"]
+        try:
+            mostrar_error(
+                "No se pudo cargar el programa",
+                "".join(traceback.format_exception(error)),
+                parent=root,
+            )
+            root.destroy()
+        except tk.TclError:
+            pass
+        return False
+
+    return True
 
 
 COLOR_OK = "#1a6b1a"
@@ -148,8 +239,8 @@ COLOR_REGISTRO = {
 }
 
 # Donde queda el registro de la ultima corrida, en la carpeta Log/ del
-# caso (para poder mandarlo sin copiar a mano).
-ARCHIVO_REGISTRO = nucleo.ARCHIVO_REGISTRO
+# caso (para poder mandarlo sin copiar a mano): nucleo.ARCHIVO_REGISTRO,
+# que tambien se lee como Balance_BESS.ARCHIVO_REGISTRO (ver __getattr__).
 
 _PATRON_ERROR = re.compile(
     r"\bERROR\b|Traceback|\bNO se corre\b|: error\b|termino con problemas",
@@ -423,14 +514,31 @@ def formato_tiempo(segundos):
 
 def main():
 
-    # Los tokens de las APIs pasan solos a __config__/tks.json la primera
-    # vez (antes estaban en "claves_api" del config.json local).
-    config.migrar_tokens()
-    cfg = leer_config()
-
+    # La ventana primero, con un cartel: lo pesado (nucleo) se importa
+    # con ella ya a la vista.
     root = tk.Tk()
     root.title("Balance BESS / SSCC")
     root.geometry("1180x820")
+    cartel = tk.Label(
+        root, text=TEXTO_CARGANDO, font=("Segoe UI", 11), fg=COLOR_NEUTRO,
+    )
+    cartel.pack(expand=True)
+    try:
+        root.update()                      # la ventana ya se ve
+    except tk.TclError:
+        return
+    if not _ventana_viva(root):
+        return
+
+    if not _importar_con_la_ventana_viva(root):
+        return                             # la cerraron mientras cargaba
+    cartel.destroy()
+
+    # Los tokens de las APIs pasan solos a __config__/tks.json la primera
+    # vez (antes estaban en "claves_api" del config.json local). Va
+    # despues de mostrar la ventana: __config__ puede estar en red.
+    config.migrar_tokens()
+    cfg = leer_config()
 
     var_base = tk.StringVar(value=cfg.get("carpeta_base", ""))
     var_aamm = tk.StringVar(value=cfg.get("aamm", ""))
@@ -1186,7 +1294,7 @@ def main():
         if not base or not os.path.isdir(base):
             return None
         carpeta_log = os.path.join(base, nucleo.CARPETA_LOG)
-        ruta = os.path.join(carpeta_log, ARCHIVO_REGISTRO)
+        ruta = os.path.join(carpeta_log, nucleo.ARCHIVO_REGISTRO)
         try:
             os.makedirs(carpeta_log, exist_ok=True)
             with open(ruta, "w", encoding="utf-8") as archivo:
