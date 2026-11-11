@@ -74,6 +74,12 @@ C_HORAS_SUB = "Horas adjudicadas"
 C_NP_CSF = "Horas FD CSF 'No participó'"
 C_NP_CPF = "Horas FD CPF 'No participó'"
 C_FDH_CSF = "Horas en FD CSF"
+# Lo mismo, pero SOLO en las horas en que la central tenia ese servicio
+# adjudicado: "No participó" fuera de esas horas es lo normal.
+C_NPA_CPF = "Horas adjudicadas CPF con 'No participó'"
+C_NPA_CSF = "Horas adjudicadas CSF con 'No participó'"
+C_HA_CPF = "Horas adjudicadas CPF en el FD"
+C_HA_CSF = "Horas adjudicadas CSF en el FD"
 C_FDH_CPF = "Horas en FD CPF"
 C_EC_C1 = "E Costos Total C1 [CLP]"
 C_EC_C2 = "E Costos Total C2 [CLP]"
@@ -88,7 +94,8 @@ C_RE_VENTANAS_MES = "Ventanas del mes"
 COLUMNAS_RESUMEN = (
     C_CENTRAL, C_EMPRESA, C_ECOSTOS, C_RE545, C_TOTAL, C_DIAS, C_DESCARGA,
     C_CARGA, C_CMG, C_HORAS_ADJ, C_HORAS_SUB, C_ADJ_CPF, C_ADJ_CSF, C_RESERVA,
-    C_FD_CPF, C_FD_CSF, C_NP_CPF, C_NP_CSF, C_FDH_CPF, C_FDH_CSF, C_OFERTA_DIAS,
+    C_FD_CPF, C_FD_CSF, C_NP_CPF, C_NP_CSF, C_FDH_CPF, C_FDH_CSF,
+    C_NPA_CPF, C_NPA_CSF, C_HA_CPF, C_HA_CSF, C_OFERTA_DIAS,
     C_EC_C1, C_EC_C2, C_EC_AJUSTADA, C_EC_CICLOS, C_EC_CICLOS_MES,
     C_RE_C1, C_RE_C2, C_RE_VENTANAS, C_RE_VENTANAS_MES,
 )
@@ -339,6 +346,7 @@ def resumen_por_central(ruta_planilla, registrar=print):
     if dias_de:
         datos[C_DIAS] = {c: float(len(d)) for c, d in dias_de.items()}
 
+    horas_adjudicadas = {}   # servicio -> {(central, hora del mes)}
     # --- lo adjudicado en Subastas, con el nombre Balance_BESS ---------------
     if subastas is not None and _col(subastas, "Configuración") is not None:
         subastas = subastas_con_nombre_balance_bess(
@@ -357,6 +365,14 @@ def resumen_por_central(ruta_planilla, registrar=print):
             datos[C_HORAS_SUB] = (
                 tabla_horas.drop_duplicates().groupby("c")["h"].size().astype(float).to_dict()
             )
+        if horas is not None and servicio is not None:
+            centrales_sub = _col(subastas, "Configuración").map(normalizar)
+            for codigo in ("CPF", "CSF"):
+                es = servicio.eq(codigo).to_numpy()
+                horas_adjudicadas[codigo] = {
+                    (c, int(h)) for c, h in zip(centrales_sub[es], horas[es])
+                    if c and pd.notna(h)
+                }
         energia = _col(subastas, "Energía SSCC")
         if servicio is not None and energia is not None:
             for codigo, columna in (("CPF", C_ADJ_CPF), ("CSF", C_ADJ_CSF)):
@@ -395,6 +411,20 @@ def resumen_por_central(ruta_planilla, registrar=print):
                 )
                 datos[sin] = tabla_np.groupby("c")["np"].sum().astype(float).to_dict()
                 datos[total] = tabla_np.groupby("c").size().astype(float).to_dict()
+                codigo = "CSF" if clave == "Fd_CSF" else "CPF"
+                horas_fd = _col(bloque, "Hora Mes")
+                if codigo in horas_adjudicadas and horas_fd is not None:
+                    tabla_np["h"] = _num(horas_fd).reset_index(drop=True)
+                    adjudicada = [
+                        (c, int(h)) in horas_adjudicadas[codigo] if pd.notna(h) else False
+                        for c, h in zip(tabla_np["c"], tabla_np["h"])
+                    ]
+                    dentro = tabla_np[adjudicada]
+                    sin_a, total_a = (
+                        (C_NPA_CSF, C_HA_CSF) if codigo == "CSF" else (C_NPA_CPF, C_HA_CPF)
+                    )
+                    datos[sin_a] = dentro.groupby("c")["np"].sum().astype(float).to_dict()
+                    datos[total_a] = dentro.groupby("c").size().astype(float).to_dict()
 
     # --- ofertas -------------------------------------------------------------
     if ofertas is not None and _col(ofertas, "Oferta completa") is not None:
@@ -483,18 +513,24 @@ def explicar_central(fila):
         if adjudicada and _hay(horas_adj) and horas_adj == 0:
             yield ("Adjudicada en Subastas, pero ninguna hora cruza con "
                    "Medidores (Adj SSCC = 0): revisar su nombre en el Diccionario.")
-        for nombre, adj, sin, total in (
-            ("CPF", adj_cpf, fila.get(C_NP_CPF), fila.get(C_FDH_CPF)),
-            ("CSF", adj_csf, fila.get(C_NP_CSF), fila.get(C_FDH_CSF)),
+        for nombre, adj, sin_a, total_a, sin, total in (
+            ("CPF", adj_cpf, fila.get(C_NPA_CPF), fila.get(C_HA_CPF),
+             fila.get(C_NP_CPF), fila.get(C_FDH_CPF)),
+            ("CSF", adj_csf, fila.get(C_NPA_CSF), fila.get(C_HA_CSF),
+             fila.get(C_NP_CSF), fila.get(C_FDH_CSF)),
         ):
-            if not (_hay(adj) and adj > 0 and _hay(sin) and _hay(total) and total > 0):
+            # Mejor en las horas adjudicadas; si no se pudo cruzar, todas.
+            que = "horas adjudicadas"
+            if not (_hay(total_a) and total_a > 0):
+                sin_a, total_a, que = sin, total, "horas"
+            if not (_hay(adj) and adj > 0 and _hay(sin_a) and _hay(total_a) and total_a > 0):
                 continue
-            if sin >= total:
+            # Solo si no participo en NINGUNA: con los datos reales de oct,
+            # "No participó" en la mayoria de las horas CPF adjudicadas es lo
+            # normal (85-95 % en casi todas, y reciben igual).
+            if sin_a >= total_a:
                 yield (f"Según FD no tuvo participación en {nombre} ('No participó' "
-                       f"en todas sus {numero(total)} horas, aunque el FD diga 1).")
-            elif sin >= total / 2:
-                yield (f"Según FD casi no participó en {nombre} ('No participó' en "
-                       f"{numero(sin)} de {numero(total)} horas).")
+                       f"en todas sus {numero(total_a)} {que}, aunque el FD diga 1).")
         servicios_sin_fd = [
             nombre for nombre, adj, fd in (("CPF", adj_cpf, fd_cpf), ("CSF", adj_csf, fd_csf))
             if _hay(adj) and adj > 0 and _hay(fd) and fd == 0
@@ -526,23 +562,65 @@ def explicar_central(fila):
     return ""
 
 
+C_PERDIDA_FD = "Dejó de recibir por FD [CLP]"
+
+
+def _n_de_m(con, total):
+    if not _hay(con) or not _hay(total) or total == 0:
+        return ""
+    return f"{numero(con)} de {numero(total)}"
+
+
 def reporte_corrida(resumen):
     """
-    (texto de arriba, tabla por central) para la hoja "Reporte" del
-    control: lo que recibe cada central y, si hay algo que decir, por que.
+    (lineas de arriba, tabla por central, ficha) para el control:
+      - tabla: lo que recibe cada central por lado, cuantos ciclos y
+        ventanas pagaron, cuanto DEJO de recibir por FD < 1 (el mismo
+        escenario de la comparacion, con FD = 1: responsables.perdida_por_fd)
+        y, si hay algo que decir, por que;
+      - ficha: un renglon por central y concepto, con su valor y una alerta
+        cuando algo esta fuera de lo normal (ver ficha_corrida).
     """
 
+    from .responsables import perdida_por_fd
+
+    filas = resumen.to_dict("records")
+    perdidas = [perdida_por_fd(f) for f in filas]
     tabla = resumen[[C_CENTRAL, C_EMPRESA, C_ECOSTOS, C_RE545, C_TOTAL]].copy()
-    tabla["Observación"] = [explicar_central(f) for f in resumen.to_dict("records")]
+    tabla["Ciclos con monto"] = [
+        _n_de_m(f.get(C_EC_CICLOS), f.get(C_EC_CICLOS_MES)) for f in filas
+    ]
+    tabla["Ventanas con monto"] = [
+        _n_de_m(f.get(C_RE_VENTANAS), f.get(C_RE_VENTANAS_MES)) for f in filas
+    ]
+    tabla[C_PERDIDA_FD] = [
+        (math.nan if any(not _hay(v) for v in p.values()) and not any(_hay(v) and v > 0 for v in p.values())
+         else sum(v for v in p.values() if _hay(v)))
+        if p else math.nan
+        for p in perdidas
+    ]
+    tabla["Observación"] = [explicar_central(f) for f in filas]
 
     total = resumen[C_TOTAL].sum(min_count=1)
     sin_ingreso = resumen[resumen[C_TOTAL].fillna(-1) == 0][C_CENTRAL].tolist()
     lineas = []
     if _hay(total):
-        lineas.append(f"Total del mes: {plata(total)} entre {len(resumen)} centrales.")
+        lineas.append(f"Total del mes: {plata_corta(total)} entre {len(resumen)} centrales "
+                      f"(E Costos {plata_corta(resumen[C_ECOSTOS].sum())} · "
+                      f"RE545 {plata_corta(resumen[C_RE545].sum())}).")
+        mayores = resumen.sort_values(C_TOTAL, ascending=False).head(3)
+        lineas.append("Las que más reciben: " + ", ".join(
+            f"{f[C_CENTRAL]} {plata_corta(f[C_TOTAL])} ({numero(f[C_TOTAL] / total * 100)} %)"
+            for _, f in mayores.iterrows() if total
+        ) + ".")
+    perdida = tabla[C_PERDIDA_FD].sum(min_count=1)
+    if _hay(perdida) and perdida >= CAMBIO_MINIMO_CLP:
+        mas = tabla.dropna(subset=[C_PERDIDA_FD]).sort_values(C_PERDIDA_FD, ascending=False).head(3)
         lineas.append(
-            f"E Costos {plata(resumen[C_ECOSTOS].sum())} · "
-            f"RE545 {plata(resumen[C_RE545].sum())}."
+            f"Por FD bajo 1 se dejaron de recibir {plata_corta(perdida)} en el mes "
+            f"(con FD = 1 se habría recibido {plata_corta(total + perdida)}). Las que más: "
+            + ", ".join(f"{f[C_CENTRAL]} {plata_corta(f[C_PERDIDA_FD])}" for _, f in mas.iterrows())
+            + "."
         )
     if sin_ingreso:
         lineas.append(
@@ -551,7 +629,137 @@ def reporte_corrida(resumen):
         )
     elif _hay(total):
         lineas.append("Todas las centrales reciben algo.")
-    return lineas, tabla
+    alertas = ficha_corrida(resumen)
+    con_alerta = alertas[alertas["Alerta"] != ""]
+    if len(con_alerta):
+        lineas.append(
+            f"{con_alerta[C_CENTRAL].nunique()} central(es) con alertas en la ficha "
+            f"({len(con_alerta)} en total): ver la hoja 'Reporte ficha'."
+        )
+    return lineas, tabla, alertas
+
+
+# La ficha: (columna del resumen, concepto, unidad). Va todo lo que la
+# central tiene (lo que es 0 o no esta, no va), con su alerta.
+_FICHA = (
+    (C_TOTAL, "Recibe total", "CLP"),
+    (C_ECOSTOS, "Recibe E Costos", "CLP"),
+    (C_RE545, "Recibe RE545", "CLP"),
+    (C_EC_CICLOS, "E Costos: ciclos con monto", "ciclos"),
+    (C_EC_C1, "E Costos: Total C1", "CLP"),
+    (C_EC_C2, "E Costos: Total C2", "CLP"),
+    (C_RE_VENTANAS, "RE545: ventanas con monto", "ventanas"),
+    (C_RE_C1, "RE545: Total C1", "CLP"),
+    (C_RE_C2, "RE545: Total C2", "CLP"),
+    (C_ADJ_CPF, "Adjudicado CPF", "MW"),
+    (C_ADJ_CSF, "Adjudicado CSF", "MW"),
+    (C_HORAS_SUB, "Horas adjudicadas", "h"),
+    (C_FD_CPF, "FD CPF promedio", "FD"),
+    (C_FD_CSF, "FD CSF promedio", "FD"),
+    (C_NPA_CPF, "CPF: horas adjudicadas con 'No participó'", "h"),
+    (C_NPA_CSF, "CSF: horas adjudicadas con 'No participó'", "h"),
+    (C_OFERTA_DIAS, "Días con oferta completa", "días"),
+    (C_DIAS, "Días en el mes", "días"),
+    (C_DESCARGA, "Descarga", "kWh"),
+    (C_CARGA, "Carga", "kWh"),
+    (C_RESERVA, "Reserva con FD y FMA", "kWh"),
+    (C_CMG, "CMg promedio", "CLP/kWh"),
+)
+
+
+def _alerta(columna, fila):
+    """El texto de alerta de un concepto de la ficha, o ''."""
+
+    valor = fila.get(columna)
+    if columna == C_TOTAL and _hay(valor) and valor == 0:
+        return "Sin ingreso"
+    for adj, fd, sin, total, servicio in (
+        (C_ADJ_CPF, C_FD_CPF, C_NPA_CPF, C_HA_CPF, "CPF"),
+        (C_ADJ_CSF, C_FD_CSF, C_NPA_CSF, C_HA_CSF, "CSF"),
+    ):
+        adjudicada = _hay(fila.get(adj)) and fila.get(adj) > 0
+        if not adjudicada:
+            continue
+        if columna == sin and _hay(valor) and _hay(fila.get(total)) and fila[total] > 0:
+            # Solo NINGUNA: la mayoria de las horas CPF con "No participó"
+            # es lo normal (ver explicar_central).
+            if valor >= fila[total]:
+                return f"No participó en ninguna de sus horas con {servicio} adjudicado"
+        if columna == fd and _hay(valor) and valor < 0.5:
+            return f"FD {servicio} bajo 0,5 con {servicio} adjudicado"
+    adjudicada = any(_hay(fila.get(c)) and fila.get(c) > 0 for c in (C_ADJ_CPF, C_ADJ_CSF))
+    sin_ofertas = _hay(fila.get(C_OFERTA_DIAS)) and fila.get(C_OFERTA_DIAS) == 0
+    if columna == C_OFERTA_DIAS and sin_ofertas and adjudicada:
+        return "Sin oferta completa: su energía no va a RE545"
+    # Solo si todo pasa por E Costos (sin oferta completa): si no, E Costos
+    # cubre pocos dias y tener pocos ciclos con monto es lo normal.
+    if columna == C_EC_CICLOS and sin_ofertas and _hay(valor) \
+            and _hay(fila.get(C_EC_CICLOS_MES)) and fila[C_EC_CICLOS_MES] > 0 \
+            and (fila.get(C_DESCARGA) or 0) > 0 and valor < fila[C_EC_CICLOS_MES] / 4:
+        return "Menos de 1 de cada 4 ciclos con monto (C2 sobre C1 en el resto)"
+    if columna == C_HORAS_SUB and _hay(valor) and valor > 0 \
+            and _hay(fila.get(C_HORAS_ADJ)) and abs(fila[C_HORAS_ADJ] - valor) >= 1:
+        return ("Las horas con Adj SSCC no coinciden con las adjudicadas: "
+                "revisar su nombre en el Diccionario")
+    return ""
+
+
+def ficha_corrida(resumen):
+    """Un renglon por central y concepto (Central, Concepto, Valor, Unidad, Alerta)."""
+
+    filas = []
+    for f in resumen.to_dict("records"):
+        for columna, concepto, unidad in _FICHA:
+            valor = f.get(columna)
+            alerta = _alerta(columna, f)
+            if (not _hay(valor) or valor == 0) and not alerta and columna != C_TOTAL:
+                continue
+            total = {C_EC_CICLOS: C_EC_CICLOS_MES, C_RE_VENTANAS: C_RE_VENTANAS_MES,
+                     C_NPA_CPF: C_HA_CPF, C_NPA_CSF: C_HA_CSF}.get(columna)
+            filas.append({
+                C_CENTRAL: f[C_CENTRAL], "Concepto": concepto,
+                "Valor": valor, "De": f.get(total) if total else math.nan,
+                "Unidad": unidad, "Alerta": alerta,
+            })
+    return pd.DataFrame(filas, columns=[C_CENTRAL, "Concepto", "Valor", "De", "Unidad", "Alerta"])
+
+
+def formato_ficha(ws):
+    """La ficha: numero segun su unidad, alerta en rojo, franja por central, filtro."""
+
+    from openpyxl.styles import Font, PatternFill
+
+    fila_enc = FILA_ENCABEZADO_REPORTE
+    columnas = {str(c.value): c.column for c in ws[fila_enc] if c.value is not None}
+    if "Alerta" not in columnas or "Concepto" not in columnas:
+        return
+    franja = PatternFill(fill_type="solid", start_color="F5F8FC", end_color="F5F8FC")
+    rojo = PatternFill(fill_type="solid", start_color="F8CBAD", end_color="F8CBAD")
+    formatos = {"CLP": "#,##0", "FD": "0.00", "CLP/kWh": "#,##0.0"}
+    anterior, banda = None, False
+    for fila in range(fila_enc + 1, ws.max_row + 1):
+        central = ws.cell(fila, columnas[C_CENTRAL]).value
+        if central is None:
+            continue
+        if central != anterior:
+            banda, anterior = not banda, central
+        formato = formatos.get(ws.cell(fila, columnas["Unidad"]).value, "#,##0")
+        for nombre in ("Valor", "De"):
+            ws.cell(fila, columnas[nombre]).number_format = formato if nombre == "Valor" else "#,##0"
+        if banda:
+            for col in range(min(columnas.values()), max(columnas.values()) + 1):
+                ws.cell(fila, col).fill = franja
+        alerta = ws.cell(fila, columnas["Alerta"])
+        if alerta.value:
+            alerta.fill = rojo
+            alerta.font = Font(color="9C0006", bold=True)
+    for nombre, ancho in ((C_CENTRAL, 30), ("Concepto", 32), ("Valor", 18), ("De", 8),
+                          ("Unidad", 10), ("Alerta", 70)):
+        ws.column_dimensions[ws.cell(fila_enc, columnas[nombre]).column_letter].width = ancho
+    primera = ws.cell(fila_enc, min(columnas.values())).coordinate
+    ultima = ws.cell(ws.max_row, max(columnas.values())).coordinate
+    ws.auto_filter.ref = f"{primera}:{ultima}"
+    ws.freeze_panes = ws.cell(fila_enc + 1, min(columnas.values()) + 2).coordinate
 
 
 # ------------------------------------------------------------
@@ -1182,6 +1390,8 @@ def dar_formato_reporte(ws):
                     celda.font = Font(bold=True, color="375623" if celda.value >= 0 else "9C0006")
         if "[%]" in nombre:
             formato = '0.0" %"'
+        elif "[CLP]" in nombre:
+            formato = "#,##0"
         elif "FD" in nombre:
             formato = "0.00"
         else:
@@ -1258,12 +1468,12 @@ def generar_reporte_corrida(carpeta_base, aamm, registrar=print, progreso=None):
             f"{rutas['salida'].name} no tiene centrales calculadas todavia: "
             f"calcula E Costos y RE545 primero."
         )
-    lineas, tabla = reporte_corrida(resumen)
-    escribir_control(rutas["control"], df_reporte=(lineas, tabla))
+    lineas, tabla, ficha = reporte_corrida(resumen)
+    escribir_control(rutas["control"], df_reporte=(lineas, tabla, ficha))
     for linea in lineas:
         registrar(f"  {linea}")
     con_observacion = tabla[tabla["Observación"] != ""]
     for _, fila in con_observacion.iterrows():
         registrar(f"  {fila[C_CENTRAL]}: {fila['Observación']}")
-    registrar(f"Reporte en {rutas['control']} (hoja 'Reporte').")
+    registrar(f"Reporte en {rutas['control']} (hojas 'Reporte' y 'Reporte ficha').")
     return rutas["control"]
