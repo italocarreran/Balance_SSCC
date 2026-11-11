@@ -43,7 +43,7 @@ Script/nucleo/orquestador.py; esta ventana solo los dibuja.
             (fma_cft_<AAMM>.xlsx: oculto, FMA_CON_CTF = False)
         Subastas/
             DB subastas/                   [Traer]
-        Balance_BESS.xlsx                  [Actualizar]
+        11_PAGOS_BESS_AAMM.xlsx            [Actualizar]
             hoja 'Resumen'                 [Asignar]
             hoja 'PRORRATA_RETIROS'        [Traer]
             hoja 'COMPENSACION_CENTRAL'    [Resumir]
@@ -393,26 +393,34 @@ def carpeta_recordada(aamm):
         return ""
 
 
-def recordar_carpeta(aamm, ruta):
+def recordar_carpeta(aamm, ruta, ademas=None):
     """
     Deja anotado que 'ruta' es la carpeta del periodo 'aamm'. Si esa
     carpeta estaba anotada como la de OTRO periodo, se le saca: una
     carpeta pertenece a un solo periodo.
+
+    Si ya estaba anotada asi, no se escribe nada (config.json es
+    compartido y puede estar en red). 'ademas' son otras claves a
+    guardar en la MISMA escritura (usar_carpeta guarda tambien la
+    carpeta base).
     """
 
-    if not aamm or not ruta:
-        return
+    datos = dict(ademas or {})
 
-    ruta = str(ruta)
+    if aamm and ruta:
+        ruta = str(ruta)
+        actuales = carpetas_por_periodo()
+        carpetas = {
+            periodo: otra
+            for periodo, otra in actuales.items()
+            if periodo == str(aamm) or otra != ruta
+        }
+        carpetas[str(aamm)] = ruta
+        if carpetas != actuales:
+            datos[CLAVE_CARPETAS_PERIODO] = carpetas
 
-    carpetas = {
-        periodo: otra
-        for periodo, otra in carpetas_por_periodo().items()
-        if periodo == str(aamm) or otra != ruta
-    }
-    carpetas[str(aamm)] = ruta
-
-    guardar_config({CLAVE_CARPETAS_PERIODO: carpetas})
+    if datos:
+        guardar_config(datos)
 
 
 def carpeta_a_abrir(ruta, es_archivo=False):
@@ -938,6 +946,46 @@ def main():
         celda.pack_propagate(False)
         return celda
 
+    def presentar(top, modal=False, ancho=None, alto=None):
+        """
+        Muestra un Toplevel ya construido (se crea con withdraw()),
+        centrado sobre la ventana principal: asi aparece de una vez, en
+        vez de verse armarse. Una ventana oculta todavia no tiene tamaño
+        real: se usa el pedido, o el que se le fijo (ancho, alto).
+        """
+
+        top.update_idletasks()
+        ancho = ancho or top.winfo_reqwidth()
+        alto = alto or top.winfo_reqheight()
+        x = root.winfo_rootx() + (root.winfo_width() - ancho) // 2
+        y = root.winfo_rooty() + (root.winfo_height() - alto) // 3
+        top.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+        top.deiconify()
+        if modal:
+            # En este orden: un grab_set sobre una ventana oculta falla
+            # ("grab failed: window not viewable").
+            top.wait_visibility()
+            top.grab_set()
+
+    # "Ejecutar todo" y "Generar antecedentes SAE" son de una sola
+    # instancia: un segundo click trae al frente la que ya esta abierta.
+    dialogos_abiertos = {}
+
+    def traer_al_frente(clave):
+        """True si ya habia una ventana abierta de esas (y quedo al frente)."""
+
+        top = dialogos_abiertos.get(clave)
+        try:
+            if top is not None and top.winfo_exists():
+                top.deiconify()
+                top.lift()
+                top.focus_set()
+                return True
+        except tk.TclError:
+            pass
+        dialogos_abiertos.pop(clave, None)
+        return False
+
     def ventana_aviso(aviso):
         """
         El cuadro que abre el simbolo de aviso de una fila: el mensaje,
@@ -946,6 +994,7 @@ def main():
         """
 
         ventana = tk.Toplevel(root)
+        ventana.withdraw()
         ventana.title(aviso.get("titulo", "Aviso"))
         ventana.transient(root)
         ventana.resizable(False, False)
@@ -987,7 +1036,7 @@ def main():
         ).pack(side="right", padx=6)
 
         ventana.bind("<Escape>", lambda e: ventana.destroy())
-        ventana.grab_set()
+        presentar(ventana, modal=True)
         ventana.focus_set()
         return ventana
 
@@ -1538,7 +1587,6 @@ def main():
         ruta = str(ruta)
 
         var_base.set(ruta)
-        guardar_config({"carpeta_base": ruta})
 
         aamm = var_aamm.get().strip()
 
@@ -1547,8 +1595,10 @@ def main():
         except nucleo.ErrorEntrada:
             aamm = ""
 
+        # Una sola escritura de config.json: la carpeta base y, si hay
+        # periodo, la carpeta de ese periodo.
+        recordar_carpeta(aamm, ruta, ademas={"carpeta_base": ruta})
         if aamm:
-            recordar_carpeta(aamm, ruta)
             log(f"Carpeta del periodo {aamm}: {ruta}")
         else:
             log(f"Carpeta base: {ruta}")
@@ -1669,6 +1719,7 @@ def main():
         base = var_base.get()
 
         top = tk.Toplevel(root)
+        top.withdraw()
         top.title(f"Carpeta del periodo {aamm}")
         top.transient(root)
         top.resizable(False, False)
@@ -1744,7 +1795,7 @@ def main():
 
         top.protocol("WM_DELETE_WINDOW", lambda: cerrar(False))
 
-        top.grab_set()
+        presentar(top, modal=True)
         root.wait_window(top)
 
         # Sin carpeta para el periodo nuevo se vuelve al anterior: la
@@ -1892,13 +1943,13 @@ def main():
         "consolidar_subastas": "Consolidar subastas",
         "generar_cmg": "Generar cmg.xlsx",
         "generar_medidas_sae": "Actualizar Medidas_SAE",
-        "generar_consolidado": "Balance_BESS.xlsx (entradas)",
-        "generar_pagos_bess": "Balance_BESS.xlsx (calculo)",
+        "generar_consolidado": "Planilla 11_PAGOS_BESS (entradas)",
+        "generar_pagos_bess": "Planilla 11_PAGOS_BESS (calculo)",
         "ejecutar_plan": "Ejecutar todo",
         "generar_csv_sae": "Generar SAE_AAMM.csv",
         "generar_reporte_corrida": "Generar reporte de la corrida",
         "generar_antecedentes": "Generar antecedentes SAE",
-        "correr": "Balance_BESS.xlsx (entradas y calculo)",
+        "correr": "Planilla 11_PAGOS_BESS (entradas y calculo)",
     }
 
     def titulo_de(funcion, kwargs):
@@ -2372,6 +2423,7 @@ def main():
             nombre_inicial = base_actual.name if base_actual else "Caso nuevo"
 
         top = tk.Toplevel(root)
+        top.withdraw()
         top.title("Crear la carpeta del caso")
         top.geometry("760x460")
         top.transient(root)
@@ -2492,7 +2544,7 @@ def main():
             side="right", padx=8
         )
 
-        top.grab_set()
+        presentar(top, modal=True, ancho=760, alto=460)
         root.wait_window(top)
 
         return resultado["ok"]
@@ -2512,6 +2564,9 @@ def main():
         dibuja y devuelve la seleccion.
         """
 
+        if traer_al_frente("ejecutar_todo"):
+            return
+
         ruta = caso_listo()
         if ruta is None:
             return
@@ -2525,10 +2580,25 @@ def main():
         # ser el set que el usuario va tildando.
         seleccion = {"ids": None}
 
+        # La lista se arma UNA vez y despues solo se actualizan sus
+        # valores (pedido del usuario: "cuando selecciono una casilla hace
+        # un parpadeo"). Antes cada tilde borraba y volvia a crear todas
+        # las filas -y volvia a revisar la carpeta entera-, y la lista
+        # quedaba en blanco un instante. La estructura de la carpeta no
+        # cambia mientras la ventana esta abierta: se revisa al abrirla,
+        # ANTES de crear la ventana (si falla no queda una vacia abierta).
+        try:
+            _, filas_plan = nucleo.revisar_estructura(ruta, aamm)
+        except Exception as error:  # noqa: BLE001 - se muestra
+            mostrar_error("No se pudo revisar la carpeta", str(error))
+            return
+
         top = tk.Toplevel(root)
+        top.withdraw()
         top.title("Ejecutar todo")
         top.geometry("900x640")
         top.transient(root)
+        dialogos_abiertos["ejecutar_todo"] = top
 
         tk.Label(
             top,
@@ -2612,13 +2682,6 @@ def main():
 
         estado_plan = {"plan": None}
 
-        # La lista se arma UNA vez y despues solo se actualizan sus
-        # valores (pedido del usuario: "cuando selecciono una casilla hace
-        # un parpadeo"). Antes cada tilde borraba y volvia a crear todas
-        # las filas -y volvia a revisar la carpeta entera-, y la lista
-        # quedaba en blanco un instante. La estructura de la carpeta no
-        # cambia mientras la ventana esta abierta: se revisa al abrirla.
-        _, filas_arbol = nucleo.revisar_estructura(ruta, aamm)
         vista = {
             "armada": False,
             "seleccionadas": set(),
@@ -2626,7 +2689,7 @@ def main():
             "libro": None,    # (var, cuadro, contador, ids)
         }
 
-        COLOR_ESTADO = {
+        COLOR_ESTADO_PLAN = {
             "al dia": COLOR_OK,
             "se genera": COLOR_BASE_OK,
             "se rehace": COLOR_PENDIENTE,
@@ -2714,12 +2777,12 @@ def main():
             pintadas = set()
             titulo_pendiente = None
 
-            for fila_arbol in filas_arbol:
+            for fila_arbol in filas_plan:
                 id_fila = fila_arbol["id"]
 
                 if id_fila == "salida":
                     hojas = [
-                        tarea_de_fila[f["id"]] for f in filas_arbol
+                        tarea_de_fila[f["id"]] for f in filas_plan
                         if f["id"] in tarea_de_fila
                         and f["id"].split(":", 1)[0] in ("consolidado", "pagos")
                     ]
@@ -2756,7 +2819,7 @@ def main():
         def repintar():
 
             plan = nucleo.planificar(
-                ruta, aamm, seleccion["ids"], filas=filas_arbol
+                ruta, aamm, seleccion["ids"], filas=filas_plan
             )
             estado_plan["plan"] = plan
 
@@ -2777,7 +2840,7 @@ def main():
                 var.set(tarea["seleccionada"])
                 cuadro.config(state=deshabilitado)
                 estado.config(
-                    text=tarea["estado"], fg=COLOR_ESTADO[tarea["estado"]]
+                    text=tarea["estado"], fg=COLOR_ESTADO_PLAN[tarea["estado"]]
                 )
                 faltan = ", ".join(
                     tarea["faltan_requisitos"] + tarea["faltan_dependencias"]
@@ -2857,6 +2920,7 @@ def main():
         btn_ejecutar.pack(side="right", padx=8)
 
         repintar()
+        presentar(top, ancho=900, alto=640)
 
     # --------------------------------------------------------
     # ANTECEDENTES SAE
@@ -2869,6 +2933,8 @@ def main():
     # --------------------------------------------------------
 
     def ventana_antecedentes():
+        if traer_al_frente("antecedentes"):
+            return
         ruta = caso_listo()
         if ruta is None:
             return
@@ -2891,9 +2957,11 @@ def main():
             return
 
         top = tk.Toplevel(root)
+        top.withdraw()
         top.title("Generar antecedentes SAE")
         top.transient(root)
         top.geometry("720x260")
+        dialogos_abiertos["antecedentes"] = top
 
         tk.Label(
             top,
@@ -2977,6 +3045,8 @@ def main():
             abajo, text="Generar", width=12, bg="#1f5fa8", fg="white",
             font=("Segoe UI", 9, "bold"), command=generar,
         ).pack(side="right", padx=8)
+
+        presentar(top, ancho=720, alto=260)
 
     # --------------------------------------------------------
     # BOTONES FIJOS ABAJO

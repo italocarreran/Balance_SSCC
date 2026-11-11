@@ -12,6 +12,29 @@ programa, funcionan solas en cualquier carpeta).
 """
 
 
+def _centrar(ventana, raiz):
+    """
+    Pone la ventana (todavia oculta) centrada sobre 'raiz'. Copia del
+    'presentar' de Balance_BESS.py: este modulo no depende de la ventana
+    principal. Si la raiz no esta a la vista, la deja donde la ponga el
+    sistema.
+    """
+
+    ventana.update_idletasks()
+    if raiz is None:
+        return
+    try:
+        if not raiz.winfo_viewable():
+            return
+        ancho = ventana.winfo_reqwidth()
+        alto = ventana.winfo_reqheight()
+        x = raiz.winfo_rootx() + (raiz.winfo_width() - ancho) // 2
+        y = raiz.winfo_rooty() + (raiz.winfo_height() - alto) // 3
+        ventana.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+    except Exception:  # noqa: BLE001 - centrar es un adorno
+        pass
+
+
 def mostrar_error(titulo, mensaje, parent=None, **_opciones):
     """Como messagebox.showerror(titulo, mensaje), con boton Copiar."""
 
@@ -19,6 +42,8 @@ def mostrar_error(titulo, mensaje, parent=None, **_opciones):
 
     raiz = parent or tk._default_root
     ventana = tk.Toplevel(raiz)
+    # Oculta mientras se arma: aparece de una vez, centrada (ver _centrar).
+    ventana.withdraw()
     ventana.title(titulo)
     ventana.resizable(True, True)
     if raiz is not None:
@@ -60,6 +85,11 @@ def mostrar_error(titulo, mensaje, parent=None, **_opciones):
 
     ventana.bind("<Escape>", lambda e: ventana.destroy())
     ventana.bind("<Return>", lambda e: ventana.destroy())
+    _centrar(ventana, raiz)
+    ventana.deiconify()
+    # deiconify -> wait_visibility -> grab_set: un grab sobre una ventana
+    # oculta falla ("grab failed: window not viewable").
+    ventana.wait_visibility()
     ventana.grab_set()
     ventana.focus_set()
     ventana.wait_window()

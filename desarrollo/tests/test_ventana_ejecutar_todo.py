@@ -10,6 +10,7 @@ unittest discover`); sin ellos se saltea.
 """
 
 import unittest
+from unittest import mock
 
 from Script.nucleo import orquestador
 from desarrollo.tests import test_ventana_actualizar as base
@@ -23,6 +24,9 @@ class TestVentanaEjecutarTodo(base.TestVentanaActualizar):
     test_actualizar_muestra_un_archivo_pegado_a_mano = None
     test_medidas_arranca_sin_advertencia = None
     test_aviso_de_medidas_incompletas = None
+    test_actualizar_sin_cambios_no_rehace_el_arbol = None
+    test_cambia_el_estado_sin_rehacer_las_filas = None
+    test_despues_de_un_proceso_los_botones_quedan_habilitados = None
 
     def _dialogo(self):
         self._boton("Ejecutar todo", self.root).invoke()
@@ -171,6 +175,51 @@ class TestVentanaEjecutarTodo(base.TestVentanaActualizar):
             self.assertEqual(antes, despues)
         finally:
             dialogo.destroy()
+
+
+    # ---- Dialogos (plan de la ventana, Fase 5)
+
+    def _abiertos(self):
+        return [
+            w for w in self.root.winfo_children()
+            if w.winfo_class() == "Toplevel" and w.title() == "Ejecutar todo"
+        ]
+
+    def test_dos_clicks_abren_una_sola_ventana(self):
+        boton = self._boton("Ejecutar todo", self.root)
+        boton.invoke()
+        self.root.update()
+        boton.invoke()
+        self.root.update()
+        abiertos = self._abiertos()
+        try:
+            self.assertEqual(len(abiertos), 1)
+            # Aparece ya armada y a la vista.
+            self.assertTrue(abiertos[0].winfo_viewable())
+        finally:
+            for top in abiertos:
+                top.destroy()
+        # Cerrada, el siguiente click abre otra.
+        self.root.update()
+        dialogo = self._dialogo()
+        dialogo.destroy()
+
+    def test_si_falla_la_revision_no_queda_una_ventana_vacia(self):
+        errores = []
+
+        def falla(*args, **kwargs):
+            raise OSError("unidad desconectada")
+
+        with mock.patch.object(self.nucleo, "revisar_estructura", falla), \
+                mock.patch.object(
+                    self.app, "mostrar_error",
+                    lambda titulo, texto, **_: errores.append(texto),
+                ):
+            self._boton("Ejecutar todo", self.root).invoke()
+            self.root.update()
+
+        self.assertEqual(self._abiertos(), [])
+        self.assertEqual(errores, ["unidad desconectada"])
 
 
 if __name__ == "__main__":
