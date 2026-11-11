@@ -256,6 +256,16 @@ para que no ensucien la planilla de trabajo:
   tamaño, fecha y `sha256` de cada archivo que alimentó el cálculo.
 - **`Log`** — los avisos e incidencias de la generación de las hojas de
   entrada (antes era una hoja más de `Consolidado_entradas.xlsx`).
+**Regla de pago del FD por dirección (2026-11-11).** Una hora cuya Respuesta
+del FD dice "No participó" **no se paga en esa dirección**, aunque el archivo
+de desempeño traiga FD = 1: Respuesta CPF+ → CPF(+), Respuesta CPF− → CPF(−),
+Respuesta CSF → CSF(+) y CSF(−). La otra dirección se paga como venga ("si
+estás adjudicado en bajada y no participaste en subida, la bajada se paga").
+Se aplica en Calculo E Costos (AM:AR) y en el FD de cada fila de Subastas de
+Calculo RE545 (`Script/nucleo/no_participo.py`); la hoja FD muestra el
+archivo tal cual. En octubre 2026 resta $11 MM (−0,6 %; experimento en la
+rama `claude/experimento-no-participo`).
+
 - **`Reporte`** — con el botón **Generar reporte** de la fila de
   `Control_corrida.xlsx`: lo que recibe cada central (E Costos, RE545 y
   total), cuántos ciclos y ventanas pagaron ("27 de 32"), **cuánto dejó de

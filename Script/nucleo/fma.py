@@ -12,6 +12,7 @@ import pandas as pd
 
 from .externos import desempeno_fd, fma_subastas
 from .hojas_entrada import NOMBRES_SUBASTAS
+from .no_participo import sentido_de_concepto
 from .lectura import (
     ROL_BALANCE_BESS, ROL_SUBASTAS, TITULOS_DICCIONARIO,
     _bloques_columnas_diccionario, _clave_titulo, mapa_diccionario,
@@ -430,6 +431,9 @@ def calcular_fd_subastas(
     columna_control = NOMBRES_SUBASTAS["C"]
     columna_hora_mes = NOMBRES_SUBASTAS["J"]
     columna_config = NOMBRES_SUBASTAS["K"]
+    columna_concepto = NOMBRES_SUBASTAS["B"]
+    no_participo = (tablas_fd or {}).get("no_participo") or set()
+    sin_pago = 0
 
     valores = []
     sin_dato = {}
@@ -453,11 +457,30 @@ def calcular_fd_subastas(
             tablas_fd, control, unidad, datos[columna_hora_mes]
         )
 
+        # "No participó" en la direccion de la fila: no se paga (FD = 0).
+        # La otra direccion de la misma hora se paga como venga.
+        sentido = sentido_de_concepto(datos.get(columna_concepto))
+        if valor is not None and sentido and no_participo:
+            try:
+                hora = int(datos[columna_hora_mes])
+            except (TypeError, ValueError):
+                hora = None
+            clave = (control.lower()[:3], sentido, desempeno_fd._normalizar(unidad), hora)
+            if clave in no_participo:
+                valor = 0.0
+                sin_pago += 1
+
         if valor is None:
             sin_dato[control] = sin_dato.get(control, 0) + 1
             valores.append(pd.NA)
         else:
             valores.append(valor)
+
+    if sin_pago:
+        registrar(
+            f"  FD de Subastas: {sin_pago:,} fila(s) con 'No participó' en su "
+            f"direccion quedan con FD = 0 (no se pagan)."
+        )
 
     for central in sorted(sin_equivalencia):
         registrar(

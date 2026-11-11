@@ -6273,3 +6273,37 @@ ventana con xvfb. 332 pruebas.
   igual: solo es alerta/motivo si es en NINGUNA (LILE 29 de 29, ELENA 197 de
   197). Fuera "casi no participó".
 - Pruebas: test_reporte y test_responsables (+6).
+
+## 2026-11-11 (46) — "No participó" no se paga, por dirección; reportes por dirección
+
+- Decisión del usuario, tras el experimento de la rama
+  `claude/experimento-no-participo` (por dirección −$11 MM en oct; estricto
+  −$268 MM): "pasa al main la corrección [...] la que va por dirección, porque
+  ese es el que vale. Si estás adjudicado por control de bajada y no
+  prestaste control de subida [...] el control de bajada te lo tienen que
+  pagar".
+- `Script/nucleo/no_participo.py`: la dirección cuya Respuesta dice "No
+  participó" va a FD = 0 (CPF+ → CPF(+), CPF− → CPF(−), CSF → las dos).
+  - E Costos: `fd_por_direccion` antes de los diccionarios del FD (AM:AR).
+  - RE545: cada fila de Subastas mira la Respuesta de SU dirección (Concepto):
+    `tablas_fd_desde_hoja` arma las claves "No participó" y
+    `calcular_fd_subastas` deja esa fila en FD = 0. Más fino que el
+    experimento (que ponía en 0 el Fd del servicio solo si ninguna dirección
+    participaba): en oct difiere solo en ESTEPA (−$167 mil).
+  - La hoja FD no se toca (muestra el archivo). El cálculo anota cuántas
+    filas quedaron en 0.
+  - Oct real recalculado: $1.841 MM → $1.829 MM (−$11 MM).
+- Reportes, por dirección:
+  - "FD CPF/CSF en horas adjudicadas": el FD de la dirección adjudicada en
+    cada hora, ya con la regla (antes, el promedio del mes: LILE 0,96 cuando
+    en sus horas adjudicadas era 0).
+  - Horas adjudicadas con "No participó": solo en la dirección adjudicada
+    (antes contaba si lo decía cualquiera: inflaba; mi respuesta del 56 % /
+    86 % estaba mal por eso).
+  - Textos: "no se pagan" en vez de "aunque el FD diga 1"; "FD = 0 en sus
+    horas adjudicadas" en vez de "en todo el mes".
+  - Comparación: si una planilla se calculó antes de la regla (filas
+    adjudicadas "No participó" con FD > 0 en E Costos; oct de Drive: 340), una
+    línea ATENCIÓN pide recalcularla, para que la regla no aparezca como un
+    cambio de FD de las centrales.
+- Pruebas: test_no_participo (6) y test_reporte actualizado.

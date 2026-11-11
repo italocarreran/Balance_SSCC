@@ -60,8 +60,8 @@ C_HORAS_ADJ = "Horas con Adj SSCC"
 C_ADJ_CPF = "Adjudicado CPF [MW]"
 C_ADJ_CSF = "Adjudicado CSF [MW]"
 C_RESERVA = "Reserva con FD y FMA [kWh]"
-C_FD_CPF = "FD CPF promedio"
-C_FD_CSF = "FD CSF promedio"
+C_FD_CPF = "FD CPF en horas adjudicadas"
+C_FD_CSF = "FD CSF en horas adjudicadas"
 C_OFERTA_DIAS = "Días con oferta completa"
 C_DIAS = "Días en el mes"
 C_HORAS_SUB = "Horas adjudicadas"
@@ -80,6 +80,7 @@ C_NPA_CPF = "Horas adjudicadas CPF con 'No participó'"
 C_NPA_CSF = "Horas adjudicadas CSF con 'No participó'"
 C_HA_CPF = "Horas adjudicadas CPF en el FD"
 C_HA_CSF = "Horas adjudicadas CSF en el FD"
+# (por direccion: una hora adjudicada en CPF(+) y CPF(-) cuenta dos veces)
 C_FDH_CPF = "Horas en FD CPF"
 C_EC_C1 = "E Costos Total C1 [CLP]"
 C_EC_C2 = "E Costos Total C2 [CLP]"
@@ -366,12 +367,17 @@ def resumen_por_central(ruta_planilla, registrar=print):
                 tabla_horas.drop_duplicates().groupby("c")["h"].size().astype(float).to_dict()
             )
         if horas is not None and servicio is not None:
+            from .no_participo import sentido_de_concepto
+
             centrales_sub = _col(subastas, "Configuración").map(normalizar)
+            sentidos = _col(subastas, "Concepto").map(sentido_de_concepto)
             for codigo in ("CPF", "CSF"):
                 es = servicio.eq(codigo).to_numpy()
+                # (central, hora del mes, sentido): la direccion importa
+                # ("No participó" en subida no quita la bajada).
                 horas_adjudicadas[codigo] = {
-                    (c, int(h)) for c, h in zip(centrales_sub[es], horas[es])
-                    if c and pd.notna(h)
+                    (c, int(h), d) for c, h, d in zip(centrales_sub[es], horas[es], sentidos[es])
+                    if c and pd.notna(h) and d
                 }
         energia = _col(subastas, "Energía SSCC")
         if servicio is not None and energia is not None:
@@ -379,52 +385,81 @@ def resumen_por_central(ruta_planilla, registrar=print):
                 parte = subastas[servicio.eq(codigo).to_numpy()]
                 datos[columna] = _por_central(parte, "Configuración", "Energía SSCC")
 
-    # --- FD: el factor de desempeno promedio de las horas que existen -------
+    claves_no_participo = set()   # (central, hora, servicio, sentido)
+    no_participo_pagadas = 0
+    # --- FD: en las horas ADJUDICADAS, por direccion ------------------------
+    # Lo que importa es el FD de la direccion adjudicada en cada hora, ya
+    # con la regla de pago (no_participo.py: "No participó" en esa
+    # direccion -> FD = 0). El promedio de todo el mes engañaba (SAE-LILE
+    # oct: 0,96 en el mes, 0 en sus horas adjudicadas).
     if fd is not None:
+        from .no_participo import mascaras_no_participo
+
         for bloque, clave, columna in ((fd[0], "Fd_CSF", C_FD_CSF),
                                        (fd[1], "Fd_CPF", C_FD_CPF)):
-            if bloque is None:
+            if bloque is None or _col(bloque, "Central") is None:
                 continue
-            factor = next((c for c in bloque.columns if clave in str(c)), None)
-            if factor is None or _col(bloque, "Central") is None:
-                continue
+            codigo = "CSF" if clave == "Fd_CSF" else "CPF"
             horas = _col(bloque, "Hora Mes")
             if horas is not None:
                 bloque = bloque[_num(horas).notna().to_numpy()]
-            datos[columna] = _por_central(bloque, "Central", factor, "mean")
-            # "No participó" en la Respuesta (columnas H y V de la hoja):
-            # puede venir con FD = 1 (docs/Trazabilidad_FD_a_DB_Y_planilla3.md,
-            # seccion 25), asi que el promedio del FD no lo ve.
-            respuestas = [c for c in bloque.columns if "respuesta" in normalizar(c)]
-            if respuestas:
-                no_participo = pd.Series(False, index=range(len(bloque)))
-                for nombre in respuestas:
-                    no_participo |= (
-                        _col(bloque, nombre).reset_index(drop=True)
-                        .map(lambda v: normalizar(v).startswith("no particip"))
-                    )
-                central = _col(bloque, "Central").reset_index(drop=True).map(normalizar)
-                tabla_np = pd.DataFrame({"c": central, "np": no_participo})
-                tabla_np = tabla_np[tabla_np["c"] != ""]
-                sin, total = (
-                    (C_NP_CSF, C_FDH_CSF) if clave == "Fd_CSF" else (C_NP_CPF, C_FDH_CPF)
-                )
-                datos[sin] = tabla_np.groupby("c")["np"].sum().astype(float).to_dict()
-                datos[total] = tabla_np.groupby("c").size().astype(float).to_dict()
-                codigo = "CSF" if clave == "Fd_CSF" else "CPF"
-                horas_fd = _col(bloque, "Hora Mes")
-                if codigo in horas_adjudicadas and horas_fd is not None:
-                    tabla_np["h"] = _num(horas_fd).reset_index(drop=True)
-                    adjudicada = [
-                        (c, int(h)) in horas_adjudicadas[codigo] if pd.notna(h) else False
-                        for c, h in zip(tabla_np["c"], tabla_np["h"])
-                    ]
-                    dentro = tabla_np[adjudicada]
-                    sin_a, total_a = (
-                        (C_NPA_CSF, C_HA_CSF) if codigo == "CSF" else (C_NPA_CPF, C_HA_CPF)
-                    )
-                    datos[sin_a] = dentro.groupby("c")["np"].sum().astype(float).to_dict()
-                    datos[total_a] = dentro.groupby("c").size().astype(float).to_dict()
+            bloque = bloque.loc[:, ~bloque.columns.duplicated()].reset_index(drop=True)
+            central = _col(bloque, "Central").reset_index(drop=True).map(normalizar)
+            hora = _num(_col(bloque, "Hora Mes")).reset_index(drop=True)
+            mascaras = mascaras_no_participo(bloque, codigo)
+            for sentido in ("+", "-"):
+                for c, h in zip(central[mascaras[sentido].to_numpy()], hora[mascaras[sentido].to_numpy()]):
+                    if c and pd.notna(h):
+                        claves_no_participo.add((c, int(h), codigo, sentido))
+            # Todas las horas (por si no hay Subastas con que cruzar).
+            factor = next((c for c in bloque.columns if clave in str(c)), None)
+            if factor is not None:
+                datos[columna] = _por_central(bloque, "Central", factor, "mean")
+            no_participo = mascaras["+"] | mascaras["-"]
+            tabla_np = pd.DataFrame({"c": central, "np": no_participo.reset_index(drop=True)})
+            tabla_np = tabla_np[tabla_np["c"] != ""]
+            sin, total = (C_NP_CSF, C_FDH_CSF) if codigo == "CSF" else (C_NP_CPF, C_FDH_CPF)
+            datos[sin] = tabla_np.groupby("c")["np"].sum().astype(float).to_dict()
+            datos[total] = tabla_np.groupby("c").size().astype(float).to_dict()
+            adjudicadas = horas_adjudicadas.get(codigo)
+            if not adjudicadas:
+                continue
+            filas = []
+            for sentido in ("+", "-"):
+                columna_fd = f"{codigo}({sentido})"
+                if columna_fd not in bloque:
+                    continue
+                valores = _num(_col(bloque, columna_fd)).reset_index(drop=True)
+                np_sentido = mascaras[sentido].reset_index(drop=True)
+                for c, h, v, n in zip(central, hora, valores, np_sentido):
+                    if c and pd.notna(h) and (c, int(h), sentido) in adjudicadas:
+                        filas.append((c, 0.0 if n else v, bool(n)))
+            if not filas:
+                continue
+            adj = pd.DataFrame(filas, columns=["c", "fd", "np"])
+            datos[columna] = adj.groupby("c")["fd"].mean().to_dict()
+            sin_a, total_a = (C_NPA_CSF, C_HA_CSF) if codigo == "CSF" else (C_NPA_CPF, C_HA_CPF)
+            datos[sin_a] = adj.groupby("c")["np"].sum().astype(float).to_dict()
+            datos[total_a] = adj.groupby("c").size().astype(float).to_dict()
+
+    # Planilla calculada ANTES de la regla "No participó" por direccion:
+    # filas de E Costos con esa direccion adjudicada, "No participó" y FD > 0.
+    pagadas = 0
+    if ecostos is not None and claves_no_participo and _col(ecostos, "Hora mes") is not None:
+        centrales_ec = _col(ecostos, "Configuracion").map(normalizar).reset_index(drop=True)
+        horas_ec = _num(_col(ecostos, "Hora mes")).reset_index(drop=True)
+        for codigo in ("CPF", "CSF"):
+            for sentido in ("+", "-"):
+                prorrata = _col(ecostos, f"Prorrata {codigo}({sentido})")
+                fd_ec = _col(ecostos, f"FD {codigo}({sentido})")
+                if prorrata is None or fd_ec is None:
+                    continue
+                prorrata = _num(prorrata).fillna(0).reset_index(drop=True)
+                fd_ec = _num(fd_ec).fillna(0).reset_index(drop=True)
+                for c, h, pr, f in zip(centrales_ec, horas_ec, prorrata, fd_ec):
+                    if pr > 0 and f > 0 and pd.notna(h) and (c, int(h), codigo, sentido) in claves_no_participo:
+                        pagadas += 1
+    no_participo_pagadas = pagadas
 
     # --- ofertas -------------------------------------------------------------
     if ofertas is not None and _col(ofertas, "Oferta completa") is not None:
@@ -463,7 +498,10 @@ def resumen_por_central(ruta_planilla, registrar=print):
         )
         filas.append(fila)
 
-    return pd.DataFrame(filas, columns=[*COLUMNAS_RESUMEN, *AGREGADOS])
+    resultado = pd.DataFrame(filas, columns=[*COLUMNAS_RESUMEN, *AGREGADOS])
+    # Ver comparar_planillas: avisa si una planilla es de antes de la regla.
+    resultado.attrs["no_participo_pagadas"] = no_participo_pagadas
+    return resultado
 
 
 # ------------------------------------------------------------
@@ -530,14 +568,14 @@ def explicar_central(fila):
             # normal (85-95 % en casi todas, y reciben igual).
             if sin_a >= total_a:
                 yield (f"Según FD no tuvo participación en {nombre} ('No participó' "
-                       f"en todas sus {numero(total_a)} {que}, aunque el FD diga 1).")
+                       f"en todas sus {numero(total_a)} {que}: no se pagan).")
         servicios_sin_fd = [
             nombre for nombre, adj, fd in (("CPF", adj_cpf, fd_cpf), ("CSF", adj_csf, fd_csf))
             if _hay(adj) and adj > 0 and _hay(fd) and fd == 0
         ]
         if servicios_sin_fd:
             yield (f"Según FD no tuvo participación (FD "
-                   f"{' y '.join(servicios_sin_fd)} = 0 en todo el mes).")
+                   f"{' y '.join(servicios_sin_fd)} = 0 en sus horas adjudicadas).")
         if _hay(dias) and dias == 0:
             yield "Ningún día con oferta completa."
 
@@ -654,8 +692,8 @@ _FICHA = (
     (C_ADJ_CPF, "Adjudicado CPF", "MW"),
     (C_ADJ_CSF, "Adjudicado CSF", "MW"),
     (C_HORAS_SUB, "Horas adjudicadas", "h"),
-    (C_FD_CPF, "FD CPF promedio", "FD"),
-    (C_FD_CSF, "FD CSF promedio", "FD"),
+    (C_FD_CPF, "FD CPF en horas adjudicadas", "FD"),
+    (C_FD_CSF, "FD CSF en horas adjudicadas", "FD"),
     (C_NPA_CPF, "CPF: horas adjudicadas con 'No participó'", "h"),
     (C_NPA_CSF, "CSF: horas adjudicadas con 'No participó'", "h"),
     (C_OFERTA_DIAS, "Días con oferta completa", "días"),
@@ -768,10 +806,10 @@ def formato_ficha(ws):
 
 # Que mira cada lado para explicar un cambio, y como se dice.
 _MOTORES_RE545 = (
-    (C_NP_CPF, "horas FD CPF 'No participó'", "h"),
-    (C_NP_CSF, "horas FD CSF 'No participó'", "h"),
-    (C_FD_CPF, "FD CPF promedio", ""),
-    (C_FD_CSF, "FD CSF promedio", ""),
+    (C_NPA_CPF, "horas CPF adjudicadas con 'No participó'", "h"),
+    (C_NPA_CSF, "horas CSF adjudicadas con 'No participó'", "h"),
+    (C_FD_CPF, "FD CPF en horas adjudicadas", ""),
+    (C_FD_CSF, "FD CSF en horas adjudicadas", ""),
     (C_ADJ_CPF, "adjudicado CPF", "MW"),
     (C_ADJ_CSF, "adjudicado CSF", "MW"),
     (C_HORAS_SUB, "horas adjudicadas", "h"),
@@ -781,10 +819,10 @@ _MOTORES_RE545 = (
     (C_CMG, "CMg promedio", "CLP/kWh"),
 )
 _MOTORES_ECOSTOS = (
-    (C_NP_CPF, "horas FD CPF 'No participó'", "h"),
-    (C_NP_CSF, "horas FD CSF 'No participó'", "h"),
-    (C_FD_CPF, "FD CPF promedio", ""),
-    (C_FD_CSF, "FD CSF promedio", ""),
+    (C_NPA_CPF, "horas CPF adjudicadas con 'No participó'", "h"),
+    (C_NPA_CSF, "horas CSF adjudicadas con 'No participó'", "h"),
+    (C_FD_CPF, "FD CPF en horas adjudicadas", ""),
+    (C_FD_CSF, "FD CSF en horas adjudicadas", ""),
     (C_ADJ_CPF, "adjudicado CPF", "MW"),
     (C_ADJ_CSF, "adjudicado CSF", "MW"),
     (C_HORAS_SUB, "horas adjudicadas", "h"),
@@ -797,7 +835,7 @@ _MOTORES_ECOSTOS = (
 
 
 # Lo que se resta en el monto (Total C2): moverse en contra lo explica.
-_RESTAN = (C_EC_C2, C_RE_C2, C_NP_CPF, C_NP_CSF)
+_RESTAN = (C_EC_C2, C_RE_C2, C_NPA_CPF, C_NPA_CSF)
 
 
 def _pct(nuevo, viejo):
@@ -1097,6 +1135,18 @@ def comparar_planillas(ruta_actual, ruta_anterior, registrar=print):
     actual = resumen_por_central(ruta_actual, registrar)
     anterior = resumen_por_central(ruta_anterior, registrar)
     lineas, tabla = comparar_resumenes(actual, anterior)
+    # Una planilla calculada antes de la regla "No participó" por direccion
+    # (2026-11-11) paga esas horas: la diferencia saldria como un cambio de
+    # FD de las centrales, cuando es un cambio del calculo.
+    for nombre, resumen in ((ruta_actual.name, actual), (ruta_anterior.name, anterior)):
+        n = resumen.attrs.get("no_participo_pagadas", 0)
+        if n:
+            lineas.insert(0, (
+                f"ATENCIÓN: {nombre} se calculó antes de la regla 'No participó' por "
+                f"dirección ({n:,} filas adjudicadas con 'No participó' pagadas con FD > 0). "
+                f"Recalcúlala (E Costos y RE545) para comparar con el mismo criterio: si no, "
+                f"esa diferencia aparece como un cambio de FD."
+            ))
 
     from .parametros import CARPETA_LOG
 
@@ -1145,10 +1195,10 @@ CONCEPTOS_CAMBIO = (
     (C_RE_C1, "RE545: Total C1", "CLP", False),
     (C_RE_C2, "RE545: Total C2", "CLP", False),
     (C_RE_VENTANAS, "RE545: ventanas con monto", "ventanas", False),
-    (C_FD_CPF, "FD CPF promedio", "FD", True),
-    (C_FD_CSF, "FD CSF promedio", "FD", True),
-    (C_NP_CPF, "FD CPF: horas 'No participó'", "h", False),
-    (C_NP_CSF, "FD CSF: horas 'No participó'", "h", False),
+    (C_FD_CPF, "FD CPF en horas adjudicadas", "FD", True),
+    (C_FD_CSF, "FD CSF en horas adjudicadas", "FD", True),
+    (C_NPA_CPF, "CPF: horas adjudicadas con 'No participó'", "h", False),
+    (C_NPA_CSF, "CSF: horas adjudicadas con 'No participó'", "h", False),
     (C_DIAS, "Días en el mes", "días", False),
     (C_HORAS_SUB, "Horas adjudicadas", "h", False),
     (C_ADJ_CPF, "Adjudicado CPF", "MW", False),
