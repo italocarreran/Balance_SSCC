@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-EXPERIMENTO (rama claude/experimento-no-participo, no va a main):
-¿cuanto cambia lo que se paga si las horas "No participó" del FD no se
-pagaran?
+EXPERIMENTO: ¿cuanto cambia lo que se paga si las horas "No participó" del
+FD no se pagaran?
+
+Desde 2026-11-11 el escenario POR DIRECCION es la regla del programa
+(Script/nucleo/no_participo.py): con el codigo actual la base ya no paga
+esas direcciones, asi que el escenario por direccion da ~0 y --estricto mide
+solo lo que agrega castigar tambien la direccion que si respondio. Los
+resultados de antes de la regla estan en RESULTADOS_sin_no_participo.md.
 
 Pedido del usuario (2026-11-11): "Crea un parentesis en otra rama para ver
 que tanto cambia si dejamos de pagar los 'no participo'".

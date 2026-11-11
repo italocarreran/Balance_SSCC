@@ -1,7 +1,13 @@
 # Experimento: ¿cuánto cambia si no se pagan las horas "No participó"?
 
-Rama `claude/experimento-no-participo` (paréntesis: **no va a main**).
 Script: `desarrollo/experimentos/sin_no_participo.py`.
+
+> **Decisión (2026-11-11):** el escenario **por dirección** es el que vale y
+> quedó como regla del programa (`Script/nucleo/no_participo.py`, ver README).
+> Desde entonces la base ya no paga las direcciones "No participó": correr el
+> script por dirección contra una planilla recalculada da ~$0, y el estricto
+> mide solo lo que agrega castigar también la dirección que sí respondió.
+> Los números de abajo son de antes de la regla (base = programa sin regla).
 
 ## Método
 
