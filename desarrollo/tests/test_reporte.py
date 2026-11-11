@@ -50,7 +50,7 @@ class TestPorQueNoRecibe(unittest.TestCase):
                r.C_FD_CPF: 0.0, r.C_ADJ_CSF: 0.0}
         ))
         self.assertEqual(
-            texto, "Según FD no tuvo participación (FD CPF = 0 en todo el mes)."
+            texto, "Según FD no tuvo participación (FD CPF = 0 en sus horas adjudicadas)."
         )
 
     def test_sin_adjudicacion(self):
@@ -117,7 +117,7 @@ class TestPorQueNoRecibe(unittest.TestCase):
         self.assertEqual(
             r.explicar_central(ninguna),
             "Según FD no tuvo participación en CPF ('No participó' en todas sus 29 "
-            "horas adjudicadas, aunque el FD diga 1).",
+            "horas adjudicadas: no se pagan).",
         )
         self.assertEqual(r.explicar_central(dict(casi, **{r.C_TOTAL: 0.0})).find("casi"), -1)
 
@@ -185,7 +185,7 @@ class TestComparacion(unittest.TestCase):
         self.assertEqual(
             tabla.set_index(r.C_CENTRAL).loc["SAE-LILE", "Qué pasó"],
             "Nueva: no estaba en la planilla anterior. Recibe $0. Según FD "
-            "no tuvo participación (FD CPF y CSF = 0 en todo el mes).",
+            "no tuvo participación (FD CPF y CSF = 0 en sus horas adjudicadas).",
         )
 
     def test_queda_y_sigue_en_cero_dicen_por_que(self):
@@ -276,7 +276,7 @@ class TestCambiosPorCentral(unittest.TestCase):
         self.assertEqual(cambios.loc["Recibe RE545", "Variación [%]"], 100.0)
         self.assertEqual(cambios.loc["Adjudicado CPF", "Anterior"], 10.0)
         self.assertEqual(cambios.loc["Adjudicado CPF", "Actual"], 15.0)
-        self.assertEqual(cambios.loc["FD CPF promedio", "Cambio"], r.IGUAL)
+        self.assertEqual(cambios.loc["FD CPF en horas adjudicadas", "Cambio"], r.IGUAL)
         # La plata, primero.
         self.assertEqual(
             list(r.cambios_por_central(actual, anterior)["Concepto"])[:3],
@@ -304,7 +304,7 @@ class TestCambiosPorCentral(unittest.TestCase):
         actual = pd.DataFrame([fila(**{r.C_ADJ_CSF: 0.0, r.C_FD_CSF: math.nan})])
         cambios = r.cambios_por_central(actual, anterior).set_index("Concepto")
         self.assertNotIn("Adjudicado CSF", cambios.index)       # 0 en los dos
-        self.assertEqual(cambios.loc["FD CSF promedio", "Cambio"], r.SIN_DATO)
+        self.assertEqual(cambios.loc["FD CSF en horas adjudicadas", "Cambio"], r.SIN_DATO)
 
     def test_nueva(self):
         cambios = r.cambios_por_central(
@@ -484,7 +484,12 @@ class TestNoParticipo(unittest.TestCase):
         with tempfile.TemporaryDirectory() as carpeta:
             resumen = self._planilla_fd(carpeta, ["No Participó", "No participo"])
         uno = resumen.set_index(r.C_CENTRAL).loc["SAE-UNO"]
-        self.assertEqual(uno[r.C_FD_CSF], 1.0)        # el factor no lo ve
+        # El archivo trae FD = 1, pero con la regla por direccion esas horas
+        # (adjudicadas en CSF, "No participó") no se pagan: FD = 0.
+        self.assertEqual(uno[r.C_FD_CSF], 0.0)
+        # Subastas: CSF(+) en la hora 1 y CSF(-) en la 2 -> 2 horas-direccion.
+        self.assertEqual(uno[r.C_NPA_CSF], 2.0)
+        self.assertEqual(uno[r.C_HA_CSF], 2.0)
         self.assertEqual(uno[r.C_NP_CSF], 2.0)
         self.assertEqual(uno[r.C_FDH_CSF], 2.0)
         fila_cero = dict(uno)
@@ -493,7 +498,7 @@ class TestNoParticipo(unittest.TestCase):
             r.explicar_central(fila_cero),
             # Las 2 horas del FD estan adjudicadas en CSF (Subastas, Hora_mes 1 y 2).
             "Según FD no tuvo participación en CSF ('No participó' en todas "
-            "sus 2 horas adjudicadas, aunque el FD diga 1).",
+            "sus 2 horas adjudicadas: no se pagan).",
         )
 
     def test_participo_no_cuenta(self):
@@ -504,15 +509,16 @@ class TestNoParticipo(unittest.TestCase):
     def test_la_comparacion_lo_usa(self):
         anterior = pd.DataFrame([fila(**{
             r.C_ECOSTOS: 9.8e6, r.C_RE545: 0.0, r.C_TOTAL: 9.8e6,
-            r.C_NP_CSF: 700.0, r.C_FDH_CSF: 720.0,
+            r.C_NPA_CSF: 700.0, r.C_HA_CSF: 720.0,
         })])
         actual = pd.DataFrame([fila(**{
             r.C_ECOSTOS: 227.3e6, r.C_RE545: 0.0, r.C_TOTAL: 227.3e6,
-            r.C_NP_CSF: 0.0, r.C_FDH_CSF: 744.0,
+            r.C_NPA_CSF: 0.0, r.C_HA_CSF: 744.0,
         })])
         cambios = r.cambios_por_central(actual, anterior).set_index("Concepto")
-        self.assertEqual(cambios.loc["FD CSF: horas 'No participó'", "Anterior"], 700.0)
-        self.assertEqual(cambios.loc["FD CSF: horas 'No participó'", "Cambio"], r.BAJA)
+        concepto = "CSF: horas adjudicadas con 'No participó'"
+        self.assertEqual(cambios.loc[concepto, "Anterior"], 700.0)
+        self.assertEqual(cambios.loc[concepto, "Cambio"], r.BAJA)
 
 
 class TestHerramienta(unittest.TestCase):

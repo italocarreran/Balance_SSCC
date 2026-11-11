@@ -28,6 +28,7 @@ from .parametros import (
     HOJA_RESUMEN_BESS,
 )
 from .hojas_entrada import subastas_con_nombre_balance_bess
+from .no_participo import fd_por_direccion
 from .lectura import ROL_FD
 from .utiles import normalizar
 
@@ -621,8 +622,17 @@ def completar_calculo_e_costos_grupos(
     _completar_mapeo_con_otros_nombres(
         df, dic_mapeo, diccionario, df_fd_csf, df_fd_cpf, registrar
     )
-    dic_fd_csf = construir_dic_fd_bloque(df_fd_csf, "id", "CSF(+)", "CSF(-)")
-    dic_fd_cpf = construir_dic_fd_bloque(df_fd_cpf, "id", "CPF(+)", "CPF(-)")
+    # Las horas "No participó" no se pagan, por direccion (no_participo.py):
+    # el FD de esa direccion pasa a 0 aunque el archivo traiga 1.
+    fd_csf_pago, sin_csf = fd_por_direccion(df_fd_csf, "CSF")
+    fd_cpf_pago, sin_cpf = fd_por_direccion(df_fd_cpf, "CPF")
+    if sin_csf or sin_cpf:
+        registrar(
+            f"  FD: {sin_cpf:,} hora(s) CPF y {sin_csf:,} CSF con 'No participó' en "
+            f"su direccion quedan con FD = 0 (no se pagan)."
+        )
+    dic_fd_csf = construir_dic_fd_bloque(fd_csf_pago, "id", "CSF(+)", "CSF(-)")
+    dic_fd_cpf = construir_dic_fd_bloque(fd_cpf_pago, "id", "CPF(+)", "CPF(-)")
 
     am, an, ap, aq = calcular_fd_prorrateado(
         df, dic_mapeo, dic_fd_csf, dic_fd_cpf, registrar=registrar,
