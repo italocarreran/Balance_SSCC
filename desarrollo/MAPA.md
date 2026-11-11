@@ -134,8 +134,10 @@ importable como cualquier módulo.
   **Examinar** está **Actualizar** (`actualizar_vista()`): vuelve a llamar
   a `revisar()` para que un archivo pegado a mano en el explorador aparezca
   en el diagrama sin cambiar de mes y volver; mientras corre un proceso no
-  hace nada (repintar recrea los botones del árbol, que en ese momento
-  están deshabilitados a propósito). Abajo de todo hay además tres botones que no son de una fila
+  hace nada (los botones del árbol están deshabilitados a propósito).
+  Desde 2026-11-11 (48) `pintar_arbol` **no recrea** el árbol si su forma
+  (ids, niveles, prefijos, origen) no cambió: solo cambia en el lugar el
+  texto, el estado, el link y el aviso de cada fila. Abajo de todo hay además tres botones que no son de una fila
   sola: **Crear carpeta del caso** (arma el caso del período con todas sus
   subcarpetas — ver `rutas.py`), **Ejecutar todo** (abre el plan de la
   corrida y la ejecuta respetando el grafo de dependencias — ver
@@ -232,6 +234,15 @@ importable como cualquier módulo.
   carpeta de ese período (`recordar_carpeta()`); dispara en `nucleo` la escritura del CSV de CMg, `cmg.xlsx`,
   `11_PAGOS_BESS_AAMM.xlsx` (y `Control_corrida.xlsx`) dentro de la carpeta
   base del caso (cada hoja por su botón).
+- **Arranque (2026-11-11 (48)):** `Script.nucleo` (pandas, openpyxl) **no
+  se importa arriba del archivo**: `main()` crea la ventana con un cartel
+  "Cargando…" y lo importa en un hilo (`_importar_con_la_ventana_viva`);
+  hasta entonces el nombre `nucleo` del módulo vale `None`.
+  `Balance_BESS.ARCHIVO_REGISTRO` se resuelve con un `__getattr__` de
+  módulo. Los diálogos se crean ocultos y aparecen armados con
+  `presentar()` (centrados; modales: `deiconify` → `wait_visibility` →
+  `grab_set`); "Ejecutar todo" y "Generar antecedentes SAE" son de una sola
+  instancia.
 - **Expone:** `main()` — punto de entrada (`python Balance_BESS.py`);
   `carpeta_a_abrir(ruta, es_archivo=False)` y
   `abrir_en_explorador(ruta, es_archivo=False)` (la carpeta que abre cada
@@ -443,6 +454,10 @@ importable como cualquier módulo.
   hora)`, `nombres_del_periodo(aamm)`, `ruta_origen(raiz=None)`,
   `carpeta_db_subastas(...)`, `asegurar_carpeta_db(...)`,
   `accdb_presentes(carpeta_subastas, aamm)`,
+  `accdb_presentes_con_fecha(carpeta_subastas, aamm)` → `(presentes,
+  mtime del más nuevo o None)` (las dos leen `DB subastas/` con UN
+  `os.scandir`, no un `is_file()` por nombre posible; `revisar_estructura`
+  deja esa fecha en `rutas["accdb_subastas_mtime"]` para `vigencia.py`),
   `traer_accdb(carpeta_subastas, aamm, raiz=None, registrar=print)` →
   `(copiados, salteados, faltantes)`,
   `leer_accdb(ruta)`, `construir_crudo(carpeta_subastas, aamm, registrar)` →
