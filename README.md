@@ -326,8 +326,8 @@ Ver `desarrollo/MAPA.md` para qué hace cada módulo.
 ├── Medidas/
 │   ├── Medidas_SAE.xlsx     (botón "Actualizar")
 │   ├── _trabajo/            (lotes descargados; no se muestra en la ventana)
-│   └── <algún archivo .xlsx cuyo nombre contenga "SOC" y el AAMM,
-│        ej. SOC_2607.xlsx, "resumen soc julio 2607.xlsx">
+│   └── SOC_AAMM.xlsx        (botón "Traer": desde PI AF, tres columnas
+│                             central | fecha | soc)
 ├── Auxiliares/
 │   ├── Centrales.xlsx       (hojas "Resumen BESS" y "Diccionario")
 │   │                        El "Diccionario" acepta dos formatos: el
@@ -381,10 +381,23 @@ sellos a `__config__`. Si la planilla está abierta en Excel, se reintenta la ve
 
 Ningún archivo (salvo `cmg.xlsx`) sigue un nombre fijo:
 
-- **SoC**: cualquier `.xlsx` en `Medidas/` cuyo nombre contenga "SOC" y el
-  AAMM ingresado en la ventana. Si hay más de un archivo que cumple la
-  condición, el programa se detiene y pide dejar solo el del período
-  correspondiente (no elige por fecha de modificación).
+- **SoC**: lo trae el botón **Traer** de su fila desde PI AF
+  (`SRV-SCADA-AF2`, base `SEN`, atributo `Porc Carga Disponible` / 100,
+  cada 15 min del día 1 00:00 al día 1 del mes siguiente 00:00) y lo deja en
+  `Medidas/SOC_AAMM.xlsx` con **tres columnas: `central`, `fecha`, `soc`**
+  (una fila por central y cuarto de hora), más una hoja `Rutas PI` que dice
+  de dónde salió cada central. Las centrales son las de `Resumen BESS`; la
+  ruta de cada una sale de la columna **`SoC_PI`** del `Diccionario` (se
+  puede pegar tal cual sale de DataLink, con el `|Nombre PCP/PID` al final;
+  las de `SRV-SCADA-AF1` se buscan en AF2). Si una central no tiene ruta, o
+  la ruta no existe en AF2, se busca entre los elementos `SAE*` por su
+  atributo `Nombre PCP/PID` contra los nombres de la central en el
+  Diccionario, y el registro muestra la ruta encontrada para pegarla.
+  Solo funciona en un PC con el AF SDK de OSIsoft y `pythonnet`.
+  Un archivo puesto a mano sigue sirviendo: cualquier `.xlsx` en `Medidas/`
+  cuyo nombre contenga "SOC" y el AAMM, en el formato nuevo o en el de
+  bloques de DataLink de antes. Si hay más de uno, el programa se detiene y
+  pide dejar solo uno (no elige por fecha de modificación).
 - **OfertasSSCC** y **SSCC_Desempeño_\***: cualquier archivo Excel
   (`.xlsx`/`.xlsm`/`.xlsb`/`.xls`) en su carpeta correspondiente cuyo
   nombre contenga (Ofertas) o empiece con (el otro) ese texto. Si hay más

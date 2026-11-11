@@ -506,6 +506,10 @@ ROL_FD = "fd"
 ROL_SUBASTAS = "subastas"
 ROL_OFERTAS = "ofertas"
 ROL_FMA_CPF = "fma_cpf"
+# La ruta del elemento en PI AF de donde sale el SoC (boton "Traer" de
+# la fila del SoC, ver nucleo.soc.generar_soc). No es un nombre de la
+# central: no entra en la homologacion.
+ROL_SOC_PI = "soc_pi"
 
 # Encabezado (normalizado, con "_" tratado como espacio) -> rol.
 TITULOS_DICCIONARIO = {
@@ -514,7 +518,12 @@ TITULOS_DICCIONARIO = {
     "subastas": ROL_SUBASTAS,
     "ofertas": ROL_OFERTAS,
     "fma cpf": ROL_FMA_CPF,
+    "soc pi": ROL_SOC_PI,
+    "ruta soc": ROL_SOC_PI,
 }
+
+# Columnas del Diccionario que NO son nombres de la central.
+ROLES_NO_NOMBRE = {ROL_SOC_PI}
 
 # Cuantas filas de arriba se miran buscando la fila de encabezados: el
 # archivo real empieza con una fila vacia, asi que nunca es la 0 fija.
@@ -655,7 +664,9 @@ def construir_homologacion(diccionario):
 
             canonico = _texto_seguro(fila.get(ROL_BALANCE_BESS))
 
-            for valor in fila.values():
+            for rol, valor in fila.items():
+                if rol in ROLES_NO_NOMBRE:
+                    continue
                 if _tiene_valor(valor):
                     mapa.setdefault(normalizar(valor), canonico)
 

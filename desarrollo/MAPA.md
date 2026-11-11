@@ -30,7 +30,9 @@ Script/
         estructura.py          <- el arbol que dibuja la ventana
         origenes.py            <- de donde viene lo que se trae (links)
         lectura.py             <- Medidas_SAE.xlsx, Centrales.xlsx y la hoja "Centrales"
-        soc.py                 <- el SoC por bloques del SCADA
+        soc.py                 <- el SoC: generar_soc (PI AF -> SOC_AAMM.xlsx,
+                                  central|fecha|soc) y extraer_soc (lee el
+                                  nuevo y el de bloques de DataLink)
         ofertas_sscc.py        <- la hoja Ofertas SSCC (y R, S, T, V)
         hojas_entrada.py       <- hojas CMg, FD y Subastas
         subastas_accdb.py      <- Subastas desde los Access
@@ -97,6 +99,7 @@ Script/
         Descarga_PRMTE.py      <- API de medidas, por punto de medida
         Claves_Balance.py      <- calendario de cuartos + agrupacion por clave
         Generacion_Real.py     <- API de operacion real (hoja "Gen real")
+        Soc_PI.py              <- SoC desde PI AF (AF SDK via pythonnet)
 ```
 
 `Script/` es un paquete: la ventana hace `from Script import nucleo` y
@@ -155,6 +158,7 @@ importable como cualquier módulo.
   | Fila | Botón | Qué hace |
   |---|---|---|
   | `Medidas/Medidas_SAE.xlsx` | **Actualizar** | `nucleo.generar_medidas_sae` — corre los cuatro pasos de Medidas de un viaje |
+  | `Medidas/SOC_AAMM.xlsx` | **Traer** | `nucleo.generar_soc` — el SoC de las centrales de `Resumen BESS` desde PI AF2 (rutas: columna `SoC_PI` del Diccionario) |
   | `Cmg/cmg<AAMM>_def_15minutal.csv` | **Traer** | `nucleo.traer_csv_cmg` — copia el CSV del período desde la unidad de red a `Cmg/` |
   | `Cmg/cmg.xlsx` | **Generar** | `nucleo.generar_cmg` — arma `cmg.xlsx` con el CSV que quedó al lado |
   | `FD y FMA/SSCC_Desempeño_*` | **Traer** | `nucleo.traer_fd` — baja el FD del período del árbol de indicadores del DCO y descomprime el zip |

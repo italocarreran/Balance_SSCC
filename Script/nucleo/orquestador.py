@@ -50,6 +50,7 @@ from .csv_sae import generar_csv_sae
 from .parametros import ARCHIVO_CSV_SAE
 from .proceso import generar_consolidado, generar_pagos_bess
 from .medidas_sae import generar_medidas_sae
+from .soc import generar_soc
 from .rutas import validar_aamm
 from .traer import (
     consolidar_subastas, generar_cmg, generar_fma, traer_csv_cmg, traer_fd,
@@ -73,6 +74,12 @@ Tarea = namedtuple(
 
 def _correr_medidas_sae(carpeta_base, aamm, secciones, registrar, progreso):
     return generar_medidas_sae(
+        carpeta_base, aamm, registrar=registrar, progreso=progreso
+    )
+
+
+def _correr_soc(carpeta_base, aamm, secciones, registrar, progreso):
+    return generar_soc(
         carpeta_base, aamm, registrar=registrar, progreso=progreso
     )
 
@@ -140,6 +147,8 @@ def _correr_csv_sae(carpeta_base, aamm, secciones, registrar, progreso):
 
 GRUPOS = (
     Grupo("medidas_sae", ARCHIVO_MEDIDAS_SAE, "medidas", _correr_medidas_sae),
+    # PI AF es otro servidor: corre en paralelo con las APIs.
+    Grupo("soc", "SoC del periodo (PI AF)", "soc", _correr_soc),
     Grupo("cmg_csv", "CSV 15-minutal de CMg", "cmg", _correr_traer_cmg),
     Grupo("cmg_xlsx", ARCHIVO_CMG, "cmg", _correr_generar_cmg),
     Grupo("fd_sscc", "FD (SSCC_Desempeño_*)", "fd_fma", _correr_traer_fd),
@@ -178,6 +187,12 @@ TAREAS = (
         "medidas_sae", f"{ARCHIVO_MEDIDAS_SAE} (baja el mes de las APIs)",
         "medidas_sae", None, "medidas_sae",
         _REQ_HOMOLOGACION, (), (),
+    ),
+    Tarea(
+        # Las centrales y sus rutas de AF salen de Centrales.xlsx.
+        "soc", "Traer SoC del periodo (PI AF)",
+        "soc", None, "soc",
+        _REQ_CENTRALES, (), (),
     ),
     Tarea(
         "cmg_csv", "Traer cmg_15min (unidad de red)",
@@ -225,7 +240,7 @@ TAREAS = (
     Tarea(
         "consolidado:medidores", "hoja 'Medidores'",
         "consolidado", "medidores", "consolidado:medidores",
-        _REQ_CENTRALES + ("soc",), ("medidas_sae",),
+        _REQ_CENTRALES, ("medidas_sae", "soc"),
         ("consolidado:centrales",),
     ),
     Tarea(
@@ -347,7 +362,7 @@ NOMBRE_REQUISITO = {
 
 # Las entradas que pone la persona antes de poder hacer NADA de
 # calculo (las que nombro el usuario: "centrales, homologacion y
-# ofertas", mas el SoC del periodo). Si falta una de estas, el boton
+# ofertas"). El SoC ya no: lo trae el programa desde PI. Si falta una de estas, el boton
 # se bloquea: no tiene sentido ofrecer una corrida que no va a poder
 # terminar.
 ENTRADAS_INICIALES = (
@@ -357,7 +372,6 @@ ENTRADAS_INICIALES = (
     "homologacion",
     f"homologacion:{Homologacion.HOJA_HOMOL}",
     "ofertas",
-    "soc",
 )
 
 # Entradas que suelen llegar DESPUES (el Excel de prorrata de retiros
@@ -427,7 +441,7 @@ def _seleccion_por_defecto(hechas, estado_fila):
 
     Lo mismo, en cadena, con lo que salga de una tarea asi.
 
-    Las ENTRADAS_INICIALES (Centrales, homologacion, ofertas, SoC) NO
+    Las ENTRADAS_INICIALES (Centrales, homologacion, ofertas) NO
     se tratan asi: si falta una, el plan igual las incluye y el boton
     queda bloqueado diciendo que falta -- que es lo que pidio el
     usuario.

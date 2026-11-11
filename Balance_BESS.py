@@ -23,7 +23,7 @@ Script/nucleo/orquestador.py; esta ventana solo los dibuja.
     <CARPETA_BASE>/
         Medidas/
             Medidas_SAE.xlsx               [Actualizar]
-            <algo>SOC<algo>AAMM<algo>.xlsx
+            SOC_AAMM.xlsx                  [Traer]
         Auxiliares/
             Centrales.xlsx
                 hoja 'Resumen BESS'
@@ -1225,6 +1225,9 @@ def main():
         if id_fila == "medidas_sae":
             return ("Actualizar", actualizar_medidas_sae)
 
+        if id_fila == "soc":
+            return ("Traer", traer_soc)
+
         if id_fila == "cmg_csv":
             return ("Traer", traer_cmg_15min)
 
@@ -1943,6 +1946,7 @@ def main():
         "consolidar_subastas": "Consolidar subastas",
         "generar_cmg": "Generar cmg.xlsx",
         "generar_medidas_sae": "Actualizar Medidas_SAE",
+        "generar_soc": "Traer SoC desde PI",
         "generar_consolidado": "Planilla 11_PAGOS_BESS (entradas)",
         "generar_pagos_bess": "Planilla 11_PAGOS_BESS (calculo)",
         "ejecutar_plan": "Ejecutar todo",
@@ -2277,6 +2281,32 @@ def main():
             nucleo.generar_medidas_sae,
             dict(carpeta_base=ruta, aamm=aamm),
             nucleo.ARCHIVO_MEDIDAS_SAE,
+        )
+
+    def traer_soc():
+        """
+        Trae desde PI AF (SRV-SCADA-AF2) el SoC de todas las centrales
+        de 'Resumen BESS' y deja Medidas/SOC_AAMM.xlsx en tres
+        columnas: central | fecha | soc. Las rutas salen de la columna
+        SoC_PI del Diccionario (ver nucleo.generar_soc).
+        """
+
+        ruta = caso_listo()
+        if ruta is None:
+            return
+
+        aamm = var_aamm.get().strip()
+
+        try:
+            nucleo.validar_aamm(aamm)
+        except nucleo.ErrorEntrada as error:
+            messagebox.showwarning("Falta el periodo", str(error))
+            return
+
+        lanzar(
+            nucleo.generar_soc,
+            dict(carpeta_base=ruta, aamm=aamm),
+            nucleo.nombre_archivo_soc(aamm),
         )
 
     def actualizar_consolidado(secciones):

@@ -28,7 +28,6 @@ ENTRADAS_OK = {
     "centrales:Diccionario": "ok",
     "homologacion": "ok",
     "homologacion:homol": "ok",
-    "soc": "ok",
     "ofertas": "ok",
     "prorrata_archivo": "ok",
 }
@@ -134,11 +133,22 @@ class TestPlan(unittest.TestCase):
         self.assertTrue(plan["puede_ejecutar"], plan["bloqueos"])
 
     def test_una_entrada_inicial_que_falta_sigue_bloqueando(self):
-        filas = caso_completo(soc="falta")
+        filas = caso_completo(ofertas="falta")
         plan = nucleo.planificar(
             "/caso", "2607", seleccion={"consolidado:medidores"}, filas=filas
         )
         self.assertFalse(plan["puede_ejecutar"])
+
+    def test_el_soc_lo_trae_el_programa_y_va_antes_de_medidores(self):
+        # Sin archivo de SoC el boton NO se bloquea: es una tarea mas.
+        plan = nucleo.planificar("/caso", "2607", filas=caso_vacio())
+        self.assertTrue(plan["puede_ejecutar"], plan["bloqueos"])
+        self.assertIn(
+            "soc", {t["id"] for t in plan["tareas"] if t["seleccionada"]}
+        )
+        self.assertIn(
+            "consolidado:medidores", nucleo.propagar_seleccion({"soc"})
+        )
 
     def test_de_cero_se_hace_todo_y_el_boton_se_puede_apretar(self):
         plan = nucleo.planificar("/caso", "2607", filas=caso_vacio())
@@ -409,7 +419,7 @@ class TestCorrida(unittest.TestCase):
         )
         self.assertRegex(texto, r"Resumen de la corrida \(total \d+,\d s")
         resumen = [m for m in mensajes if ": ok - tardo" in m]
-        self.assertEqual(len(resumen), 10, mensajes)  # + SAE_AAMM.csv
+        self.assertEqual(len(resumen), 11, mensajes)  # + SAE_AAMM.csv y SoC
         self.assertTrue(all("empezo a los" in m for m in resumen))
 
     def test_formatear_duracion(self):
@@ -477,7 +487,7 @@ class TestCorrida(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual(simultaneos, 1)
         ids = [g for g, _ in corridos]
-        self.assertEqual(len(ids), 10)
+        self.assertEqual(len(ids), 11)
         self.assertEqual(ids[-1], "sae_csv")  # el ultimo paso
         self.assertLess(ids.index("consolidado"), ids.index("pagos"))
 

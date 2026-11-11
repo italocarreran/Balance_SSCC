@@ -12,6 +12,12 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **SoC desde PI (2026-11-11 (49)):** probar el botón **Traer** de la fila
+  del SoC en el PC con AF (Windows, `pip install pythonnet`): que las rutas
+  AF1 pasadas a AF2 existan tal cual, qué ruta encuentra la búsqueda para
+  MANZANO, ARICA2, ANDES2B, ELENA, ALFALFAL-VR2 y LILE (pegarlas en
+  `SoC_PI`), y comparar un mes contra el SOC de DataLink (2610).
+
 - **Ventana más rápida (2026-11-11 (48)):** fases 1 a 5 del
   `desarrollo/PLAN_OPTIMIZACION_VENTANAS_BESS.md` hechas, con los valores
   por defecto de las decisiones D1–D5 (§6). Falta, del usuario:
@@ -6407,3 +6413,41 @@ ventana con xvfb. 332 pruebas.
 + tkinter + xvfb; antes 437). No se pudo probar en Windows: queda en
 "Pendientes abiertos".
 
+
+## 2026-11-11 (49) — El SoC se trae desde PI AF, en tres columnas
+
+- Pedido: "necesitamos sacar los SOC con python" (referencia: el script
+  `PruebaPI.py` del usuario, que comparaba el Excel de DataLink contra AF).
+  "El formato actual muere, ahora que sean 3 columnas, central, fecha y soc".
+  "Los SoC van a tener su propio botón". Las rutas: "hazlo tú" con el SoC
+  antiguo; "hay unos AF1 que hay que buscar en AF2 porque es el acceso que
+  tengo".
+- `Script/Medidas/Soc_PI.py` (nuevo): conexión a `SRV-SCADA-AF2`/`SEN` con el
+  AF SDK (pythonnet, importado recién al usarse), ubicación de cada central
+  (1. ruta de la columna `SoC_PI` del Diccionario, sin el `|atributo` y con
+  AF1 cambiado por AF2; 2. si no hay ruta o no existe, búsqueda `Name:SAE*`
+  por el atributo `Nombre PCP/PID` contra todos los nombres de la central en
+  el Diccionario, como hacía PruebaPI) y lectura de `Porc Carga Disponible`
+  interpolado cada 15 min / 100, en hora local del PC.
+- `nucleo.soc.generar_soc`: centrales de `Resumen BESS` (de Centrales.xlsx,
+  no de la foto de la planilla: es donde se pegan las rutas), rango día 1
+  00:00 → día 1 del mes siguiente 00:00 incluido (igual que el Excel de
+  DataLink), escribe `Medidas/SOC_AAMM.xlsx` hoja `SoC` (central | fecha |
+  soc) + hoja `Rutas PI` (estado, ruta usada, origen, registros, sin dato).
+  Avisa en el registro las centrales no encontradas y las rutas halladas por
+  búsqueda (para pegarlas en el Diccionario).
+- `extraer_soc` lee el formato nuevo (y sigue leyendo el de bloques, para
+  casos viejos). El Diccionario tiene un rol nuevo `soc_pi` (encabezado
+  `SoC_PI` o `Ruta SoC`) que NO entra en la homologación.
+- Ventana: botón **Traer** en la fila del SoC. "Ejecutar todo": tarea nueva
+  `soc` (recurso propio, corre en paralelo con las APIs); la hoja
+  `Medidores` depende de ella y el SoC dejó de ser entrada inicial que
+  bloquea el botón.
+- Centrales.xlsx del usuario con la columna `SoC_PI` llenada desde
+  `SOC_2610.xlsx` (12 rutas; las 3 de AF1 pasadas a AF2). Sin ruta en el SoC
+  antiguo: MANZANO (la fila traía solo "07 Region RM"), ARICA2, ANDES2B,
+  ELENA, ALFALFAL-VR2 y LILE — quedan para la búsqueda por Nombre PCP/PID.
+
+**Verificación:** `py_compile` OK; 470 pruebas OK (36 salteadas: sin tkinter
+en esta máquina). Pruebas nuevas en `desarrollo/tests/test_soc_pi.py` con
+una conexión AF falsa. PI no se pudo probar acá: queda en "Pendientes".
