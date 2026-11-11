@@ -6249,3 +6249,27 @@ ventana con xvfb. 332 pruebas.
   líneas con % del cambio y lo que se movió); hoja "Responsables" (el del mes
   con su total y el por central/lado, con filtro).
 - Pruebas: test_responsables (9).
+
+## 2026-11-11 (45) — Reporte de la corrida con lo que se pierde por FD y una ficha
+
+- Pedido: "mejora el reporte del control de corrida [...] ve si puedes tomar
+  algunas cositas de eso" (de la comparación).
+- `responsables.perdida_por_fd`: cuánto MÁS habría recibido cada central con
+  FD = 1, con los mismos escenarios (C1 escalado por el factor sin FD, y en
+  RE545 la reserva sin FD; max(0, C1 − C2) ciclo por ciclo). Sumas nuevas: la
+  energía ajustada solo con prorrata y la reserva con solo FMA. "Sin dato" si
+  el factor es casi 0 (< 0,1: SAE-LILE oct 0,013 -> x77, sería inventar); 0
+  si el lado no aplica (sin horas adjudicadas, sin reserva, sin energía
+  asignada, FMA 0). Oct real: $519 MM en el mes (ARENA $153 MM, ESTEPA $85
+  MM, DON-HUMBERTO $63 MM).
+- Hoja `Reporte`: cuadro del mes (total, las que más reciben, lo perdido por
+  FD, sin ingreso, alertas) y por central: E Costos, RE545, total, ciclos y
+  ventanas con monto "N de M", "Dejó de recibir por FD", Observación.
+- Hoja nueva `Reporte ficha` (`HOJA_REPORTE_FICHA`): un renglón por central y
+  concepto con su alerta.
+- "No participó" se cuenta ahora DENTRO de las horas adjudicadas de cada
+  servicio (cruce FD × Subastas por hora del mes). Con oct real, en CPF lo
+  normal es "No participó" en el 85-95 % de las horas adjudicadas y reciben
+  igual: solo es alerta/motivo si es en NINGUNA (LILE 29 de 29, ELENA 197 de
+  197). Fuera "casi no participó".
+- Pruebas: test_reporte y test_responsables (+6).

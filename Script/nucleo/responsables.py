@@ -58,9 +58,13 @@ X_EC_Q = ("x:ec_q_d", "x:ec_q_c")                # energia ajustada FD-prorrata
 X_EC_C1 = ("x:ec_c1_d", "x:ec_c1_c")             # valorizacion C1
 X_EC_C2 = ("x:ec_c2_d", "x:ec_c2_c")             # valorizacion C2
 X_EC_I = "x:ec_ingreso"
+# La energia ajustada solo con la prorrata (FD = 1): para "cuanto dejo de
+# recibir por FD" en el reporte de la corrida.
+X_EC_QP = ("x:ec_qp_d", "x:ec_qp_c")
 X_RE_A = "x:re_adjudicado"                       # A, en kWh
 X_RE_R0 = "x:re_reserva"                         # reserva sin FD ni FMA
 X_RE_R = "x:re_reserva_fd_fma"
+X_RE_RFMA = "x:re_reserva_fma"                   # con FMA, sin FD (FD = 1)
 X_RE_EA = "x:re_e_asignada"
 X_RE_EB = "x:re_e_disponible"
 X_RE_C1 = "x:re_c1"
@@ -73,8 +77,8 @@ X_EC_GRUPOS = "x:ec_grupos"    # [(C1d, C1c, C2d, C2c), ...]
 X_RE_GRUPOS = "x:re_grupos"    # [(C1, C2, con reserva), ...]
 
 AGREGADOS = (
-    *X_EC_E_TOT, *X_EC_E, *X_EC_L, *X_EC_Q, *X_EC_C1, *X_EC_C2, X_EC_I,
-    X_RE_A, X_RE_R0, X_RE_R, X_RE_EA, X_RE_EB, X_RE_C1, X_RE_C2, X_RE_I,
+    *X_EC_E_TOT, *X_EC_E, *X_EC_L, *X_EC_Q, *X_EC_C1, *X_EC_C2, X_EC_I, *X_EC_QP,
+    X_RE_A, X_RE_R0, X_RE_R, X_RE_RFMA, X_RE_EA, X_RE_EB, X_RE_C1, X_RE_C2, X_RE_I,
     X_EC_GRUPOS, X_RE_GRUPOS,
 )
 
@@ -153,6 +157,12 @@ def agregados(ecostos, re545, subastas):
                     datos[X_EC_C2[i]] = _sumar(ecostos, l * e * cmg)
             if _col(ecostos, ajustada) is not None:
                 datos[X_EC_Q[i]] = _sumar(ecostos, _col(ecostos, ajustada))
+            prorratas = [
+                _col(ecostos, n) for n in
+                ("Prorrata CPF(-)", "Prorrata CSF(-)", "Prorrata CPF(+)", "Prorrata CSF(+)")
+            ]
+            if all(x is not None for x in prorratas):
+                datos[X_EC_QP[i]] = _sumar(ecostos, e * sum(x.fillna(0.0) for x in prorratas))
             if _col(ecostos, c1) is not None:
                 datos[X_EC_C1[i]] = _sumar(ecostos, _col(ecostos, c1))
             # Energia medida total: lo de E Costos y lo de RE545.
@@ -173,6 +183,14 @@ def agregados(ecostos, re545, subastas):
         if all(r is not None for r in reservas):
             # Misma cuenta que la Reserva con FD y FMA, sin FD ni FMA.
             datos[X_RE_R0] = _sumar(re545, sum(r.fillna(0.0) for r in reservas) / 4 * 1000)
+            fmas = [
+                _col(re545, n) for n in
+                ("FMA CPF(-)", "FMA CSF(-)", "FMA CPF(+)", "FMA CSF(+)")
+            ]
+            if all(f is not None for f in fmas):
+                datos[X_RE_RFMA] = _sumar(re545, sum(
+                    r.fillna(0.0) * f.fillna(0.0) for r, f in zip(reservas, fmas)
+                ) / 4 * 1000)
         for nombre, clave in (
             ("Reserva con FD y FMA", X_RE_R), ("Energía asignada", X_RE_EA),
             ("Asignacion Edisponible+SSCC ultima hora", X_RE_EB),
@@ -768,3 +786,72 @@ def _textos_central(lista, delta, actual, anterior):
     if abs(otros) >= 0.5:
         desglose.append(f"• {'+' if otros >= 0 else '-'}{r.plata_corta(abs(otros))} otros")
     return principal, "\n".join(desglose)
+
+
+# ------------------------------------------------------------
+# Un solo mes: cuanto dejo de recibir por FD (reporte de la corrida)
+# ------------------------------------------------------------
+
+# Bajo este factor (FD x prorrata, FD x FMA) no se estima "con FD = 1": el
+# C1 de hoy es casi 0 y escalarlo seria inventar.
+_FACTOR_MINIMO = 0.1
+
+
+def perdida_por_fd(fila):
+    """
+    {"E Costos": pesos, "RE545": pesos}: cuanto MAS habria recibido la
+    central este mes con FD = 1 (desempeno perfecto), con los mismos
+    escenarios que la comparacion: C1 (y en RE545 tambien C2, que sale de
+    la misma reserva) escalados por el factor sin FD, y max(0, C1 - C2)
+    ciclo por ciclo. NaN si no se puede armar (por ejemplo un FD = 0 en
+    todo el lado: sin C1 no hay precio de la curva con que valorizar).
+    Las horas "No participó" vienen con FD = 1: esto no las ve (van
+    aparte, como horas).
+    """
+
+    resultado = {}
+    grupos = fila.get(X_EC_GRUPOS)
+    sin_horas_ec = all(_cero(fila.get(X_EC_L[i], math.nan)) == 0 for i in range(2))
+    sin_reserva = _cero(fila.get(X_RE_R0, math.nan)) == 0
+    if sin_horas_ec:
+        resultado["E Costos"] = 0.0      # sin horas adjudicadas: no aplica
+    elif isinstance(grupos, list) and _hay(fila.get(X_EC_I)):
+        theta = _theta_ec(fila)
+        ideal = [list(t) for t in theta]
+        posible = True
+        for i in range(2):
+            f_ideal = _razon(fila.get(X_EC_QP[i], math.nan), fila.get(X_EC_L[i], math.nan))
+            if _hay(f_ideal) and _hay(theta[i][3]) and theta[i][3] >= _FACTOR_MINIMO:
+                ideal[i][3] = f_ideal
+            elif _hay(f_ideal) and f_ideal != 0 and not (
+                _hay(theta[i][3]) and theta[i][3] >= _FACTOR_MINIMO
+            ):
+                # FD (casi) 0 en todo el lado: no hay C1 con que valorizar,
+                # o seria multiplicarlo por mucho (SAE-LILE oct: 0,013 -> x77).
+                posible = False
+        # Un lado sin carga (o sin descarga) tiene sus factores en 0/0.
+        ideal, base = _completar_theta(ideal, theta)
+        valor = _ingreso_ec(ideal, base, grupos) if posible else None
+        resultado["E Costos"] = (valor - fila[X_EC_I]) if valor is not None else math.nan
+    grupos = fila.get(X_RE_GRUPOS)
+    if sin_reserva:
+        resultado["RE545"] = 0.0         # sin reserva en RE545: no aplica
+    elif isinstance(grupos, list) and _hay(fila.get(X_RE_I)):
+        theta = _theta_re(fila)
+        ideal = list(theta)
+        phi_ideal = _razon(fila.get(X_RE_RFMA, math.nan), fila.get(X_RE_R0, math.nan))
+        valor = None
+        if _hay(phi_ideal) and _hay(theta[2]) and theta[2] >= _FACTOR_MINIMO:
+            ideal[2] = phi_ideal
+            ideal, base = _completar_theta(ideal, theta)
+            valor = _ingreso_re(ideal, base, grupos)
+        elif _hay(phi_ideal) and phi_ideal == 0:
+            valor = fila[X_RE_I]          # el FMA ya es 0: con FD = 1 igual da 0
+        if valor is None and _cero(fila.get(X_RE_EA, math.nan)) == 0:
+            # Sin energia asignada (sin oferta completa no hay Edisp): con
+            # FD = 1 tampoco recibiria por RE545.
+            valor = fila[X_RE_I]
+        resultado["RE545"] = (valor - fila[X_RE_I]) if valor is not None else math.nan
+    # Algunas horas pueden tener un factor sobre 1: lo que "pierde" no baja
+    # de 0 (no es una ganancia por FD, es ruido de esas horas).
+    return {k: (max(0.0, v) if _hay(v) else v) for k, v in resultado.items()}

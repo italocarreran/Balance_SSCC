@@ -192,9 +192,11 @@ HOJA_MATRIZ_CENTRALES = "Centrales por origen"
 # Lo que recibe cada central y por que (boton "Generar reporte", ver
 # reporte.py).
 HOJA_REPORTE = "Reporte"
+# Una fila por central y concepto, con su alerta (reporte.ficha_corrida).
+HOJA_REPORTE_FICHA = "Reporte ficha"
 ORDEN_HOJAS_CONTROL = (
-    HOJA_EJECUCION, HOJA_REPORTE, HOJA_MATRIZ_CENTRALES, HOJA_ALERTAS,
-    HOJA_LOG,
+    HOJA_EJECUCION, HOJA_REPORTE, HOJA_REPORTE_FICHA, HOJA_MATRIZ_CENTRALES,
+    HOJA_ALERTAS, HOJA_LOG,
 )
 
 # El periodo AAMM (ej. "2607") ya no se infiere del nombre del archivo:

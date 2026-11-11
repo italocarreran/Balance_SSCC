@@ -97,6 +97,34 @@ class TestDescomponer(unittest.TestCase):
         self.assertEqual(rs.descomponer({}, actual), {"E Costos": {rs.YA_NO: -80.0}})
 
 
+class TestPerdidaPorFD(unittest.TestCase):
+    """Un solo mes: cuanto MAS habria recibido con FD = 1."""
+
+    def test_factor_fd_a_la_mitad(self):
+        # Energia ajustada con FD 400; solo con prorrata 800 (FD = 1).
+        fila = fila_ec([(100.0, 80.0)], q=400.0, **{rs.X_EC_QP[0]: 800.0})
+        fila[rs.X_RE_R0] = 0.0
+        perdida = rs.perdida_por_fd(fila)
+        self.assertAlmostEqual(perdida["E Costos"], 200.0 - 80.0 - 20.0)
+        self.assertEqual(perdida["RE545"], 0.0)          # sin reserva: no aplica
+
+    def test_fd_perfecto_no_pierde(self):
+        fila = fila_ec([(100.0, 80.0)], q=800.0, **{rs.X_EC_QP[0]: 800.0})
+        fila[rs.X_RE_R0] = 0.0
+        self.assertAlmostEqual(rs.perdida_por_fd(fila)["E Costos"], 0.0)
+
+    def test_factor_casi_cero_no_se_extrapola(self):
+        """SAE-LILE oct: factor 0,013 -> escalarlo a 1 seria multiplicar por 77."""
+        fila = fila_ec([(1.0, 80.0)], q=10.0, **{rs.X_EC_QP[0]: 800.0})
+        fila[rs.X_RE_R0] = 0.0
+        self.assertTrue(math.isnan(rs.perdida_por_fd(fila)["E Costos"]))
+
+    def test_fd_cero_no_se_puede(self):
+        fila = fila_ec([(0.0, 80.0)], q=0.0, **{rs.X_EC_QP[0]: 800.0})
+        fila[rs.X_RE_R0] = 0.0
+        self.assertTrue(math.isnan(rs.perdida_por_fd(fila)["E Costos"]))
+
+
 class TestTablas(unittest.TestCase):
 
     def test_el_mes_suma_la_diferencia_y_hay_principal(self):

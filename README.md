@@ -258,10 +258,17 @@ para que no ensucien la planilla de trabajo:
   entrada (antes era una hoja más de `Consolidado_entradas.xlsx`).
 - **`Reporte`** — con el botón **Generar reporte** de la fila de
   `Control_corrida.xlsx`: lo que recibe cada central (E Costos, RE545 y
-  total) y, si no recibe nada o solo por un lado, por qué en una frase (sin
-  energía medida, sin adjudicación en Subastas, adjudicada pero sin cruce
-  con Medidores, FD = 0, sin días con oferta completa, o valorización C1 ≤
-  C2).
+  total), cuántos ciclos y ventanas pagaron ("27 de 32"), **cuánto dejó de
+  recibir por FD bajo 1** (el mismo escenario de la comparación, con FD = 1)
+  y, si no recibe nada o solo por un lado, por qué en una frase (sin energía
+  medida, sin adjudicación, adjudicada pero sin cruce con Medidores, "No
+  participó" en todas sus horas adjudicadas, sin días con oferta completa, o
+  valorización C1 ≤ C2).
+- **`Reporte ficha`** — una fila por central y concepto (lo que recibe, C1 y
+  C2, adjudicación, FD, horas adjudicadas con "No participó", ofertas,
+  energía, CMg) con una **alerta** solo cuando algo no es normal: sin
+  ingreso, "No participó" en ninguna hora adjudicada, FD bajo 0,5 con el
+  servicio adjudicado, sin oferta completa, horas con Adj SSCC que no cruzan.
 
 El catálogo de controles, con lo que está implementado y lo que falta, está en
 `docs/Alertas_y_Controles_Traspaso_Python_BESS.md`.

@@ -85,10 +85,41 @@ class TestPorQueNoRecibe(unittest.TestCase):
             fila(), fila(**{r.C_CENTRAL: "SAE-DOS", r.C_ECOSTOS: 0.0,
                             r.C_RE545: 0.0, r.C_TOTAL: 0.0}),
         ])
-        lineas, tabla = r.reporte_corrida(resumen)
-        self.assertEqual(lineas[0], "Total del mes: $300 entre 2 centrales.")
-        self.assertIn("SAE-DOS", lineas[-1])
+        lineas, tabla, ficha = r.reporte_corrida(resumen)
+        self.assertEqual(
+            lineas[0], "Total del mes: $300 entre 2 centrales (E Costos $100 · RE545 $200)."
+        )
+        self.assertTrue(any("sin ingreso: SAE-DOS" in l for l in lineas), lineas)
         self.assertEqual(tabla["Observación"].iloc[0], "")
+        for columna in ("Ciclos con monto", "Ventanas con monto", r.C_PERDIDA_FD):
+            self.assertIn(columna, tabla.columns)
+        self.assertEqual(
+            list(ficha.columns), [r.C_CENTRAL, "Concepto", "Valor", "De", "Unidad", "Alerta"]
+        )
+
+    def test_alertas_solo_lo_que_no_es_normal(self):
+        """
+        Con oct real: "No participó" en la mayoria de las horas CPF
+        adjudicadas es lo normal (85-95 %, y reciben igual). Solo alerta si
+        no participo en NINGUNA (SAE-LILE, ELENA).
+        """
+
+        casi = fila(**{r.C_NPA_CPF: 325.0, r.C_HA_CPF: 365.0})
+        ninguna = fila(**{r.C_CENTRAL: "SAE-LILE", r.C_NPA_CPF: 29.0, r.C_HA_CPF: 29.0,
+                          r.C_ECOSTOS: 0.0, r.C_RE545: 0.0, r.C_TOTAL: 0.0})
+        ficha = r.ficha_corrida(pd.DataFrame([casi, ninguna])).set_index([r.C_CENTRAL, "Concepto"])
+        concepto = "CPF: horas adjudicadas con 'No participó'"
+        self.assertEqual(ficha.loc[("SAE-UNO", concepto), "Alerta"], "")
+        self.assertEqual(ficha.loc[("SAE-LILE", concepto), "Alerta"],
+                         "No participó en ninguna de sus horas con CPF adjudicado")
+        self.assertEqual(ficha.loc[("SAE-LILE", concepto), "De"], 29.0)
+        self.assertEqual(ficha.loc[("SAE-LILE", "Recibe total"), "Alerta"], "Sin ingreso")
+        self.assertEqual(
+            r.explicar_central(ninguna),
+            "Según FD no tuvo participación en CPF ('No participó' en todas sus 29 "
+            "horas adjudicadas, aunque el FD diga 1).",
+        )
+        self.assertEqual(r.explicar_central(dict(casi, **{r.C_TOTAL: 0.0})).find("casi"), -1)
 
 
 class TestComparacion(unittest.TestCase):
@@ -365,6 +396,11 @@ class TestArchivos(unittest.TestCase):
         self.assertEqual(nombres[0], "Resumen")
         self.assertIn("Observación", nombres)
         self.assertTrue(str(ws["B4"].value).startswith("Total del mes:"))
+        self.assertIn(r.C_PERDIDA_FD, nombres)
+        self.assertIn(nucleo.HOJA_REPORTE_FICHA, libro.sheetnames)
+        ficha = libro[nucleo.HOJA_REPORTE_FICHA]
+        self.assertEqual([c.value for c in ficha[3] if c.value][-1], "Alerta")
+        self.assertIsNotNone(ficha.auto_filter.ref)
 
     def test_sin_planilla_dice_que_hay_que_calcular(self):
         with tempfile.TemporaryDirectory() as carpeta:
@@ -455,8 +491,9 @@ class TestNoParticipo(unittest.TestCase):
         fila_cero.update({r.C_ECOSTOS: 0.0, r.C_RE545: 0.0, r.C_TOTAL: 0.0})
         self.assertEqual(
             r.explicar_central(fila_cero),
+            # Las 2 horas del FD estan adjudicadas en CSF (Subastas, Hora_mes 1 y 2).
             "Según FD no tuvo participación en CSF ('No participó' en todas "
-            "sus 2 horas, aunque el FD diga 1).",
+            "sus 2 horas adjudicadas, aunque el FD diga 1).",
         )
 
     def test_participo_no_cuenta(self):

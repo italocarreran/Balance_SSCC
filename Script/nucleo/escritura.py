@@ -52,7 +52,7 @@ from .parametros import (
     HOJA_ALERTAS, HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545, HOJA_CENTRALES,
     COLUMNA_CENTRAL, HOJA_CMG, HOJA_FMA,
     HOJA_COMPENSACION_CENTRAL, HOJA_EJECUCION, HOJA_FD, HOJA_LOG,
-    HOJA_MATRIZ_CENTRALES, HOJA_REPORTE,
+    HOJA_MATRIZ_CENTRALES, HOJA_REPORTE, HOJA_REPORTE_FICHA,
     HOJA_MEDIDORES, HOJA_PRORRATA_RETIROS, HOJA_RESUMEN, HOJA_SUBASTAS,
     ORDEN_HOJAS_CONTROL, ORDEN_HOJAS_SALIDA,
 )
@@ -431,11 +431,17 @@ def escribir_control(
             # (lineas de resumen, tabla por central): ver reporte.py.
             from .reporte import escribir_hoja_reporte
 
-            lineas, tabla = df_reporte
+            lineas, tabla, *resto = df_reporte
             escribir_hoja_reporte(
                 writer, HOJA_REPORTE, lineas, tabla, "Lo que recibe cada central"
             )
             escritas.add(HOJA_REPORTE)
+            if resto and resto[0] is not None and len(resto[0]):
+                escribir_hoja_reporte(
+                    writer, HOJA_REPORTE_FICHA, [], resto[0],
+                    "Cada central: sus cifras del mes y las alertas",
+                )
+                escritas.add(HOJA_REPORTE_FICHA)
 
         if df_log is not None:
             _escribir_tabla_con_titulo(
@@ -447,8 +453,8 @@ def escribir_control(
         _preservar_ajenas(writer, wb_existente, escritas)
         _ordenar_hojas(writer.book, ORDEN_HOJAS_CONTROL)
         hojas_control = (
-            HOJA_EJECUCION, HOJA_REPORTE, HOJA_MATRIZ_CENTRALES, HOJA_ALERTAS,
-            HOJA_LOG,
+            HOJA_EJECUCION, HOJA_REPORTE, HOJA_REPORTE_FICHA, HOJA_MATRIZ_CENTRALES,
+            HOJA_ALERTAS, HOJA_LOG,
         )
         formatear_libro(
             writer.book,
@@ -459,6 +465,10 @@ def escribir_control(
             from .reporte import dar_formato_reporte
 
             dar_formato_reporte(writer.sheets[HOJA_REPORTE])
+        if HOJA_REPORTE_FICHA in escritas:
+            from .reporte import formato_ficha
+
+            formato_ficha(writer.sheets[HOJA_REPORTE_FICHA])
         if HOJA_MATRIZ_CENTRALES in escritas:
             _pintar_matriz(
                 writer.sheets[HOJA_MATRIZ_CENTRALES],
