@@ -28,6 +28,7 @@ import de todo el programa en una maquina donde no este instalada.
 """
 
 import calendar
+import os
 import re
 import shutil
 from pathlib import Path
@@ -213,25 +214,67 @@ def asegurar_carpeta_db(carpeta_subastas):
     return carpeta
 
 
+def _clave_nombre(nombre):
+    """
+    Como compara nombres el sistema de archivos: sin distinguir
+    mayusculas en Windows, tal cual en el resto. Asi buscar en una
+    lectura de la carpeta da lo mismo que preguntar is_file() por nombre.
+    """
+
+    return nombre.casefold() if os.name == "nt" else nombre
+
+
+def _archivos_de(carpeta):
+    """{nombre: DirEntry} de los archivos de la carpeta. {} si no se puede leer."""
+
+    try:
+        with os.scandir(carpeta) as entradas:
+            return {
+                _clave_nombre(entrada.name): entrada
+                for entrada in entradas if entrada.is_file()
+            }
+    except OSError:
+        return {}
+
+
+def accdb_presentes_con_fecha(carpeta_subastas, aamm):
+    """
+    Como accdb_presentes, y ademas la fecha de modificacion (st_mtime)
+    del Access mas nuevo de los presentes (None si no hay ninguno).
+
+    Una sola lectura de la carpeta en vez de preguntar por cada uno de
+    los 24 x dias nombres posibles: sobre una unidad de red eso eran
+    segundos de ventana congelada en cada repintado.
+    """
+
+    carpeta = carpeta_db_subastas(carpeta_subastas)
+    archivos = _archivos_de(carpeta)
+
+    presentes = []
+    mas_nuevo = None
+
+    for dia, hora, nombre in nombres_del_periodo(aamm):
+        entrada = archivos.get(_clave_nombre(nombre))
+        if entrada is None:
+            continue
+        presentes.append((dia, hora, carpeta / nombre))
+        try:
+            fecha = entrada.stat().st_mtime
+        except OSError:
+            continue
+        if mas_nuevo is None or fecha > mas_nuevo:
+            mas_nuevo = fecha
+
+    return presentes, mas_nuevo
+
+
 def accdb_presentes(carpeta_subastas, aamm):
     """
     Los .accdb del periodo que YA estan copiados en 'DB subastas'.
     Lista de tuplas (dia, hora, ruta), ordenada por (dia, hora).
     """
 
-    carpeta = carpeta_db_subastas(carpeta_subastas)
-
-    if not carpeta.is_dir():
-        return []
-
-    presentes = []
-
-    for dia, hora, nombre in nombres_del_periodo(aamm):
-        ruta = carpeta / nombre
-        if ruta.is_file():
-            presentes.append((dia, hora, ruta))
-
-    return presentes
+    return accdb_presentes_con_fecha(carpeta_subastas, aamm)[0]
 
 
 # ============================================================
