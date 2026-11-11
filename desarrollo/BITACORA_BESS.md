@@ -12,6 +12,11 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **Ventana más rápida (2026-11-11 (47)):** ejecutar
+  `desarrollo/PLAN_OPTIMIZACION_VENTANAS_BESS.md` (fases 1 a 5; la 6 solo si
+  el usuario lo pide). Antes, que el usuario conteste las decisiones D1 a D5
+  del §6 del plan, y que pruebe en Windows lo que acá no se pudo ver.
+
 - **Reliquidación enero 2601 — observaciones (2026-10-21, revisión con el
   usuario, sin cambios de código todavía):**
   - **Regla de los 10 kWh** (hoy en `ecostos_valorizacion.py`; antes `calcular_au_av`): viene de la macro VBA
@@ -6307,3 +6312,27 @@ ventana con xvfb. 332 pruebas.
     línea ATENCIÓN pide recalcularla, para que la regla no aparezca como un
     cambio de FD de las centrales.
 - Pruebas: test_no_participo (6) y test_reporte actualizado.
+
+## 2026-11-11 (47) — Auditoría de la ventana y plan para hacerla más rápida
+
+- Pedido: "revises y audites los BESS. Y crea un plan en un .md con el
+  objetivo de optimizar el programa, las ventanas hacerlas más fluidas y que
+  abran más rápido. Planifica pensando que otro modelo va a ejecutar los
+  cambios". **No se cambió código del programa**: solo se midió y se escribió
+  el plan.
+- `desarrollo/PLAN_OPTIMIZACION_VENTANAS_BESS.md`: 18 hallazgos y 7 fases,
+  cada una con archivos, pasos, pruebas y criterio de aceptación.
+- `desarrollo/medir_ventana.py` (nuevo): mide importar, revisar la carpeta
+  (con las llamadas al disco por origen y una latencia de red simulada) y la
+  ventana real (arranque, "Actualizar", "Ejecutar todo"). Es la vara del
+  plan: se corre antes y después de cada fase.
+- Lo principal que salió (Linux, disco local, Python 3.12; no se pudo medir
+  en Windows ni en red):
+  - nada se dibuja hasta importar pandas/openpyxl/`nucleo`: 0,5–0,8 s acá;
+  - cada repintado hace ~880 llamadas al disco en el hilo de la ventana, 721
+    de ellas en `accdb_presentes` (pregunta por los 24 × días nombres
+    posibles); simulando 3 ms por llamada son 2,9 s de ventana congelada;
+  - el árbol (396 widgets) se destruye y se recrea en cada repintado.
+- El cálculo no entra en el plan: ya se optimizó en (15), (16) y (19).
+
+**Verificación:** 437 pruebas, 0 salteadas (con tkinter y xvfb), sin cambios.
