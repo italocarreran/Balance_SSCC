@@ -319,6 +319,10 @@ LINEAS_POR_MUESCA = 3      # cuantas lineas baja el registro por muesca
 # Windows/macOS mandan <MouseWheel>; X11 manda los botones 4 y 5.
 EVENTOS_RUEDA = ("<MouseWheel>", "<Button-4>", "<Button-5>")
 
+# Cuantos mensajes del hilo de trabajo se escriben en el registro por
+# pasada (ver vaciar_cola_log): una rafaga grande no congela la ventana.
+MENSAJES_POR_TANDA = 400
+
 
 # ============================================================
 # CONFIG POR PC/USUARIO
@@ -580,12 +584,24 @@ def main():
     contenedor = tk.Frame(canvas)
     ventana_canvas = canvas.create_window((0, 0), window=contenedor, anchor="nw")
 
+    # Dos ataduras separadas: el canvas que cambia de tamaño solo ajusta
+    # el ancho de lo de adentro (y solo si cambio), y lo de adentro que
+    # cambia solo ajusta la region desplazable. Antes las dos hacian las
+    # dos cosas y una disparaba a la otra.
+    ancho_pintado = {}
+
+    def ajustar_ancho(lienzo, ventana_interna, event):
+        if ancho_pintado.get(str(lienzo)) != event.width:
+            ancho_pintado[str(lienzo)] = event.width
+            lienzo.itemconfig(ventana_interna, width=event.width)
+
     def ajustar(event=None):
         canvas.configure(scrollregion=canvas.bbox("all"))
-        canvas.itemconfig(ventana_canvas, width=canvas.winfo_width())
 
     contenedor.bind("<Configure>", ajustar)
-    canvas.bind("<Configure>", ajustar)
+    canvas.bind(
+        "<Configure>", lambda e: ajustar_ancho(canvas, ventana_canvas, e)
+    )
 
     # --------------------------------------------------------
     # RUEDA DEL MOUSE
@@ -636,6 +652,29 @@ def main():
         resto_rueda[clave] = total - entero
         return entero
 
+    # Un desplazamiento por cuadro, no por evento: un touchpad de
+    # precision manda decenas de eventos por segundo y cada yview_scroll
+    # redibuja el arbol. Los pixeles se suman y se aplican de una vez
+    # cuando Tk queda libre (after_idle: en el mismo update()).
+    desplazamiento_pendiente = {}
+
+    def _desplazar_por_cuadro(lienzo, pixeles):
+        clave = str(lienzo)
+        if clave in desplazamiento_pendiente:
+            desplazamiento_pendiente[clave] += pixeles
+            return
+        desplazamiento_pendiente[clave] = pixeles
+
+        def aplicar():
+            total = desplazamiento_pendiente.pop(clave, 0)
+            if total:
+                try:
+                    lienzo.yview_scroll(total, "units")
+                except tk.TclError:
+                    pass  # se cerro la ventana del lienzo
+
+        root.after_idle(aplicar)
+
     def _desplazar_ventana(muescas):
         # scrollregion mas chica que lo visible = no hay nada que
         # desplazar; sin esto la ventana "tiembla" con la rueda.
@@ -644,7 +683,7 @@ def main():
             return
         pixeles = _acumular("ventana", muescas * PIXELES_POR_MUESCA)
         if pixeles:
-            canvas.yview_scroll(pixeles, "units")
+            _desplazar_por_cuadro(canvas, pixeles)
 
     def _muescas(event):
         """Muescas de rueda de este evento (negativo = hacia arriba)."""
@@ -1360,22 +1399,44 @@ def main():
         txt_log.see("end")
 
     # Los mensajes del hilo de trabajo llegan a esta cola y se escriben de
-    # a tandas cada 100 ms (antes, un root.after por mensaje).
+    # a tandas cada 100 ms (antes, un root.after por mensaje). Cada tanda
+    # tiene tope: una rafaga de miles de lineas se escribe en varias
+    # pasadas seguidas (cada 10 ms) en vez de congelar la ventana.
     cola_log = queue.Queue()
+    sondeo_log = {"programado": None}
 
-    def vaciar_cola_log():
-        hubo = False
-        while True:
+    def vaciar_cola_log(todo=False):
+        """
+        Escribe en el registro lo que llego por la cola. todo=True la
+        vacia entera (al terminar un proceso, antes de la linea de
+        cierre y de guardar el registro); si no, como mucho
+        MENSAJES_POR_TANDA por pasada.
+        """
+
+        if sondeo_log["programado"] is not None:
+            try:
+                root.after_cancel(sondeo_log["programado"])
+            except tk.TclError:
+                pass
+            sondeo_log["programado"] = None
+
+        # Solo se baja al final si ya se estaba al final: asi se puede
+        # leer hacia arriba durante una corrida.
+        al_final = txt_log.yview()[1] >= 0.999
+        escritos = 0
+        while todo or escritos < MENSAJES_POR_TANDA:
             try:
                 ahora, mensaje = cola_log.get_nowait()
             except queue.Empty:
                 break
             _insertar_log(mensaje, ahora)
-            hubo = True
-        if hubo:
+            escritos += 1
+        if escritos and al_final:
             txt_log.see("end")
-        if corriendo["activo"] or not cola_log.empty():
-            root.after(100, vaciar_cola_log)
+        if not cola_log.empty():
+            sondeo_log["programado"] = root.after(10, vaciar_cola_log)
+        elif corriendo["activo"]:
+            sondeo_log["programado"] = root.after(100, vaciar_cola_log)
 
     def registrar_desde_hilo(mensaje):
         cola_log.put((time.time(), mensaje))
@@ -1902,7 +1963,7 @@ def main():
         def terminar(res):
             timer["corriendo"] = False
             corriendo["activo"] = False
-            vaciar_cola_log()
+            vaciar_cola_log(todo=True)
 
             duracion = time.time() - timer["inicio"]
             log("")
@@ -2497,10 +2558,11 @@ def main():
 
         def ajustar_lista(event=None):
             lienzo.configure(scrollregion=lienzo.bbox("all"))
-            lienzo.itemconfig(ventana_lista, width=lienzo.winfo_width())
 
         lista.bind("<Configure>", ajustar_lista)
-        lienzo.bind("<Configure>", ajustar_lista)
+        lienzo.bind(
+            "<Configure>", lambda e: ajustar_ancho(lienzo, ventana_lista, e)
+        )
 
         frame_avisos = tk.LabelFrame(
             top, text="Para poder ejecutar", padx=8, pady=6
@@ -2520,7 +2582,7 @@ def main():
                 return
             pixeles = _acumular("ejecutar_todo", muescas * PIXELES_POR_MUESCA)
             if pixeles:
-                lienzo.yview_scroll(pixeles, "units")
+                _desplazar_por_cuadro(lienzo, pixeles)
 
         def desplazar_avisos(muescas):
             lineas = _acumular("ejecutar_todo_avisos", muescas * LINEAS_POR_MUESCA)

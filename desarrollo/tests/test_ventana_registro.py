@@ -23,6 +23,9 @@ class TestRegistro(base.TestVentanaActualizar):
     test_actualizar_muestra_un_archivo_pegado_a_mano = None
     test_medidas_arranca_sin_advertencia = None
     test_aviso_de_medidas_incompletas = None
+    test_actualizar_sin_cambios_no_rehace_el_arbol = None
+    test_cambia_el_estado_sin_rehacer_las_filas = None
+    test_despues_de_un_proceso_los_botones_quedan_habilitados = None
 
     def test_nivel_del_mensaje(self):
         nivel = self.app.nivel_del_mensaje
@@ -80,6 +83,38 @@ class TestRegistro(base.TestVentanaActualizar):
         guardado = self.caso / "Log" / self.app.ARCHIVO_REGISTRO
         self.assertTrue(guardado.is_file())
         self.assertIn("[AVISO] faltan 2 dias", guardado.read_text(encoding="utf-8"))
+
+
+    def test_rafaga_grande_queda_entera_y_en_orden(self):
+        # El registro escribe por tandas con tope (plan de la ventana,
+        # Fase 4.3); al terminar tiene que vaciar la cola entera antes
+        # de guardar el archivo.
+        total = 5000
+
+        def proceso_falso(registrar=None, progreso=None, **_):
+            for i in range(total):
+                registrar(f"mensaje numero {i:05d}")
+
+        class HiloInmediato:
+            def __init__(self, target, daemon=None, **_):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        with mock.patch.object(self.nucleo, "traer_subastas", proceso_falso), \
+                mock.patch.object(self.app.threading, "Thread", HiloInmediato), \
+                mock.patch.object(self.app.messagebox, "showinfo"), \
+                mock.patch.object(self.app, "mostrar_error"):
+            self._boton("Traer", self._fila("DB subastas")).invoke()
+            for _ in range(5):
+                self.root.update()
+
+        guardado = self.caso / "Log" / self.app.ARCHIVO_REGISTRO
+        numeros = re.findall(
+            r"mensaje numero (\d{5})", guardado.read_text(encoding="utf-8")
+        )
+        self.assertEqual(numeros, [f"{i:05d}" for i in range(total)])
 
 
 if __name__ == "__main__":
