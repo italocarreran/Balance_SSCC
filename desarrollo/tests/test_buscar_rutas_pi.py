@@ -126,6 +126,27 @@ class TestGuardarEnCentrales(unittest.TestCase):
                 {"sae-lile": BASE + "SAE-Lile"},
             )
 
+    def test_la_ruta_queda_sin_negrita(self):
+        from openpyxl import load_workbook
+        from openpyxl.styles import Font
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ruta = self.armar(tmp, True)
+            libro = load_workbook(ruta)
+            dic = libro["Diccionario"]
+            for fila in range(3, 5):
+                for col in range(1, 4):
+                    dic.cell(fila, col).font = Font(bold=True)
+            libro.save(ruta)
+
+            br.guardar_ruta_en_centrales(ruta, "SAE-LILE", BASE + "SAE-Lile")
+            br.guardar_ruta_en_centrales(ruta, "SAE-ARENA", BASE + "SAE-ARENA")
+
+            dic = load_workbook(ruta)["Diccionario"]
+            self.assertFalse(dic.cell(3, 3).font.bold)
+            self.assertFalse(dic.cell(4, 3).font.bold)
+            self.assertTrue(dic.cell(3, 1).font.bold)  # lo demas no se toca
+
     def test_central_que_no_esta(self):
         with tempfile.TemporaryDirectory() as tmp:
             ruta = self.armar(tmp, True)

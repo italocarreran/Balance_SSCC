@@ -6489,3 +6489,12 @@ elemento. Contra el AF real no se pudo probar.
 existente, columna nueva leída por `nucleo` sin entrar en la homologación,
 central inexistente). Ventana probada en xvfb con AF falso y una copia del
 Centrales.xlsx real: elegir SAE-LILE → posible ruta → Guardar → queda ✓.
+
+## 2026-11-12 (3) — Buscar_Rutas_PI: la ruta se guarda sin negrita
+
+- Pedido: "se agrega en negrita, que se agregue sin negrita". La celda nueva
+  copiaba el formato de la columna Balance_BESS, que en el Centrales.xlsx
+  real va en negrita. Ahora copia el de la celda de su izquierda y siempre
+  queda con `bold=False` (también al reescribir una que ya estaba en
+  negrita). Prueba nueva `test_la_ruta_queda_sin_negrita`; verificado sobre
+  una copia del Centrales.xlsx real.

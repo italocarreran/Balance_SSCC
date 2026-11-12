@@ -275,7 +275,12 @@ def guardar_ruta_en_centrales(ruta_centrales, central, ruta_pi):
     celda = hoja.cell(fila_central, col_ruta)
     anterior = str(celda.value or "").strip()
     if not celda.has_style:
-        celda._style = copy(hoja.cell(fila_central, col_central)._style)
+        celda._style = copy(hoja.cell(fila_central, col_ruta - 1)._style)
+    # Sin negrita: la columna Balance_BESS (de donde se copiaba el
+    # formato antes) suele ir en negrita, la ruta no.
+    fuente = copy(celda.font)
+    fuente.bold = False
+    celda.font = fuente
     celda.value = str(ruta_pi).split("|")[0].strip()
 
     try:
