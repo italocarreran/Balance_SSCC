@@ -6498,3 +6498,24 @@ Centrales.xlsx real: elegir SAE-LILE → posible ruta → Guardar → queda ✓.
   queda con `bold=False` (también al reescribir una que ya estaba en
   negrita). Prueba nueva `test_la_ruta_queda_sin_negrita`; verificado sobre
   una copia del Centrales.xlsx real.
+
+## 2026-11-12 (4) — Herramienta Extraer_Datos_PI
+
+- Pedido: "una herramienta que me permita sacar la generación o cualquier
+  dato disponible que seleccione de una central … en un rango de tiempo
+  determinado, con intervalos … horario o 4to horario".
+- `Herramientas/Extraer_Datos_PI.py` (reusa `Buscar_Rutas_PI.py`, misma
+  carpeta): elegir central (lista SAE*, toda la base, árbol), tildar atributos
+  con referencia de datos (incluye sub-atributos `Padre|Hijo`, hasta 3
+  niveles), pedido de varias centrales/datos, desde/hasta, 15 min u horario,
+  promedio ponderado en el tiempo (`Summaries` Average, TimeWeighted,
+  timestamp al inicio del intervalo) o instantáneo (`InterpolatedValues`).
+  Excel con `Datos` (fecha local + UTC como clave, para no pisar la hora
+  repetida de abril) y `Pedido`. Tramos de 31 días.
+
+**Verificación:** `desarrollo/tests/test_extraer_datos_pi.py` (fechas, tramos
+sin repetir puntas, promedio sin el intervalo que empieza en "hasta", hora
+repetida de abril, Excel). Ventana probada en xvfb con AF falso: buscar
+"arena", tildar 2 datos, horario de octubre → 744 filas. Contra PI real no se
+pudo probar (pendiente: confirmar que `Summaries` con `Auto` deja la fecha al
+inicio del intervalo).

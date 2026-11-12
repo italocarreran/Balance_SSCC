@@ -87,6 +87,23 @@ python Herramientas/Buscar_Puntos_PRMTE.py
 python Herramientas/Buscar_Rutas_PI.py
 ```
 
+- `Extraer_Datos_PI.py`: saca de PI AF cualquier dato de una o varias
+  centrales (generación, potencia, SoC, lo que tenga el elemento) en un rango
+  de fechas, cada **15 minutos** u **horario**, a un Excel. Se busca la central
+  como en `Buscar_Rutas_PI.py` (lista SAE*, toda la base o la pestaña
+  Navegar), se tildan sus datos (los atributos con serie de tiempo, con su
+  valor actual y unidad) y se agregan al pedido. Valor por intervalo:
+  **promedio** ponderado en el tiempo (fecha = inicio del intervalo; lo que
+  corresponde para potencia/generación) o **instantáneo** (interpolado). El
+  Excel trae la hoja `Datos` (fecha, fecha UTC —no se repite en el cambio de
+  hora de abril— y una columna por central y dato) y la hoja `Pedido` (de
+  dónde salió cada columna). Pide de a tramos de 31 días. Usa
+  `Buscar_Rutas_PI.py`: tienen que estar en la misma carpeta.
+
+```bash
+python Herramientas/Extraer_Datos_PI.py
+```
+
 - `Comparar_Meses.py`: compara dos planillas 11_PAGOS_BESS (el mes anterior
   u otra versión del mismo mes). **Responsables en pesos**: el cambio de lo
   que recibe cada central se reparte, exacto (la suma da la diferencia),
