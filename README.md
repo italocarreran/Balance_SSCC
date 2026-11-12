@@ -68,6 +68,22 @@ python Herramientas/Buscar_Barras_CMg.py
 python Herramientas/Buscar_Puntos_PRMTE.py
 ```
 
+- `Buscar_Rutas_PI.py`: la ruta de PI AF de una central, para la columna
+  `SoC_PI` del Diccionario. Baja una vez la lista de elementos `SAE*` de
+  `SRV-SCADA-AF2`/`SEN` (nombre, `Nombre PCP/PID`, si tiene
+  `Porc Carga Disponible`), la guarda en `__config__/elementos_sae_pi.json` y
+  busca por nombre aproximado (`manzano`, `arica 2`); "Buscar en toda la
+  base" busca por nombre de elemento en toda la base. Con "Centrales.xlsx..."
+  muestra en rojo las centrales sin ruta (clic en una la busca). La pestaña
+  **Navegar** recorre la jerarquía como PI System Explorer, y "Ver en el
+  árbol" la abre en el elemento elegido. Al elegir un elemento se ven sus
+  atributos; "Copiar ruta" (o doble clic) deja la ruta lista para pegar.
+  Necesita el AF SDK y `pythonnet`.
+
+```bash
+python Herramientas/Buscar_Rutas_PI.py
+```
+
 - `Comparar_Meses.py`: compara dos planillas 11_PAGOS_BESS (el mes anterior
   u otra versión del mismo mes). **Responsables en pesos**: el cambio de lo
   que recibe cada central se reparte, exacto (la suma da la diferencia),

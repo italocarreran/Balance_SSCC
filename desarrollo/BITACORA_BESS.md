@@ -16,7 +16,9 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
   del SoC en el PC con AF (Windows, `pip install pythonnet`): que las rutas
   AF1 pasadas a AF2 existan tal cual, qué ruta encuentra la búsqueda para
   MANZANO, ARICA2, ANDES2B, ELENA, ALFALFAL-VR2 y LILE (pegarlas en
-  `SoC_PI`), y comparar un mes contra el SOC de DataLink (2610).
+  `SoC_PI`, con `Herramientas/Buscar_Rutas_PI.py`), y comparar un mes contra
+  el SOC de DataLink (2610). Probar también esa herramienta contra el AF
+  real (2026-11-12 (1)).
 
 - **Ventana más rápida (2026-11-11 (48)):** fases 1 a 5 del
   `desarrollo/PLAN_OPTIMIZACION_VENTANAS_BESS.md` hechas, con los valores
@@ -6451,3 +6453,22 @@ ventana con xvfb. 332 pruebas.
 **Verificación:** `py_compile` OK; 470 pruebas OK (36 salteadas: sin tkinter
 en esta máquina). Pruebas nuevas en `desarrollo/tests/test_soc_pi.py` con
 una conexión AF falsa. PI no se pudo probar acá: queda en "Pendientes".
+
+## 2026-11-12 (1) — Herramienta para buscar rutas de PI AF
+
+- Pedido: "¿cómo puedo buscar las rutas de las centrales que faltan? podrías
+  agregar un buscador a las herramientas… que permita navegar por la
+  jerarquía del scada".
+- `Herramientas/Buscar_Rutas_PI.py` (suelta, no importa el programa, igual
+  que Buscar_Puntos_PRMTE): lista de elementos `SAE*` guardada en
+  `__config__/elementos_sae_pi.json` con búsqueda aproximada offline (palabras
+  comunes SAE/CRCA/PFV/BESS no cuentan; romanos = números, así "arica 2"
+  encuentra "Arica II"); "Buscar en toda la base" (`Name:'*texto*'`, máx.
+  300); panel con las centrales de Centrales.xlsx sin ruta en `SoC_PI`;
+  pestaña Navegar (árbol con carga perezosa, "Ver en el árbol"); atributos
+  del elemento elegido y "Copiar ruta".
+
+**Verificación:** pruebas nuevas `desarrollo/tests/test_buscar_rutas_pi.py`
+(búsqueda y lectura del Diccionario); la ventana se probó con un AF falso en
+xvfb (Python 3.12 + tkinter): busca, muestra atributos y abre el árbol en el
+elemento. Contra el AF real no se pudo probar.
