@@ -74,7 +74,10 @@ python Herramientas/Buscar_Puntos_PRMTE.py
   `Porc Carga Disponible`), la guarda en `__config__/elementos_sae_pi.json` y
   busca por nombre aproximado (`manzano`, `arica 2`); "Buscar en toda la
   base" busca por nombre de elemento en toda la base. Con "Centrales.xlsx..."
-  muestra en rojo las centrales sin ruta (clic en una la busca). La pestaña
+  muestra en rojo las centrales sin ruta: clic en una muestra su ruta o, si
+  no tiene, la busca y deja elegida la más parecida; **Guardar en
+  Centrales.xlsx** escribe la ruta elegida en su `SoC_PI` (pregunta antes, y
+  agrega la columna si no está; Centrales.xlsx tiene que estar cerrado). La pestaña
   **Navegar** recorre la jerarquía como PI System Explorer, y "Ver en el
   árbol" la abre en el elemento elegido. Al elegir un elemento se ven sus
   atributos; "Copiar ruta" (o doble clic) deja la ruta lista para pegar.

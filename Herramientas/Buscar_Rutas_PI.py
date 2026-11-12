@@ -18,7 +18,11 @@ Tres formas de llegar a la ruta:
      "Buscar en toda la base" busca ademas por nombre de elemento en
      toda la base (para lo que no empieza con SAE).
   2. Centrales.xlsx: se elige el archivo y aparecen sus centrales,
-     marcadas con o sin ruta en SoC_PI. Clic en una la busca.
+     marcadas con o sin ruta en SoC_PI. Clic en una muestra su ruta (si
+     ya tiene) o la busca y deja elegida la mas parecida (posible
+     ruta). "Guardar en Centrales.xlsx" escribe la ruta elegida en la
+     columna SoC_PI de esa central (pregunta antes; si la columna no
+     existe, la agrega).
   3. Navegar: el arbol de la base, carpeta por carpeta, como en PI
      System Explorer. "Ver en el arbol" abre el arbol en el elemento
      elegido en la busqueda, para ver los que estan a su lado.
@@ -213,6 +217,76 @@ def centrales_del_diccionario(ruta_centrales):
     return []
 
 
+class CentralesAbierto(Exception):
+    """Centrales.xlsx no se puede escribir (lo tiene abierto Excel)."""
+
+
+def guardar_ruta_en_centrales(ruta_centrales, central, ruta_pi):
+    """
+    Escribe ruta_pi en la columna SoC_PI de la fila de 'central' en la
+    hoja Diccionario. Si la columna no existe, la agrega al final de los
+    encabezados (con el formato del encabezado de al lado). Devuelve la
+    ruta que habia antes ("" si no habia).
+
+    ValueError si no se encuentra la hoja, el encabezado o la central;
+    CentralesAbierto si el archivo esta abierto en Excel.
+    """
+
+    from copy import copy
+
+    from openpyxl import load_workbook
+
+    libro = load_workbook(ruta_centrales)
+    hoja = next((libro[n] for n in libro.sheetnames
+                 if limpiar(n) == "DICCIONARIO"), None)
+    if hoja is None:
+        raise ValueError("Centrales.xlsx no tiene la hoja Diccionario.")
+
+    fila_titulos = None
+    for fila in range(1, min(hoja.max_row, 10) + 1):
+        titulos = {limpiar(hoja.cell(fila, c).value): c
+                   for c in range(1, hoja.max_column + 1)}
+        if TITULO_CENTRAL in titulos:
+            fila_titulos = fila
+            break
+    if fila_titulos is None:
+        raise ValueError(
+            "El Diccionario no tiene la fila de encabezados con Balance_BESS.")
+
+    col_central = titulos[TITULO_CENTRAL]
+    col_ruta = next((titulos[t] for t in TITULOS_RUTA if t in titulos), None)
+
+    if col_ruta is None:
+        ultima = max(c for t, c in titulos.items() if t)
+        col_ruta = ultima + 1
+        titulo = hoja.cell(fila_titulos, col_ruta)
+        titulo.value = "SoC_PI"
+        titulo._style = copy(hoja.cell(fila_titulos, ultima)._style)
+        letra = titulo.column_letter
+        hoja.column_dimensions[letra].width = 90
+
+    fila_central = next(
+        (f for f in range(fila_titulos + 1, hoja.max_row + 1)
+         if limpiar(hoja.cell(f, col_central).value) == limpiar(central)),
+        None)
+    if fila_central is None:
+        raise ValueError(f"La central {central} no esta en el Diccionario.")
+
+    celda = hoja.cell(fila_central, col_ruta)
+    anterior = str(celda.value or "").strip()
+    if not celda.has_style:
+        celda._style = copy(hoja.cell(fila_central, col_central)._style)
+    celda.value = str(ruta_pi).split("|")[0].strip()
+
+    try:
+        libro.save(ruta_centrales)
+    except PermissionError as error:
+        raise CentralesAbierto(
+            f"No se pudo guardar {ruta_centrales}: cerralo en Excel y "
+            f"volve a apretar el boton.") from error
+    return anterior
+
+
 # ------------------------------------------------------------
 # AF (solo en el PC con el AF SDK)
 # ------------------------------------------------------------
@@ -377,7 +451,7 @@ def mostrar_error(titulo, mensaje, parent=None):
 
 def main():
     import tkinter as tk
-    from tkinter import filedialog, ttk
+    from tkinter import filedialog, messagebox, ttk
 
     root = tk.Tk()
     root.title("Buscar rutas de PI AF (SoC)")
@@ -385,7 +459,7 @@ def main():
 
     prefs = leer_preferencias()
     estado = {"af": None, "elementos": [], "nodos": {}, "elegido": None,
-              "ocupado": False}
+              "ocupado": False, "centrales": None, "central": None}
     var_servidor = tk.StringVar(value=prefs.get("servidor", SERVIDOR_AF))
     var_base = tk.StringVar(value=prefs.get("base", BASE_AF))
     var_texto = tk.StringVar()
@@ -487,6 +561,13 @@ def main():
     boton_copiar.pack(side="left")
     boton_ir = tk.Button(abajo, text="Ver en el arbol")
     boton_ir.pack(side="left", padx=6)
+    boton_guardar = tk.Button(abajo, text="Guardar en Centrales.xlsx",
+                              bg="#2d7a2d", fg="white",
+                              font=("Segoe UI", 9, "bold"), state="disabled")
+    boton_guardar.pack(side="left")
+    var_central = tk.StringVar(value="(elegi una central a la izquierda)")
+    tk.Label(abajo, textvariable=var_central, fg="#2d7a2d",
+             font=("Segoe UI", 8, "bold")).pack(side="left", padx=6)
     tk.Label(root, textvariable=var_info, anchor="w", fg="#444444").pack(
         fill="x", padx=14, pady=(0, 8))
 
@@ -591,6 +672,12 @@ def main():
                mostrar_base, f"Buscando '*{texto}*' en toda la base...")
 
     # ---- elegir un elemento -----------------------------------------
+    def refrescar_guardar(*_):
+        listo = bool(estado["central"] and var_ruta.get())
+        boton_guardar.config(state="normal" if listo else "disabled")
+
+    var_ruta.trace_add("write", refrescar_guardar)
+
     def elegir(ruta, elem_af=None):
         var_ruta.set(ruta)
         estado["elegido"] = ruta
@@ -716,7 +803,11 @@ def main():
             raices()
 
     # ---- Centrales.xlsx ------------------------------------------------
-    def pintar_centrales(ruta):
+    def pintar_centrales(ruta, elegir_central=None):
+        estado["centrales"] = ruta
+        estado["central"] = None
+        var_central.set("(elegi una central a la izquierda)")
+        refrescar_guardar()
         lista_centrales.delete(*lista_centrales.get_children())
         try:
             centrales = centrales_del_diccionario(ruta)
@@ -731,11 +822,14 @@ def main():
         for central, ruta_soc in sorted(centrales,
                                         key=lambda c: (bool(c[1]), c[0])):
             sin += not ruta_soc
-            lista_centrales.insert(
+            iid = lista_centrales.insert(
                 "", "end", text=("✓ " if ruta_soc else "✗ ") + central,
                 values=(ruta_soc,), tags=("con" if ruta_soc else "sin",))
+            if elegir_central == central:
+                lista_centrales.selection_set(iid)
+                lista_centrales.see(iid)
         var_info.set(f"{len(centrales)} centrales, {sin} sin ruta en SoC_PI "
-                     f"(en rojo). Clic en una para buscarla.")
+                     f"(en rojo). Clic en una para ver su ruta o buscarla.")
 
     def elegir_centrales():
         ruta = filedialog.askopenfilename(
@@ -751,10 +845,61 @@ def main():
             return
         texto = lista_centrales.item(sel[0], "text")[2:]
         ruta_soc = (lista_centrales.item(sel[0], "values") or ("",))[0]
+        if estado["central"] == texto:
+            return
+        estado["central"] = texto
+        var_central.set(f"-> {texto}")
         pestanas.select(0)
         var_texto.set(texto)
         if ruta_soc:
-            var_info.set(f"Ya tiene ruta: {ruta_soc}")
+            # La que ya tiene: se muestra con sus atributos.
+            elegir(ruta_soc)
+            var_info.set(f"{texto} ya tiene ruta en SoC_PI. Si encontras "
+                         f"otra mejor, elegila y apreta Guardar.")
+            return
+        filas = tabla.get_children()
+        if filas:
+            # La posible ruta: el resultado mas parecido.
+            tabla.selection_set(filas[0])
+            tabla.see(filas[0])
+            var_info.set(f"Posible ruta para {texto}: la primera de la "
+                         f"lista. Revisala y apreta 'Guardar en "
+                         f"Centrales.xlsx'.")
+        else:
+            var_ruta.set("")
+            var_info.set(f"No hay parecidos para {texto} en la lista SAE*. "
+                         f"Proba 'Buscar en toda la base' o Navegar.")
+
+    def guardar_en_centrales():
+        central, ruta = estado["central"], var_ruta.get().strip()
+        archivo = estado["centrales"]
+        if not (central and ruta and archivo):
+            return
+        actual = next(
+            ((lista_centrales.item(i, "values") or ("",))[0]
+             for i in lista_centrales.get_children()
+             if lista_centrales.item(i, "text")[2:] == central), "")
+        if actual == ruta:
+            var_info.set(f"{central} ya tiene esa ruta.")
+            return
+        pregunta = f"Guardar en SoC_PI de {central}:\n\n{ruta}"
+        if actual:
+            pregunta += f"\n\nReemplaza a:\n{actual}"
+        if not messagebox.askyesno("Guardar en Centrales.xlsx", pregunta):
+            return
+        try:
+            guardar_ruta_en_centrales(archivo, central, ruta)
+        except CentralesAbierto as error:
+            mostrar_error("Centrales.xlsx abierto", str(error))
+            return
+        except Exception as error:  # noqa: BLE001 - se muestra
+            mostrar_error("Centrales.xlsx", str(error))
+            return
+        pintar_centrales(archivo, elegir_central=central)
+        estado["central"] = central
+        var_central.set(f"-> {central}")
+        refrescar_guardar()
+        var_info.set(f"Guardado en Centrales.xlsx: {central} -> {ruta}")
 
     # ---- arranque ----------------------------------------------------
     try:
@@ -774,6 +919,7 @@ def main():
     boton_centrales.config(command=elegir_centrales)
     boton_copiar.config(command=copiar)
     boton_ir.config(command=ver_en_arbol)
+    boton_guardar.config(command=guardar_en_centrales)
     tabla.bind("<<TreeviewSelect>>", al_elegir_en_tabla)
     tabla.bind("<Double-1>", copiar)
     arbol.bind("<<TreeviewOpen>>", al_abrir)

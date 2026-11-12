@@ -6472,3 +6472,20 @@ una conexión AF falsa. PI no se pudo probar acá: queda en "Pendientes".
 (búsqueda y lectura del Diccionario); la ventana se probó con un AF falso en
 xvfb (Python 3.12 + tkinter): busca, muestra atributos y abre el árbol en el
 elemento. Contra el AF real no se pudo probar.
+
+## 2026-11-12 (2) — Buscar_Rutas_PI: guardar la ruta en Centrales.xlsx
+
+- Pedido: al elegir una central de Centrales.xlsx ver su ruta o la posible
+  ruta, y "si encuentro la ruta poder agregarla con un botón a
+  centrales.xlsx".
+- Clic en una central: si ya tiene `SoC_PI`, se muestra esa ruta con sus
+  atributos; si no, se busca y queda elegido el resultado más parecido.
+  Botón **Guardar en Centrales.xlsx** (`guardar_ruta_en_centrales`): pide
+  confirmación (muestra la ruta que reemplaza, si había), escribe en la hoja
+  Diccionario con openpyxl (sin el `|atributo`), agrega la columna `SoC_PI`
+  si falta y avisa si el archivo está abierto en Excel. La lista se refresca.
+
+**Verificación:** 3 pruebas nuevas en `test_buscar_rutas_pi.py` (columna
+existente, columna nueva leída por `nucleo` sin entrar en la homologación,
+central inexistente). Ventana probada en xvfb con AF falso y una copia del
+Centrales.xlsx real: elegir SAE-LILE → posible ruta → Guardar → queda ✓.

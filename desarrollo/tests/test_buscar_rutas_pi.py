@@ -79,5 +79,59 @@ class TestCentrales(unittest.TestCase):
             )
 
 
+class TestGuardarEnCentrales(unittest.TestCase):
+
+    def armar(self, tmp, con_columna):
+        ruta = Path(tmp) / "Centrales.xlsx"
+        libro = Workbook()
+        libro.active.title = "Resumen BESS"
+        libro.active.append(["Nombre activo", "Barra inyección"])
+        dic = libro.create_sheet("Diccionario")
+        dic.append([])
+        dic.append(["Balance_BESS", "FD"] + (["SoC_PI"] if con_columna else []))
+        dic.append(["SAE-LILE", "SAE LILE"])
+        dic.append(["SAE-ARENA", "SAE ARENA"]
+                   + ([BASE + "VIEJA"] if con_columna else []))
+        libro.save(ruta)
+        return ruta
+
+    def test_escribe_en_la_columna_que_ya_esta(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ruta = self.armar(tmp, True)
+            anterior = br.guardar_ruta_en_centrales(
+                ruta, "sae-arena", BASE + "SAE-ARENA|Nombre PCP/PID")
+            self.assertEqual(anterior, BASE + "VIEJA")
+            self.assertEqual(
+                br.centrales_del_diccionario(ruta),
+                [("SAE-LILE", ""), ("SAE-ARENA", BASE + "SAE-ARENA")],
+            )
+
+    def test_agrega_la_columna_si_no_esta(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ruta = self.armar(tmp, False)
+            br.guardar_ruta_en_centrales(ruta, "SAE-LILE", BASE + "SAE-Lile")
+            self.assertEqual(
+                br.centrales_del_diccionario(ruta),
+                [("SAE-LILE", BASE + "SAE-Lile"), ("SAE-ARENA", "")],
+            )
+            # El programa la lee igual (y no la toma como un nombre).
+            sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+            import Script.nucleo as nucleo
+            resumen, dic = nucleo.leer_centrales(ruta)
+            mapa = nucleo.construir_homologacion(dic)
+            self.assertNotIn(nucleo.normalizar(BASE + "SAE-Lile"), mapa)
+            self.assertEqual(
+                nucleo.mapa_diccionario(dic, nucleo.ROL_BALANCE_BESS,
+                                        nucleo.ROL_SOC_PI),
+                {"sae-lile": BASE + "SAE-Lile"},
+            )
+
+    def test_central_que_no_esta(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ruta = self.armar(tmp, True)
+            with self.assertRaises(ValueError):
+                br.guardar_ruta_en_centrales(ruta, "SAE-NADA", BASE + "X")
+
+
 if __name__ == "__main__":
     unittest.main()
