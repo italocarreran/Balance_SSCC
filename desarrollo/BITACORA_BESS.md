@@ -12,6 +12,14 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **SoC desde PI (2026-11-11 (49)):** probar el botón **Traer** de la fila
+  del SoC en el PC con AF (Windows, `pip install pythonnet`): que las rutas
+  AF1 pasadas a AF2 existan tal cual, qué ruta encuentra la búsqueda para
+  MANZANO, ARICA2, ANDES2B, ELENA, ALFALFAL-VR2 y LILE (pegarlas en
+  `SoC_PI`, con `Herramientas/Buscar_Rutas_PI.py`), y comparar un mes contra
+  el SOC de DataLink (2610). Probar también esa herramienta contra el AF
+  real (2026-11-12 (1)).
+
 - **Ventana más rápida (2026-11-11 (48)):** fases 1 a 5 del
   `desarrollo/PLAN_OPTIMIZACION_VENTANAS_BESS.md` hechas, con los valores
   por defecto de las decisiones D1–D5 (§6). Falta, del usuario:
@@ -6407,3 +6415,86 @@ ventana con xvfb. 332 pruebas.
 + tkinter + xvfb; antes 437). No se pudo probar en Windows: queda en
 "Pendientes abiertos".
 
+
+## 2026-11-11 (49) — El SoC se trae desde PI AF, en tres columnas
+
+- Pedido: "necesitamos sacar los SOC con python" (referencia: el script
+  `PruebaPI.py` del usuario, que comparaba el Excel de DataLink contra AF).
+  "El formato actual muere, ahora que sean 3 columnas, central, fecha y soc".
+  "Los SoC van a tener su propio botón". Las rutas: "hazlo tú" con el SoC
+  antiguo; "hay unos AF1 que hay que buscar en AF2 porque es el acceso que
+  tengo".
+- `Script/Medidas/Soc_PI.py` (nuevo): conexión a `SRV-SCADA-AF2`/`SEN` con el
+  AF SDK (pythonnet, importado recién al usarse), ubicación de cada central
+  (1. ruta de la columna `SoC_PI` del Diccionario, sin el `|atributo` y con
+  AF1 cambiado por AF2; 2. si no hay ruta o no existe, búsqueda `Name:SAE*`
+  por el atributo `Nombre PCP/PID` contra todos los nombres de la central en
+  el Diccionario, como hacía PruebaPI) y lectura de `Porc Carga Disponible`
+  interpolado cada 15 min / 100, en hora local del PC.
+- `nucleo.soc.generar_soc`: centrales de `Resumen BESS` (de Centrales.xlsx,
+  no de la foto de la planilla: es donde se pegan las rutas), rango día 1
+  00:00 → día 1 del mes siguiente 00:00 incluido (igual que el Excel de
+  DataLink), escribe `Medidas/SOC_AAMM.xlsx` hoja `SoC` (central | fecha |
+  soc) + hoja `Rutas PI` (estado, ruta usada, origen, registros, sin dato).
+  Avisa en el registro las centrales no encontradas y las rutas halladas por
+  búsqueda (para pegarlas en el Diccionario).
+- `extraer_soc` lee el formato nuevo (y sigue leyendo el de bloques, para
+  casos viejos). El Diccionario tiene un rol nuevo `soc_pi` (encabezado
+  `SoC_PI` o `Ruta SoC`) que NO entra en la homologación.
+- Ventana: botón **Traer** en la fila del SoC. "Ejecutar todo": tarea nueva
+  `soc` (recurso propio, corre en paralelo con las APIs); la hoja
+  `Medidores` depende de ella y el SoC dejó de ser entrada inicial que
+  bloquea el botón.
+- Centrales.xlsx del usuario con la columna `SoC_PI` llenada desde
+  `SOC_2610.xlsx` (12 rutas; las 3 de AF1 pasadas a AF2). Sin ruta en el SoC
+  antiguo: MANZANO (la fila traía solo "07 Region RM"), ARICA2, ANDES2B,
+  ELENA, ALFALFAL-VR2 y LILE — quedan para la búsqueda por Nombre PCP/PID.
+
+**Verificación:** `py_compile` OK; 470 pruebas OK (36 salteadas: sin tkinter
+en esta máquina). Pruebas nuevas en `desarrollo/tests/test_soc_pi.py` con
+una conexión AF falsa. PI no se pudo probar acá: queda en "Pendientes".
+
+## 2026-11-12 (1) — Herramienta para buscar rutas de PI AF
+
+- Pedido: "¿cómo puedo buscar las rutas de las centrales que faltan? podrías
+  agregar un buscador a las herramientas… que permita navegar por la
+  jerarquía del scada".
+- `Herramientas/Buscar_Rutas_PI.py` (suelta, no importa el programa, igual
+  que Buscar_Puntos_PRMTE): lista de elementos `SAE*` guardada en
+  `__config__/elementos_sae_pi.json` con búsqueda aproximada offline (palabras
+  comunes SAE/CRCA/PFV/BESS no cuentan; romanos = números, así "arica 2"
+  encuentra "Arica II"); "Buscar en toda la base" (`Name:'*texto*'`, máx.
+  300); panel con las centrales de Centrales.xlsx sin ruta en `SoC_PI`;
+  pestaña Navegar (árbol con carga perezosa, "Ver en el árbol"); atributos
+  del elemento elegido y "Copiar ruta".
+
+**Verificación:** pruebas nuevas `desarrollo/tests/test_buscar_rutas_pi.py`
+(búsqueda y lectura del Diccionario); la ventana se probó con un AF falso en
+xvfb (Python 3.12 + tkinter): busca, muestra atributos y abre el árbol en el
+elemento. Contra el AF real no se pudo probar.
+
+## 2026-11-12 (2) — Buscar_Rutas_PI: guardar la ruta en Centrales.xlsx
+
+- Pedido: al elegir una central de Centrales.xlsx ver su ruta o la posible
+  ruta, y "si encuentro la ruta poder agregarla con un botón a
+  centrales.xlsx".
+- Clic en una central: si ya tiene `SoC_PI`, se muestra esa ruta con sus
+  atributos; si no, se busca y queda elegido el resultado más parecido.
+  Botón **Guardar en Centrales.xlsx** (`guardar_ruta_en_centrales`): pide
+  confirmación (muestra la ruta que reemplaza, si había), escribe en la hoja
+  Diccionario con openpyxl (sin el `|atributo`), agrega la columna `SoC_PI`
+  si falta y avisa si el archivo está abierto en Excel. La lista se refresca.
+
+**Verificación:** 3 pruebas nuevas en `test_buscar_rutas_pi.py` (columna
+existente, columna nueva leída por `nucleo` sin entrar en la homologación,
+central inexistente). Ventana probada en xvfb con AF falso y una copia del
+Centrales.xlsx real: elegir SAE-LILE → posible ruta → Guardar → queda ✓.
+
+## 2026-11-12 (3) — Buscar_Rutas_PI: la ruta se guarda sin negrita
+
+- Pedido: "se agrega en negrita, que se agregue sin negrita". La celda nueva
+  copiaba el formato de la columna Balance_BESS, que en el Centrales.xlsx
+  real va en negrita. Ahora copia el de la celda de su izquierda y siempre
+  queda con `bold=False` (también al reescribir una que ya estaba en
+  negrita). Prueba nueva `test_la_ruta_queda_sin_negrita`; verificado sobre
+  una copia del Centrales.xlsx real.

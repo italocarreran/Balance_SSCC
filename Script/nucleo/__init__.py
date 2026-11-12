@@ -18,7 +18,7 @@ ahora en el modulo de su etapa:
     rutas.py                 Rutas del caso y busqueda de los archivos de entrada.
     estructura.py            El arbol de carpetas y archivos que dibuja la ventana.
     lectura.py               Medidas_SAE.xlsx y el maestro Centrales.xlsx.
-    soc.py                   El SoC por bloques, desde el archivo del SCADA.
+    soc.py                   El SoC del periodo: se trae de PI AF y se lee.
     ofertas_sscc.py          Ofertas SSCC y las columnas R, S, T, V de Medidores.
     hojas_entrada.py         Hojas CMg, FD y Subastas del consolidado.
     subastas_accdb.py        Subastas desde su origen: los Access OfertasSSCCAdj*.
@@ -138,8 +138,8 @@ from .compensacion import (
     construir_resumen,
 )
 from .lectura import (
-    ROL_BALANCE_BESS, ROL_FD, ROL_FMA_CPF, ROL_OFERTAS, ROL_SUBASTAS,
-    TITULOS_DICCIONARIO, encabezado_diccionario, filas_diccionario,
+    ROL_BALANCE_BESS, ROL_FD, ROL_FMA_CPF, ROL_OFERTAS, ROL_SOC_PI,
+    ROL_SUBASTAS, TITULOS_DICCIONARIO, encabezado_diccionario, filas_diccionario,
     mapa_diccionario,
     _bloques_columnas_diccionario, _leer_hoja_con_encabezado,
     _leer_resumen_bess, construir_homologacion, leer_centrales,
@@ -149,7 +149,8 @@ from .lectura import (
 )
 from .soc import (
     _extraer_nombre_desde_ruta_scada, detectar_bloques,
-    detectar_fila_nombres, extraer_soc,
+    detectar_fila_nombres, extraer_soc, generar_soc, centrales_para_soc,
+    nombre_archivo_soc,
 )
 from .cambio_hora import (
     CambioHora, cambios_de_hora, cambios_del_periodo, describir_periodo,
@@ -333,7 +334,7 @@ __all__ = [
     "describir_periodo", "horas_del_dia", "construir_resumen",
     "_filas_de_hojas", "hojas_con_datos", "hojas_de",
     "revisar_estructura", "ROL_BALANCE_BESS", "ROL_FD", "ROL_FMA_CPF",
-    "ROL_OFERTAS", "ROL_SUBASTAS", "TITULOS_DICCIONARIO",
+    "ROL_OFERTAS", "ROL_SOC_PI", "ROL_SUBASTAS", "TITULOS_DICCIONARIO",
     "encabezado_diccionario", "filas_diccionario", "mapa_diccionario",
     "_bloques_columnas_diccionario",
     "_leer_hoja_con_encabezado", "_leer_resumen_bess",
@@ -344,7 +345,8 @@ __all__ = [
     "agregar_central_ofertas", "centrales_ofertas",
     "agregar_central_fd", "dic_mapeo_desde_fd", "mapa_unidad_fd_a_central",
     "_extraer_nombre_desde_ruta_scada", "detectar_bloques",
-    "detectar_fila_nombres", "extraer_soc", "_contiene_bess_o_sae",
+    "detectar_fila_nombres", "extraer_soc", "generar_soc",
+    "centrales_para_soc", "nombre_archivo_soc", "_contiene_bess_o_sae",
     "_es_respuesta_si", "_homologar_fge", "_limpiar_nombre_mostrar",
     "_mapas_homologacion_fge", "_normalizar_nombre_clave",
     "_normalizar_periodo", "_servicio_termina_en_rs",

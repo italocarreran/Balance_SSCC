@@ -386,15 +386,18 @@ def revisar_estructura(carpeta_base, aamm=None):
             )
         )
 
-    # El SoC del periodo vive aca adentro (nivel 1), no es una entrada
-    # suelta: su nombre solo tiene que contener "SOC" y el AAMM.
+    # El SoC del periodo vive aca adentro (nivel 1). Lo trae desde PI
+    # el boton de la fila (SOC_AAMM.xlsx); uno puesto a mano sigue
+    # sirviendo si su nombre contiene "SOC" y el AAMM.
     if aamm_valido:
         try:
             archivo_soc = buscar_soc(rutas["medidas_dir"], aamm_valido)
             filas.append(
                 _fila(
                     "soc", archivo_soc.name, 1, "ok",
-                    f"periodo {aamm_valido}", ruta=archivo_soc,
+                    f"periodo {aamm_valido} - se vuelve a traer de PI "
+                    f"con el boton ->",
+                    ruta=archivo_soc,
                 )
             )
             rutas["soc"] = archivo_soc
@@ -405,7 +408,11 @@ def revisar_estructura(carpeta_base, aamm=None):
                     f"SoC del periodo {aamm_valido}",
                     1,
                     "falta",
-                    str(error).split("\n")[0],
+                    (
+                        "se trae de PI con el boton ->"
+                        if str(error).startswith("No se encontro")
+                        else str(error).split("\n")[0]
+                    ),
                     ruta=rutas["medidas_dir"],
                     es_carpeta=True,
                 )

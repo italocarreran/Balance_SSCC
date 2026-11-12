@@ -13,7 +13,7 @@ Script (lo normal, desde Balance_BESS.py) o con Script/ en el sys.path.
 try:
     from ..Cmg import Extrae_CMG_barras as extrae_cmg
     from ..Medidas import Homologacion, Descarga_PRMTE, Claves_Balance
-    from ..Medidas import Generacion_Real
+    from ..Medidas import Generacion_Real, Soc_PI
     from ..Medidas.comun import ErrorMedidas
     from ..Subastas import Ofertas_Adjudicadas as ofertas_adj
     from ..Subastas import Fma as fma_subastas
@@ -23,7 +23,7 @@ try:
 except ImportError:  # pragma: no cover - depende de como se importe
     from Cmg import Extrae_CMG_barras as extrae_cmg
     from Medidas import Homologacion, Descarga_PRMTE, Claves_Balance
-    from Medidas import Generacion_Real
+    from Medidas import Generacion_Real, Soc_PI
     from Medidas.comun import ErrorMedidas
     from Subastas import Ofertas_Adjudicadas as ofertas_adj
     from Subastas import Fma as fma_subastas
@@ -33,6 +33,6 @@ except ImportError:  # pragma: no cover - depende de como se importe
 
 __all__ = [
     "extrae_cmg", "Homologacion", "Descarga_PRMTE", "Claves_Balance",
-    "Generacion_Real", "ErrorMedidas", "ofertas_adj", "fma_subastas",
+    "Generacion_Real", "Soc_PI", "ErrorMedidas", "ofertas_adj", "fma_subastas",
     "indicadores_dco", "indices_fma", "desempeno_fd",
 ]
