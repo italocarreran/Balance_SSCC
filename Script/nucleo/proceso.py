@@ -37,7 +37,7 @@ from .lectura import (
 from .lector import abrir_excel, leer_excel
 from .matriz_centrales import construir_matriz_centrales
 from .unidades import sin_unidades
-from .verificaciones import verificar_medidores
+from .verificaciones import verificar_medidores, verificar_soc_vs_energia
 from .medidores import (
     completar_ofertas_en_medidores, construir_medidores,
     construir_ofertas_sscc, reponer_auxiliares_medidores,
@@ -246,6 +246,21 @@ def generar_consolidado(
         df_medidores, avisos = construir_medidores(
             df_sae, df_soc, mes, registrar=registrar
         )
+
+        # El signo de carga/descarga contra el SoC, apenas se juntan
+        # (pedido del usuario: que se vea al armar Medidores y no recien
+        # al pagar). Se repite en el pago para que la corrida no quede
+        # APROBADA con el signo mal. Va al Log como [AVISO].
+        try:
+            for alerta in verificar_soc_vs_energia(
+                df_medidores, registrar=lambda *_: None
+            ):
+                avisos.append(
+                    f"{alerta.id_alerta} ({alerta.severidad}) "
+                    f"{alerta.central}: {alerta.mensaje}"
+                )
+        except Exception as error:  # noqa: BLE001 - es solo un control
+            avisos.append(f"no se pudo verificar el signo vs SoC: {error}")
 
     elif quiere_ofertas:
         # Solo 'Ofertas SSCC': las centrales y ventanas salen de la

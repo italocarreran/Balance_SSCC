@@ -219,5 +219,21 @@ class BarrasConCmgTest(unittest.TestCase):
         )
 
 
+class AlArmarMedidoresTest(unittest.TestCase):
+
+    def test_la_hoja_medidores_trae_lo_que_necesita_el_control(self):
+        """El control de signo corre sobre la salida de construir_medidores."""
+        from Script.nucleo.parametros import COLUMNAS_MEDIDORES_SALIDA
+        for columna in ("clave", "intervalo", "Gen_Unidad", "SoC"):
+            self.assertIn(columna, COLUMNAS_MEDIDORES_SALIDA)
+
+    def test_proceso_lo_llama_al_armar_medidores(self):
+        import inspect
+        from Script.nucleo import proceso
+        fuente = inspect.getsource(proceso)
+        armar = fuente.index("construir_medidores(")
+        self.assertIn("verificar_soc_vs_energia(", fuente[armar:armar + 1200])
+
+
 if __name__ == "__main__":
     unittest.main()
