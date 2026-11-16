@@ -8,7 +8,13 @@ programa. Solo necesita Python con 'requests'.
   1. Baja de la API de medidas del Coordinador la lista de puntos de
      medida y la guarda (en __config__ si la encuentra hacia arriba de
      esta carpeta; si no, al lado de este archivo). Despues busca sin
-     conectarse, hasta que se aprieta 'Actualizar lista'.
+     conectarse, hasta que se aprieta 'Actualizar lista'. Si la API
+     informa mas puntos de los que llegaron, lo avisa.
+  3. 'Comprobar en la API': un id exacto que no esta en la lista se
+     pregunta a la API de medidas (la misma de la descarga, mes
+     anterior). Si tiene medidas, existe: se agrega a la lista y queda
+     guardado aparte ("encontrados_por_medidas"), asi no se pierde al
+     volver a actualizar.
   2. Se escribe el nombre aproximado ('arena 220', 'tocopila') y la
      lista se filtra mientras se escribe. Doble clic copia el id exacto.
 
@@ -112,11 +118,16 @@ def bajar_puntos(token, avisar=print):
     """
     Todos los puntos de /measurement-point/all, pagina por pagina
     (page empieza en 0). Devuelve (puntos, url).
+
+    No se confia solo en 'totalPages': se sigue pidiendo mientras
+    lleguen menos registros que 'totalElements' (por si la API recorta
+    el pageSize) y, al final, se avisa si igual faltan.
     """
 
     import requests
 
     registros, pagina, total, anterior = [], 0, None, None
+    total_elementos = None
     while pagina < MAXIMO_PAGINAS:
         avisar(f"Bajando la pagina {pagina + 1}"
                + (f" de {total}" if total else "") + "...")
@@ -145,15 +156,107 @@ def bajar_puntos(token, avisar=print):
             break
         registros += contenido
         anterior = contenido
-        if isinstance(datos, dict) and datos.get("totalPages") is not None:
-            total = int(datos["totalPages"])
-            if pagina + 1 >= total:
+        if isinstance(datos, dict):
+            if datos.get("totalPages") is not None:
+                total = int(datos["totalPages"])
+            if datos.get("totalElements") is not None:
+                total_elementos = int(datos["totalElements"])
+        if total_elementos is not None:
+            if len(registros) >= total_elementos:
                 break
+        elif total is not None and pagina + 1 >= total:
+            break
         pagina += 1
     puntos = a_puntos(registros)
     if not puntos:
         raise RuntimeError(f"{URL_PUNTOS} respondio sin puntos de medida.")
+    if total_elementos is not None and len(registros) < total_elementos:
+        avisar(f"OJO: la API informa {total_elementos:,} puntos y llegaron "
+               f"{len(registros):,}: la lista quedo incompleta. Usa "
+               f"'Comprobar en la API' para un punto que no aparezca.")
+    else:
+        avisar(f"{len(puntos):,} puntos"
+               + (f" (la API informa {total_elementos:,})."
+                  if total_elementos is not None else "."))
     return puntos, URL_PUNTOS
+
+
+# ------------------------------------------------------------
+# Un punto que no esta en la lista: se pregunta por sus medidas
+# ------------------------------------------------------------
+
+# El mismo endpoint y la misma forma de pedir que la descarga de
+# Medidas_SAE (Script/Medidas/Descarga_PRMTE.py): si el punto tiene
+# medidas, existe aunque /measurement-point/all no lo traiga.
+URL_MEDIDAS = "https://medidas.api.coordinador.cl/medidas-v2/measurement"
+CANALES = (1, 3)
+
+
+def mes_anterior(hoy=None):
+    hoy = hoy or date.today()
+    anio, mes = (hoy.year, hoy.month - 1) if hoy.month > 1 else (hoy.year - 1, 12)
+    return f"{anio:04d}{mes:02d}"
+
+
+def comprobar_punto(token, ident, periodo=None):
+    """
+    Pregunta a la API de medidas por 'ident' (id exacto), canal 1 y 3,
+    en el mes 'periodo' (AAAAMM; por defecto el mes anterior). Devuelve
+    (punto, mensaje): punto es el dict de la lista (con 'origen' =
+    "medidas") si respondio con medidas, o None.
+    """
+
+    import requests
+
+    ident = str(ident or "").strip()
+    if not ident:
+        return None, "Escribe el id exacto del punto."
+    periodo = periodo or mes_anterior()
+
+    ultimo = ""
+    for canal in CANALES:
+        try:
+            r = requests.get(
+                URL_MEDIDAS, timeout=TIMEOUT,
+                params={"channelId": canal, "measurePointId": ident,
+                        "period": f"{periodo}010000", "user_key": token},
+                headers={"accept": "application/json"},
+            )
+        except requests.RequestException as error:
+            ultimo = str(error)
+            continue
+        if r.status_code != 200:
+            ultimo = f"HTTP {r.status_code} {r.text[:200]}"
+            continue
+        try:
+            datos = r.json()
+        except ValueError:
+            ultimo = "la respuesta no es JSON"
+            continue
+        registro = datos[0] if isinstance(datos, list) and datos else None
+        if not isinstance(registro, dict) or not registro.get("measurement"):
+            ultimo = f"canal {canal} sin medidas en {periodo}"
+            continue
+
+        campos = {c: str(registro.get(c) or "").strip() for c, _ in CAMPOS}
+        if not campos["subStation"]:
+            campos["subStation"] = "(encontrado por medidas)"
+        punto = {"id": ident, "detalle": "encontrado por medidas", **campos,
+                 "origen": "medidas"}
+        return punto, (
+            f"'{ident}' existe: tiene medidas en {periodo} (canal {canal}), "
+            f"pero /measurement-point/all no lo trae. Quedo agregado a la lista."
+        )
+
+    return None, f"'{ident}' no respondio con medidas en {periodo} ({ultimo})."
+
+
+def unir_encontrados(puntos, encontrados):
+    """La lista bajada mas los puntos hallados por medidas que no trae."""
+
+    ids = {p["id"] for p in puntos}
+    return puntos + [p for p in encontrados if p["id"] not in ids]
+
 
 # ------------------------------------------------------------
 # La busqueda
@@ -263,7 +366,7 @@ def main():
     root.title("Buscar puntos de medida PRMTE")
     root.geometry("1000x580")
 
-    estado = {"puntos": []}
+    estado = {"puntos": [], "encontrados": [], "fecha": "", "origen": ""}
     var_token = tk.StringVar(value=token_guardado())
     var_texto = tk.StringVar()
     var_info = tk.StringVar()
@@ -274,6 +377,10 @@ def main():
     tk.Entry(arriba, textvariable=var_token, show="•", width=34).pack(side="left", padx=6)
     boton_bajar = tk.Button(arriba, text="Actualizar lista")
     boton_bajar.pack(side="left", padx=6)
+    boton_comprobar = tk.Button(arriba, text="Comprobar en la API")
+    boton_comprobar.pack(side="left", padx=6)
+    tk.Label(arriba, text="(id exacto escrito abajo)",
+             fg="#444444", font=("Segoe UI", 8)).pack(side="left", padx=4)
 
     medio = tk.LabelFrame(root, text="Nombre aproximado del punto", padx=10, pady=6)
     medio.pack(fill="x", padx=14, pady=4)
@@ -331,6 +438,13 @@ def main():
             root.clipboard_append(ident)
             var_info.set(f"Copiado: {ident}")
 
+    def guardar():
+        ruta_lista().write_text(json.dumps(
+            {"origen": estado["origen"], "fecha": estado["fecha"],
+             "puntos": [p for p in estado["puntos"] if p.get("origen") != "medidas"],
+             "encontrados_por_medidas": estado["encontrados"]},
+            ensure_ascii=False, indent=1), encoding="utf-8")
+
     def actualizar():
         token = var_token.get().strip()
         if not token:
@@ -342,37 +456,76 @@ def main():
             try:
                 puntos, url = bajar_puntos(
                     token, avisar=lambda m: root.after(0, var_info.set, m))
-                ruta_lista().write_text(json.dumps(
-                    {"origen": url, "fecha": date.today().isoformat(),
-                     "puntos": puntos}, ensure_ascii=False, indent=1),
-                    encoding="utf-8")
-                root.after(0, listo, puntos, f"Lista bajada de {url}.", None)
+                root.after(0, listo, puntos, url, None)
             except Exception as error:  # noqa: BLE001 - se muestra
                 root.after(0, listo, None, None, error)
 
         threading.Thread(target=trabajo, daemon=True).start()
 
-    def listo(puntos, mensaje, error):
+    def listo(puntos, url, error):
         boton_bajar.config(state="normal")
         if error is not None:
             var_info.set("No se pudo bajar la lista.")
             mostrar_error("API de medidas", str(error))
             return
-        estado["puntos"] = puntos
+        estado.update(origen=url, fecha=date.today().isoformat())
+        estado["puntos"] = unir_encontrados(puntos, estado["encontrados"])
+        guardar()
+        resumen = var_info.get()
         mostrar()
-        var_info.set(mensaje + " " + var_info.get())
+        var_info.set(f"Lista bajada de {url}. {resumen}")
         entrada.focus_set()
+
+    def comprobar():
+        token = var_token.get().strip()
+        ident = var_texto.get().strip()
+        if not token:
+            messagebox.showwarning("Falta el token", "Pega el token PRMTE.")
+            return
+        if not ident:
+            messagebox.showwarning("Falta el id", "Escribe abajo el id exacto del punto.")
+            return
+        boton_comprobar.config(state="disabled")
+        var_info.set(f"Consultando las medidas de '{ident}'...")
+
+        def trabajo():
+            try:
+                punto, mensaje = comprobar_punto(token, ident)
+            except Exception as error:  # noqa: BLE001 - se muestra
+                punto, mensaje = None, str(error)
+            root.after(0, comprobado, punto, mensaje)
+
+        threading.Thread(target=trabajo, daemon=True).start()
+
+    def comprobado(punto, mensaje):
+        boton_comprobar.config(state="normal")
+        if punto is not None:
+            ya = {p["id"] for p in estado["puntos"]}
+            if punto["id"] in ya:
+                mensaje = f"'{punto['id']}' tiene medidas y ya estaba en la lista."
+            else:
+                estado["encontrados"].append(punto)
+                estado["puntos"].append(punto)
+                try:
+                    guardar()
+                except OSError as error:
+                    mensaje += f" (no se pudo guardar: {error})"
+            mostrar()
+        var_info.set(mensaje)
 
     # La lista guardada de la vez anterior: se busca sin conectarse.
     try:
         guardada = json.loads(ruta_lista().read_text(encoding="utf-8"))
-        estado["puntos"] = guardada["puntos"]
+        estado["encontrados"] = guardada.get("encontrados_por_medidas", [])
+        estado["puntos"] = unir_encontrados(guardada["puntos"], estado["encontrados"])
+        estado.update(origen=guardada.get("origen", ""), fecha=guardada.get("fecha", ""))
         var_info.set(f"{len(estado['puntos']):,} puntos (lista del "
                      f"{guardada.get('fecha', '?')}). Escribe un nombre.")
     except (OSError, ValueError, KeyError):
         var_info.set("Pega el token y aprieta 'Actualizar lista' (solo la primera vez).")
 
     boton_bajar.config(command=actualizar)
+    boton_comprobar.config(command=comprobar)
     boton_copiar.config(command=copiar)
     tabla.bind("<Double-1>", copiar)
     entrada.bind("<Return>", copiar)
