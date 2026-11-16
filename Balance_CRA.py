@@ -3,33 +3,39 @@
 Balance CRA (remuneracion CRA).
 
 Ventana unica, con el mismo patron que Balance_BESS.py: se elige la
-carpeta base del caso, se ingresa el periodo (AAMM) y debajo se dibuja
-el arbol del caso con el estado de cada entrada (OK/FALTA/PENDIENTE) y
-un boton en cada fila que se puede generar.
+carpeta del MES (la misma que usa Balance_BESS.py), se ingresa el
+periodo (AAMM) y debajo se dibuja el arbol del caso con el estado de
+cada entrada (OK/FALTA/PENDIENTE) y un boton en cada fila que se puede
+generar. Lo propio del CRA va en <mes>/CRA/ y lo comun con el BESS en la
+raiz del mes (ver Script/nucleo/carpetas.py):
 
-    <CARPETA_BASE>/
-        Auxiliares/
-            centrales_cra.xlsx             (configuraciones del CRA)
-        Energia/
-            Formato_Solicitud_SSAA_SSCC_Hidro_*.xlsx
-        FP/
-            fp_<AAMM>_1_<N>.xlsx           [Generar]
-        CO/
-            cvar_cra_<AAMM>_1_<N>.xlsx     [Generar]
-        SC y CO/
-            Reporte_CRA*.csv
-            Cálculo_SobrecostosSSCC_*.xlsm (hoja SOBRECOSTOS)
-        FD/
+    <CARPETA DEL MES>/
+        CRA/
+            Auxiliares/
+                centrales_cra.xlsx         (configuraciones del CRA)
+            Energia/
+                Formato_Solicitud_SSAA_SSCC_Hidro_*.xlsx
+            FP/
+                fp_<AAMM>_1_<N>.xlsx       [Generar]
+            CO/
+                cvar_cra_<AAMM>_1_<N>.xlsx [Generar]
+            SC y CO/
+                Reporte_CRA*.csv
+                Cálculo_SobrecostosSSCC_*.xlsm (hoja SOBRECOSTOS)
+            Log/
+                Registro_ultima_corrida.txt
+            5_REMUNERACION_CRA_<AAMM>.xlsx [Actualizar]
+                hoja 'PRORRATA_RETIROS'    [Actualizar]  (solo bloque 1)
+                hoja 'FD_CTF' / 'FD_CSF' / 'FD_CPF'  [Actualizar]
+                hoja 'SC y CO' / 'CO' / 'FP' / 'ENERGIA'  [Actualizar]
+        BESS/                              (Balance_BESS.py)
+        FD y FMA/                          (comun con el BESS)
             SSCC_Desempeño_*.xlsx          [Traer]
-        Prorrata retiros/
+        Prorrata retiros/                  (comun con el BESS)
             Prorrata_Retiros_<AAMM>_pre/_def.xlsx
-        Balance_CRA.xlsx                   [Actualizar]
-            hoja 'PRORRATA_RETIROS'        [Actualizar]  (solo bloque 1)
-            hoja 'FD_CTF' / 'FD_CSF' / 'FD_CPF'  [Actualizar]
-            hoja 'SC y CO'                 [Actualizar]
-            hoja 'CO'                      [Actualizar]
-            hoja 'FP'                      [Actualizar]
-            hoja 'ENERGIA'                 [Actualizar]
+
+Un caso de antes (todo suelto en la carpeta, con su propia FD/) se
+sigue leyendo tal cual.
 
 Por ahora solo estan las hojas de entrada con su carga definida en
 docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md; el resto se muestra como
@@ -48,9 +54,10 @@ import traceback
 from pathlib import Path
 
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, ttk
 
 from Script import config, cra
+from Script.nucleo import cambio_hora
 from Script.arbol import _prefijos_arbol
 from Script.dialogos import mostrar_error
 
@@ -143,7 +150,7 @@ def main():
     arriba = ttk.Frame(root, padding=8)
     arriba.pack(fill="x")
 
-    ttk.Label(arriba, text="Carpeta base:").grid(row=0, column=0, sticky="w")
+    ttk.Label(arriba, text="Carpeta del mes:").grid(row=0, column=0, sticky="w")
     ttk.Entry(arriba, textvariable=var_base, width=90).grid(
         row=0, column=1, sticky="we", padx=4
     )
@@ -151,7 +158,7 @@ def main():
     def examinar():
         elegida = filedialog.askdirectory(
             initialdir=var_base.get() or None,
-            title="Carpeta del caso CRA",
+            title="Carpeta del mes (la misma del BESS)",
         )
         if elegida:
             var_base.set(elegida)
@@ -169,6 +176,29 @@ def main():
     entrada_aamm.bind("<Return>", lambda _e: revisar())
     entrada_aamm.bind("<FocusOut>", lambda _e: revisar())
     arriba.columnconfigure(1, weight=1)
+
+    # Cambio de hora del mes, a la vista (como en Balance_BESS.py): con
+    # cambio, el mes no tiene dias x 96 cuartos de hora.
+    var_cambio_hora = tk.StringVar(value="")
+    etiqueta_cambio = tk.Label(
+        arriba, textvariable=var_cambio_hora, anchor="w", justify="left",
+        font=("Segoe UI", 9, "bold"),
+    )
+    etiqueta_cambio.grid(row=2, column=1, sticky="w", padx=4, pady=(2, 0))
+
+    def mostrar_cambio_hora(*_):
+        aamm = var_aamm.get().strip()
+        try:
+            cra.validar_aamm(aamm)
+            texto = cambio_hora.describir_periodo(aamm)
+            hay = bool(cambio_hora.cambios_del_periodo(aamm))
+        except (cra.ErrorEntrada, ValueError):
+            texto, hay = "", False
+        var_cambio_hora.set(texto)
+        etiqueta_cambio.config(fg="#a06000" if hay else "#555555")
+
+    var_aamm.trace_add("write", mostrar_cambio_hora)
+    mostrar_cambio_hora()
 
     # --- arbol ----------------------------------------------
     marco_arbol = ttk.LabelFrame(root, text="Estructura del caso", padding=6)
@@ -265,9 +295,22 @@ def main():
                 "Terminado correctamente." if res["ok"]
                 else "Termino con errores (ver registro)."
             )
+            guardar_registro(base, aamm)
             revisar()
 
         threading.Thread(target=trabajo, daemon=True).start()
+
+    def guardar_registro(base, aamm):
+        """Deja el registro en <mes>/CRA/Log/Registro_ultima_corrida.txt."""
+
+        try:
+            rutas = cra.resolver_rutas(base, aamm)
+            rutas["log_dir"].mkdir(parents=True, exist_ok=True)
+            rutas["registro"].write_text(
+                txt_log.get("1.0", "end"), encoding="utf-8"
+            )
+        except OSError:
+            pass
 
     def boton_de_fila(fila):
         """(texto, comando) del boton de esa fila, o None."""
@@ -302,7 +345,7 @@ def main():
         botones.clear()
 
         if not base or not Path(base).is_dir():
-            ttk.Label(marco_arbol, text="Elegi la carpeta base del caso.").pack(
+            ttk.Label(marco_arbol, text="Elegi la carpeta del mes.").pack(
                 anchor="w"
             )
             return

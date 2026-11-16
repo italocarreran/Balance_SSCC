@@ -9,6 +9,7 @@ su id (la ventana decide con el que boton le cuelga), su estado ("ok" /
 
 from openpyxl import load_workbook
 
+from ..nucleo.carpetas import relativa
 from ..nucleo.utiles import ErrorEntrada
 from . import parametros as p
 from .proceso import SECCIONES
@@ -42,7 +43,7 @@ def _fila(nivel, id_, texto, estado, detalle="", ruta=None, es_carpeta=False):
 def revisar_estructura(carpeta_base, aamm):
     """Lista plana de filas, en el orden en que se dibujan."""
 
-    rutas = resolver_rutas(carpeta_base)
+    rutas = resolver_rutas(carpeta_base, aamm)
     filas = []
 
     carpetas = {}
@@ -52,8 +53,10 @@ def revisar_estructura(carpeta_base, aamm):
     for carpeta, entradas in carpetas.items():
         ruta_carpeta = rutas[carpeta]
         existe = ruta_carpeta.is_dir()
+        # Relativa a la carpeta del mes: "CRA/FP/" (propia) o "FD y FMA/"
+        # (comun con el BESS).
         filas.append(_fila(
-            0, f"carpeta_{carpeta}", f"{ruta_carpeta.name}/",
+            0, f"carpeta_{carpeta}", f"{relativa(ruta_carpeta, rutas['base'])}/",
             "ok" if existe else "falta", ruta=ruta_carpeta, es_carpeta=True,
         ))
 
@@ -78,7 +81,7 @@ def revisar_estructura(carpeta_base, aamm):
     salida = rutas["salida"]
     hojas_escritas = _hojas_de(salida)
     filas.append(_fila(
-        0, "salida", salida.name,
+        0, "salida", relativa(salida, rutas["base"]),
         "ok" if salida.exists() else "pendiente",
         "" if salida.exists() else "todavia no se genero",
         ruta=salida,

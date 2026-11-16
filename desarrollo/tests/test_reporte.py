@@ -381,7 +381,8 @@ class TestArchivos(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as carpeta:
             rutas = resolver_rutas(carpeta, "2610")
-            _planilla(carpeta, rutas["salida"].name)
+            rutas["raiz_bess"].mkdir()      # <mes>/BESS/
+            _planilla(rutas["raiz_bess"], rutas["salida"].name)
             # Un control que ya tiene otra hoja: no se pierde.
             nucleo.escribir_control(
                 rutas["control"],

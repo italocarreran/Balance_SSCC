@@ -33,10 +33,15 @@ CARPETA_CMG = "Cmg"
 # (fma_cpf_*, fma_csf_*, fma_cft_*) de las que sale Subastas!FMA-.
 # Se sigue aceptando el nombre viejo si la carpeta nueva no existe, para
 # que los casos ya armados no se rompan (ver resolver_rutas).
-CARPETA_FD_FMA = "FD y FMA"
-CARPETA_FD_FMA_ANTIGUA = "SSCC_Desempeño"
+#
+# "FD y FMA" y "Prorrata retiros" son COMUNES con el CRA: van en la raiz
+# de la carpeta del mes; las demas son propias del BESS y van adentro de
+# BESS/ (ver carpetas.py).
+from .carpetas import (  # noqa: E402,F401  (se re-exportan)
+    CARPETA_BESS, CARPETA_FD_FMA, CARPETA_FD_FMA_ANTIGUA,
+    CARPETA_PRORRATA_RETIROS,
+)
 CARPETA_SUBASTAS = "Subastas"
-CARPETA_PRORRATA_RETIROS = "Prorrata retiros"
 
 ARCHIVO_MEDIDAS_SAE = "Medidas_SAE.xlsx"
 HOJA_MEDIDAS_SAE = "Medidas"

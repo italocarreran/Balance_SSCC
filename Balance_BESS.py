@@ -20,44 +20,43 @@ se puede rehacer y que bloquea la corrida) y lo ejecuta respetando las
 dependencias, en paralelo donde se puede. El grafo y el plan viven en
 Script/nucleo/orquestador.py; esta ventana solo los dibuja.
 
-    <CARPETA_BASE>/
-        Medidas/
-            Medidas_SAE.xlsx               [Actualizar]
-            SOC_AAMM.xlsx                  [Traer]
-        Auxiliares/
-            Centrales.xlsx
-                hoja 'Resumen BESS'
-                hoja 'Diccionario'
-            <algo>Homologacion<algo>.xlsx
-                hoja 'homol'
-                hoja 'Gen real'
-        Ofertas/
-            <algo>OfertasSSCC<algo>.xlsx (o .xlsm/.xlsb/.xls)
-        Cmg/
-            cmg<AAMM>_def_15minutal.csv    [Traer]
-            cmg.xlsx                       [Generar]
-        FD y FMA/
+La carpeta que se elige es la del MES, la misma que usa Balance_CRA.py:
+lo propio del BESS va en <mes>/BESS/ y lo comun con el CRA en la raiz
+(ver Script/nucleo/carpetas.py). Un caso de antes, con todo suelto en
+la carpeta, se sigue usando tal cual, sin mover nada.
+
+    <CARPETA DEL MES>/
+        BESS/
+            Medidas/
+                Medidas_SAE.xlsx           [Actualizar]
+                SOC_AAMM.xlsx              [Traer]
+            Auxiliares/
+                Centrales.xlsx
+                    hoja 'Resumen BESS'
+                    hoja 'Diccionario'
+                <algo>Homologacion<algo>.xlsx
+                    hoja 'homol'
+                    hoja 'Gen real'
+            Ofertas/
+                <algo>OfertasSSCC<algo>.xlsx (o .xlsm/.xlsb/.xls)
+            Cmg/
+                cmg<AAMM>_def_15minutal.csv  [Traer]
+                cmg.xlsx                   [Generar]
+            Subastas/
+                DB subastas/               [Traer]
+            11_PAGOS_BESS_AAMM.xlsx        [Actualizar]
+                hoja 'Resumen' ... hoja 'Medidores'  [uno por hoja]
+            SAE_AAMM.csv                   [Generar]
+            Log/
+                Control_corrida.xlsx
+                Registro_ultima_corrida.txt
+        CRA/                               (Balance_CRA.py)
+        FD y FMA/                          (comun con el CRA)
             SSCC_Desempeño_<algo>.xlsx     [Traer]
             fma_cpf_<AAMM>.xlsx            [Generar]
             fma_csf_<AAMM>.xlsx            [Generar]
             (fma_cft_<AAMM>.xlsx: oculto, FMA_CON_CTF = False)
-        Subastas/
-            DB subastas/                   [Traer]
-        11_PAGOS_BESS_AAMM.xlsx            [Actualizar]
-            hoja 'Resumen'                 [Asignar]
-            hoja 'PRORRATA_RETIROS'        [Traer]
-            hoja 'COMPENSACION_CENTRAL'    [Resumir]
-            hoja 'Calculo RE545'           [Calcular]
-            hoja 'Calculo E Costos'        [Calcular]
-            hoja 'Subastas'                [Actualizar]
-            hoja 'FD'                      [Actualizar]
-            hoja 'CMg'                     [Actualizar]
-            hoja 'Ofertas SSCC'            [Actualizar]
-            hoja 'Medidores'               [Actualizar]
-        SAE_AAMM.csv                   [Generar]
-        Log/
-            Control_corrida.xlsx
-            Registro_ultima_corrida.txt
+        Prorrata retiros/                  (comun con el CRA)
 
 La salida es UNA sola planilla (antes eran dos,
 Consolidado_entradas.xlsx y Pagos_BESS.xlsx) y sus hojas quedan
@@ -1494,13 +1493,15 @@ def main():
         cola_log.put((time.time(), mensaje))
 
     def guardar_registro():
-        """Deja el registro en <caso>/Log/Registro_ultima_corrida.txt."""
+        """Deja el registro en <mes>/BESS/Log/Registro_ultima_corrida.txt."""
 
         base = var_base.get()
         if not base or not os.path.isdir(base):
             return None
-        carpeta_log = os.path.join(base, nucleo.CARPETA_LOG)
-        ruta = os.path.join(carpeta_log, nucleo.ARCHIVO_REGISTRO)
+        # <mes>/BESS/Log (o <caso>/Log en un caso de antes de BESS/).
+        rutas_caso = nucleo.resolver_rutas(base, var_aamm.get().strip())
+        carpeta_log = str(rutas_caso["log_dir"])
+        ruta = str(rutas_caso["registro"])
         try:
             os.makedirs(carpeta_log, exist_ok=True)
             with open(ruta, "w", encoding="utf-8") as archivo:
@@ -1567,14 +1568,13 @@ def main():
         btn_abrir_salida.config(state="normal")
 
     def faltan_subcarpetas(base):
-        """Las subcarpetas del caso que todavia no estan en 'base'."""
+        """
+        Las subcarpetas del caso que todavia no estan en 'base' (las de
+        un caso de antes de BESS/ si es de antes: ver
+        nucleo.subcarpetas_del_caso).
+        """
 
-        base = Path(base)
-
-        return [
-            sub for sub in nucleo.SUBCARPETAS_CASO
-            if not (base / sub).is_dir()
-        ]
+        return nucleo.faltan_subcarpetas(base)
 
     def usar_carpeta(ruta, completar=True, parent=None):
         """

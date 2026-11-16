@@ -12,6 +12,12 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **Carpeta del mes con `BESS/` (2026-11-16 (8)):** abrir en Windows un
+  caso de antes (debe seguir igual, sin crear `BESS/`) y crear un mes nuevo
+  (debe quedar `BESS/...` + `FD y FMA/` + `Prorrata retiros/`). Decidir con
+  el usuario si `Cmg/` pasa a común y si se quiere un botón que mueva un
+  caso de antes a `BESS/` (ver `BITACORA_CRA.md`).
+
 - **Buscar_Puntos_PRMTE (2026-11-16 (6)):** confirmar en Windows que ahora
   llegan los 6.886 puntos y si con `size` la API entrega más de 10 por
   página (si sigue de a 10, la descarga hace ~690 pedidos).
@@ -6655,4 +6661,36 @@ suite completa OK.
 
 **Verificación:** 2 pruebas nuevas en `test_verificaciones.py`; suite
 completa OK. Sin caso real para correr el botón de punta a punta.
+
+## 2026-11-16 (8) — La carpeta del mes se comparte con el CRA: lo propio del BESS va en `BESS/`
+
+- Pedido del usuario: "al ejecutar el balance CRA de un mes voy a
+  seleccionar una carpeta que será la misma que balance BESS [...] que
+  quede BESS>Auxiliares y CRA>Auxiliares. Las propias igual irían dentro de
+  su respectiva carpeta", "sin que se rompan los BESS que están funcionando
+  perfecto".
+- `Script/nucleo/carpetas.py` (nuevo, lo usan los dos): `CARPETA_BESS`,
+  `CARPETA_CRA`, las comunes (`FD y FMA`, `Prorrata retiros`, que se
+  mudaron ahí desde `parametros.py` y se re-exportan),
+  `raiz_herramienta()`, `es_caso_antiguo()`, `carpeta_fd()`, `relativa()`.
+- `rutas.resolver_rutas`: Medidas, Auxiliares, Ofertas, Cmg, Subastas, la
+  planilla, `SAE_AAMM.csv` y `Log/` en `<mes>/BESS/` (clave nueva
+  `raiz_bess`); `FD y FMA` y `Prorrata retiros` en la raíz.
+- **Casos de antes, sin cambios:** si no hay `BESS/` y hay suelta alguna de
+  `Medidas`, `Ofertas`, `Cmg`, `Subastas` (no `Auxiliares`, que puede ser
+  de un CRA de antes) o la planilla (`11_PAGOS_BESS_*.xlsx` /
+  `Balance_BESS.xlsx`), la raíz del BESS es la carpeta misma, como siempre.
+  No se mueve nada.
+- `SUBCARPETAS_CASO` es la lista de un caso nuevo (`BESS/Medidas`, ...,
+  `FD y FMA`, `Prorrata retiros`); `CARPETAS_PROPIAS`,
+  `subcarpetas_del_caso(base)` y `faltan_subcarpetas(base)` dan las de
+  ESTE caso (las de antes si es de antes), y las usan
+  `crear_estructura_caso` y la ventana, para no crearle un `BESS/` vacío a
+  un caso viejo.
+- Ventana: `guardar_registro` usa `rutas["registro"]` (antes armaba
+  `base/Log` a mano); `antecedentes` toma `rutas["csv_sae"]`. El árbol
+  muestra las carpetas relativas al mes (`BESS/Medidas/`, `FD y FMA/`).
+- Pruebas: las que armaban el caso con `SUBCARPETAS_CASO` y después usaban
+  `base / "Subastas"` a mano ahora toman la ruta de `resolver_rutas`; nuevas
+  en `tests/test_carpetas_mes.py`. 513 pruebas, 36 salteadas (sin tkinter).
 

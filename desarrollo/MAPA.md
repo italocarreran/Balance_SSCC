@@ -27,6 +27,7 @@ Script/
         conciliacion.py        <- Medidores = E Costos + RE545 (TRA)
         verificaciones.py      <- Medidores coherente: signo vs SoC/mediodia PFV (SOC-019/020/021), barra sin CMg (CMG-007); base de la columna 'SoC vs medida' de la matriz
         manifiesto.py          <- que archivo exacto alimento la corrida
+        carpetas.py            <- la carpeta del MES compartida: BESS/, CRA/ y las comunes (FD y FMA, Prorrata retiros); reconoce los casos de antes
         rutas.py               <- rutas del caso y busqueda de entradas
         estructura.py          <- el arbol que dibuja la ventana
         origenes.py            <- de donde viene lo que se trae (links)
@@ -70,12 +71,12 @@ Script/
         __init__.py            <- la fachada: cra.<lo que sea>
         parametros.py          <- carpetas, patrones, hojas y mapeos por letra
         lectura.py             <- busqueda por prefijo y lectura por letra/fila
-        rutas.py               <- rutas del caso y validar_aamm
+        rutas.py               <- rutas del caso (CRA/ + comunes) y validar_aamm
         hojas_entrada.py       <- ENERGIA, FP, CO, SC y CO
         fuentes_bess.py        <- FD_CPF/CSF/CTF y matriz de PRORRATA_RETIROS
         politicas.py           <- botones Generar de fp_ y cvar_cra_
         maestros.py            <- Auxiliares/centrales_cra.xlsx (3 hojas)
-        escritura.py           <- Balance_CRA.xlsx (conserva lo que no toca)
+        escritura.py           <- 5_REMUNERACION_CRA_AAMM.xlsx: cuadros y escritura rapida del BESS (conserva lo que no toca)
         proceso.py             <- SECCIONES y generar_balance_cra()
         estructura.py          <- el arbol que dibuja Balance_CRA.py
     Politicas/
@@ -102,6 +103,23 @@ Script/
         Generacion_Real.py     <- API de operacion real (hoja "Gen real")
         Soc_PI.py              <- SoC desde PI AF (AF SDK via pythonnet)
 ```
+
+**La carpeta de un caso es la del MES y la comparten las dos ventanas**
+(2026-11-16, `Script/nucleo/carpetas.py`):
+
+```
+<carpeta del mes>/
+    BESS/      Auxiliares/ Medidas/ Ofertas/ Cmg/ Subastas/ Log/ 11_PAGOS_BESS_AAMM.xlsx SAE_AAMM.csv
+    CRA/       Auxiliares/ Energia/ FP/ CO/ SC y CO/ Log/ 5_REMUNERACION_CRA_AAMM.xlsx
+    FD y FMA/          <- comun (SSCC_Desempeño_*; los fma_* son del BESS)
+    Prorrata retiros/  <- comun
+```
+
+Todo sale de `resolver_rutas()` de cada herramienta (`nucleo.rutas` y
+`cra.rutas`): ningun modulo arma `base / "Medidas"` a mano. Un caso de
+antes (sin `BESS/` y con una carpeta propia o la planilla suelta en la
+raiz; para el CRA tambien con su `FD/` propia) se usa tal cual y
+completarlo no le crea la estructura nueva (`subcarpetas_del_caso()`).
 
 `Script/` es un paquete: la ventana hace `from Script import nucleo` y
 `nucleo/externos.py` hace `from ..Cmg import Extrae_CMG_barras` (el único
@@ -1157,22 +1175,33 @@ importable como cualquier módulo.
   `FD_CPF`/`FD_CSF`/`FD_CTF` y el bloque 1 de `PRORRATA_RETIROS` (estas
   cuatro, con las mismas fuentes y lectores del BESS: `fuentes_bess.py`).
 - **Ventana (`Balance_CRA.py`):** mismo patrón que la del BESS, más
-  acotada: carpeta base + AAMM + árbol (`cra.revisar_estructura()`) con un
-  botón **Actualizar** en la fila de `Balance_CRA.xlsx` (todas las hojas) y
-  en cada hoja, y **Traer** en la fila del `SSCC_Desempeño_*` (misma
-  función del BESS, destino `FD/`); registro, barra y tiempo. Recuerda carpeta y AAMM en su
-  propia sección de `config.json` (`<host>_<usuario>_CRA`), para no pisar
-  la del BESS. Todavía **no** tiene la regla "un período, una carpeta" ni
-  "Ejecutar todo" del BESS.
-- **Caso (confirmado):**
+  acotada: carpeta **del mes** (la misma del BESS) + AAMM + línea de cambio
+  de hora + árbol (`cra.revisar_estructura()`, carpetas mostradas relativas
+  al mes: `CRA/FP/`, `FD y FMA/`) con un botón **Actualizar** en la fila de
+  la planilla (todas las hojas) y en cada hoja, y **Traer** en la fila del
+  `SSCC_Desempeño_*` (misma función del BESS, destino la carpeta común `FD
+  y FMA/`); registro, barra y tiempo; al terminar deja el registro en
+  `CRA/Log/Registro_ultima_corrida.txt`. Recuerda carpeta y AAMM en la
+  sección `modo_cra` de `__config__/config.json`. Todavía **no** tiene la
+  regla "un período, una carpeta" ni "Ejecutar todo" del BESS.
+- **Caso (confirmado):** dentro de `<mes>/CRA/`:
+  `Auxiliares/centrales_cra.xlsx`,
   `Energia/Formato_Solicitud_SSAA_SSCC_Hidro_<Mes><AAAA>.xlsx`,
   `FP/fp_<AAMM>*`, `CO/cvar_cra_<AAMM>_*`, `SC y CO/Reporte_CRA*.csv`,
-  `SC y CO/Cálculo_SobrecostosSSCC_*.xlsm` (hoja `SOBRECOSTOS`),
-  `FD/SSCC_Desempeño_*`, `Prorrata retiros/Prorrata_Retiros_<AAMM>_pre|def`,
-  y la salida `Balance_CRA.xlsx`. Los archivos propios del CRA se buscan
-  por prefijo normalizado y si hay dos del mismo tipo se para; los de
-  fuente BESS usan el buscador del BESS (el `SSCC_Desempeño_*` más
-  reciente, como la macro original).
+  `SC y CO/Cálculo_SobrecostosSSCC_*.xlsm` (hoja `SOBRECOSTOS`), `Log/` y
+  la salida `5_REMUNERACION_CRA_<AAMM>.xlsx` (un `Balance_CRA.xlsx` de
+  antes se renombra solo). Comunes con el BESS, en la raíz del mes:
+  `FD y FMA/SSCC_Desempeño_*` y
+  `Prorrata retiros/Prorrata_Retiros_<AAMM>_pre|def`. Un caso de antes
+  (todo suelto, con `FD/` propia) se lee tal cual. Los archivos propios
+  del CRA se buscan por prefijo normalizado y si hay dos del mismo tipo se
+  para; los de fuente BESS usan el buscador del BESS (el
+  `SSCC_Desempeño_*` más reciente, como la macro original).
+- **Planilla:** mismas convenciones que la del BESS (fila 1 vacía,
+  `Cuadro N° 1 — <TITULOS_HOJAS>` en la 2, encabezados en la 3, columna A
+  de margen) y su escritura rápida (`nucleo.escritura._volcar` +
+  `relleno_rapido` + `xlsx_rapido.pegar_hojas`): las hojas que no se tocan
+  quedan en el zip tal cual.
 - **Lectura:** por letra de columna y fila real de Excel
   (`lectura.leer_columnas`, openpyxl `data_only`; un `.csv` con la misma
   regla), como define cada carga la trazabilidad. Hoja de cada origen en
@@ -1199,7 +1228,9 @@ importable como cualquier módulo.
   CTF en memoria), `revisar_estructura`, `crear_carpetas_caso`,
   `validar_aamm`.
 - **Depende de:** `nucleo.utiles` (`normalizar`, `ErrorEntrada`),
-  `nucleo.formato` (`formatear_hoja`), `nucleo.prorrata_retiros`
+  `nucleo.formato` (`formatear_hoja`), `nucleo.escritura` /
+  `nucleo.xlsx_rapido` (escritura rápida), `nucleo.carpetas` (la carpeta
+  del mes), `nucleo.cambio_hora`, `nucleo.prorrata_retiros`
   (buscador y lector), `nucleo.rutas.buscar_archivo_sscc_desempeno`,
   `nucleo.externos.indicadores_dco` (Traer FD), `Script/config.py`,
   `Script/arbol.py`. `nucleo` no importa nada de `cra`.

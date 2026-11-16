@@ -4,8 +4,10 @@ Rutas de un caso CRA: todo se deriva de la carpeta base y del periodo.
 Nunca rutas absolutas ni relativas al .py (mismo criterio que el BESS).
 """
 
+import re
 from pathlib import Path
 
+from ..nucleo.carpetas import CARPETA_CRA, carpeta_fd, raiz_herramienta
 from ..nucleo.prorrata_retiros import buscar_archivo_prorrata
 from ..nucleo.rutas import buscar_archivo_sscc_desempeno
 from ..nucleo.utiles import ErrorEntrada
@@ -27,21 +29,101 @@ def validar_aamm(aamm):
     return 2000 + int(aamm[:2]), int(aamm[2:])
 
 
-def resolver_rutas(carpeta_base):
-    """Las carpetas del caso y el archivo de salida (existan o no)."""
+def nombre_salida(aamm):
+    """'2608' -> '5_REMUNERACION_CRA_2608.xlsx'."""
+
+    return f"{p.PREFIJO_SALIDA}{aamm}.xlsx"
+
+
+def raiz_cra(carpeta_base):
+    """
+    Donde van las carpetas propias del CRA y su planilla:
+    <mes>/CRA/, o la carpeta misma en un caso de antes (todo suelto en
+    la raiz; ver Script/nucleo/carpetas.py).
+    """
+
+    return raiz_herramienta(
+        carpeta_base, CARPETA_CRA, p.CARPETAS_DISTINTIVAS,
+        archivos=(f"{p.PREFIJO_SALIDA}*.xlsx", p.ARCHIVO_SALIDA_ANTIGUO),
+    )
+
+
+def _periodo_o_none(aamm):
+    texto = str(aamm or "").strip()
+    try:
+        validar_aamm(texto)
+    except ErrorEntrada:
+        return None
+    return texto
+
+
+def _salida_sin_periodo(raiz):
+    """La 5_REMUNERACION_CRA_AAMM.xlsx que haya, la de antes o una generica."""
+
+    try:
+        encontradas = sorted(
+            r for r in raiz.glob(f"{p.PREFIJO_SALIDA}*.xlsx")
+            if re.fullmatch(rf"{re.escape(p.PREFIJO_SALIDA)}\d{{4}}\.xlsx", r.name)
+        )
+    except OSError:
+        encontradas = []
+    if len(encontradas) == 1:
+        return encontradas[0]
+    if (raiz / p.ARCHIVO_SALIDA_ANTIGUO).is_file():
+        return raiz / p.ARCHIVO_SALIDA_ANTIGUO
+    return raiz / p.ARCHIVO_SALIDA
+
+
+def _migrar_salida_antigua(raiz, salida):
+    """
+    Balance_CRA.xlsx pasa a 5_REMUNERACION_CRA_AAMM.xlsx (nunca pisa
+    uno que ya este). Si no se puede (abierto en Excel) se sigue usando
+    el de antes y se reintenta la proxima vez.
+    """
+
+    vieja = raiz / p.ARCHIVO_SALIDA_ANTIGUO
+    if not vieja.is_file() or salida.exists():
+        return salida
+    try:
+        vieja.replace(salida)
+        return salida
+    except OSError:
+        return vieja
+
+
+def resolver_rutas(carpeta_base, aamm=None):
+    """
+    Las carpetas del caso y el archivo de salida (existan o no).
+
+    carpeta_base es la carpeta del MES (la misma del BESS): lo propio
+    del CRA en <mes>/CRA/ y lo comun (FD, prorrata) en la raiz.
+
+    aamm: el periodo, para el nombre de la planilla
+    (5_REMUNERACION_CRA_AAMM.xlsx); sin uno valido se usa la que haya.
+    """
 
     base = Path(carpeta_base)
+    raiz = raiz_cra(base)
+    periodo = _periodo_o_none(aamm)
+
+    salida = raiz / nombre_salida(periodo) if periodo else _salida_sin_periodo(raiz)
+    if periodo and raiz.is_dir():
+        salida = _migrar_salida_antigua(raiz, salida)
 
     return {
         "base": base,
-        "energia": base / p.CARPETA_ENERGIA,
-        "fp": base / p.CARPETA_FP,
-        "co": base / p.CARPETA_CO,
-        "sc_co": base / p.CARPETA_SC_CO,
-        "fd": base / p.CARPETA_FD,
+        "raiz_cra": raiz,
+        "energia": raiz / p.CARPETA_ENERGIA,
+        "fp": raiz / p.CARPETA_FP,
+        "co": raiz / p.CARPETA_CO,
+        "sc_co": raiz / p.CARPETA_SC_CO,
+        "auxiliares": raiz / p.CARPETA_AUXILIARES,
+        # Comunes con el BESS. Un caso CRA de antes tenia su propia FD/.
+        "fd": carpeta_fd(base, antiguas=(p.CARPETA_FD_ANTIGUA,)),
         "prorrata": base / p.CARPETA_PRORRATA,
-        "auxiliares": base / p.CARPETA_AUXILIARES,
-        "salida": base / p.ARCHIVO_SALIDA,
+        "salida": salida,
+        "log_dir": raiz / p.CARPETA_LOG,
+        "registro": raiz / p.CARPETA_LOG / p.ARCHIVO_REGISTRO,
     }
 
 
@@ -157,13 +239,35 @@ def exigir_entrada(rutas, id_entrada, aamm):
     return ruta
 
 
+def subcarpetas_del_caso(carpeta_base):
+    """
+    Las subcarpetas que tiene que tener ESTE caso, relativas a la
+    carpeta del mes: las de un caso nuevo (p.SUBCARPETAS_CASO) o, en uno
+    de antes con todo suelto, las de antes (asi completarlo no le crea
+    un CRA/ vacio al lado, que lo haria buscar todo ahi). La carpeta del
+    FD es la que el caso ya use (ver nucleo.carpetas.carpeta_fd).
+    """
+
+    base = Path(carpeta_base)
+    raiz = raiz_cra(base)
+    rutas = resolver_rutas(base)
+    propias = [
+        nombre if raiz == base else f"{CARPETA_CRA}/{nombre}"
+        for nombre in p.CARPETAS_PROPIAS
+    ]
+    return tuple(propias) + (rutas["fd"].name, p.CARPETA_PRORRATA)
+
+
 def crear_carpetas_caso(carpeta_base):
-    """Crea las subcarpetas que falten. No toca lo que ya hay."""
+    """
+    Crea las subcarpetas que falten (ver subcarpetas_del_caso). No toca
+    lo que ya hay. Si el mes ya tiene BESS/, CRA/ queda a su lado.
+    """
 
     base = Path(carpeta_base)
     creadas = []
 
-    for nombre in p.SUBCARPETAS_CASO:
+    for nombre in subcarpetas_del_caso(base):
         ruta = base / nombre
         if not ruta.exists():
             ruta.mkdir(parents=True)

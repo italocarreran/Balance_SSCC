@@ -75,7 +75,8 @@ class TestAccdbPresentes(unittest.TestCase):
         from Script import nucleo
 
         base = Path(self.tmp.name)
-        for sub in nucleo.SUBCARPETAS_CASO:
+        # Los Access quedaron en Subastas/ suelta: caso de antes de BESS/.
+        for sub in nucleo.subcarpetas_del_caso(base):
             (base / sub).mkdir(parents=True, exist_ok=True)
         rutas, filas = nucleo.revisar_estructura(str(base), "2609")
         self.assertEqual(len(rutas["accdb_subastas"]), len(self.esperados))

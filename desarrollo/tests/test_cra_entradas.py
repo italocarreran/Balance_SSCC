@@ -325,21 +325,22 @@ class PruebaProceso(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.base = Path(self._tmp.name) / "CRA 2608"
         cra.crear_carpetas_caso(self.base)
-        _energia(self.base / p.CARPETA_ENERGIA
+        self.rutas = cra.resolver_rutas(self.base)
+        _energia(self.rutas["energia"]
                  / "Formato_Solicitud_SSAA_SSCC_Hidro_Agosto2026.xlsx")
-        _libro(self.base / p.CARPETA_FP / "fp_2608_def.xlsx",
+        _libro(self.rutas["fp"] / "fp_2608_def.xlsx",
                {(2, "A"): "B1", (2, "B"): 1, (2, "C"): 1.0, (2, "D"): 1})
-        _libro(self.base / p.CARPETA_CO / "cvar_cra_2608_def.xlsx",
+        _libro(self.rutas["co"] / "cvar_cra_2608_def.xlsx",
                {(2, "A"): "C1", (2, "B"): 1, (2, "C"): 2.0, (2, "D"): 1})
-        _reporte_cra(self.base / p.CARPETA_SC_CO / "Reporte_CRA_15min_2608.csv")
-        _sobrecostos(self.base / p.CARPETA_SC_CO
+        _reporte_cra(self.rutas["sc_co"] / "Reporte_CRA_15min_2608.csv")
+        _sobrecostos(self.rutas["sc_co"]
                      / "Cálculo_SobrecostosSSCC_2608.xlsm")
-        _sscc_desempeno(self.base / p.CARPETA_FD
+        _sscc_desempeno(self.rutas["fd"]
                         / "SSCC_Desempeño_Agosto_2026_V2.xlsx")
-        _prorrata(self.base / p.CARPETA_PRORRATA
+        _prorrata(self.rutas["prorrata"]
                   / "Prorrata_Retiros_2608_def.xlsx")
         maestro_cra(
-            self.base / p.CARPETA_AUXILIARES / p.ARCHIVO_CENTRALES_CRA,
+            self.rutas["auxiliares"] / p.ARCHIVO_CENTRALES_CRA,
             ["RAPEL"],
             diccionario=[("RAPEL", "HE RAPEL U1")],
         )
@@ -368,7 +369,7 @@ class PruebaProceso(unittest.TestCase):
         libro.close()
 
     def test_dos_archivos_del_mismo_tipo_se_detiene(self):
-        _libro(self.base / p.CARPETA_FP / "fp_2608_pre.xlsx", {(2, "A"): "x"})
+        _libro(self.rutas["fp"] / "fp_2608_pre.xlsx", {(2, "A"): "x"})
 
         with self.assertRaises(cra.ErrorEntrada):
             cra.generar_balance_cra(self.base, "2608", secciones=["fp"])
@@ -384,11 +385,11 @@ class PruebaProceso(unittest.TestCase):
 
     def test_fp_y_energia_de_otro_periodo_no_se_toman(self):
         # Otro mes en el nombre: no es el archivo del periodo.
-        (self.base / p.CARPETA_FP / "fp_2608_def.xlsx").rename(
-            self.base / p.CARPETA_FP / "fp_2607_def.xlsx")
-        (self.base / p.CARPETA_ENERGIA
+        (self.rutas["fp"] / "fp_2608_def.xlsx").rename(
+            self.rutas["fp"] / "fp_2607_def.xlsx")
+        (self.rutas["energia"]
          / "Formato_Solicitud_SSAA_SSCC_Hidro_Agosto2026.xlsx").rename(
-            self.base / p.CARPETA_ENERGIA
+            self.rutas["energia"]
             / "Formato_Solicitud_SSAA_SSCC_Hidro_Julio2026.xlsx")
 
         rutas = cra.resolver_rutas(self.base)

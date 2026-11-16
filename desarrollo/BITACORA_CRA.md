@@ -64,7 +64,18 @@ se adivinó: lo que depende de una respuesta quedó como constante en
 - Validar todas las hojas contra los archivos reales de un período (hoy
   solo hay pruebas sintéticas).
 - Abrir `Balance_CRA.py` en Windows (acá no hay tkinter: solo se compiló
-  y pasó `pyflakes`).
+  y pasó `pyflakes`). Revisar también la línea nueva de cambio de hora bajo
+  el AAMM y que el registro quede en `CRA/Log/`.
+- **Carpeta del mes compartida (2026-11-16):** a decidir con el usuario:
+  - ¿`Cmg/` pasa a común? Hoy es del BESS (`BESS/Cmg/`); el `TC` del CRA
+    tiene "origen CMg" pendiente: si sale del mismo `cmg_15min`, conviene
+    subirla a la raíz.
+  - ¿Las planillas (`11_PAGOS_BESS_AAMM.xlsx`, `5_REMUNERACION_CRA_AAMM.xlsx`)
+    quedan dentro de `BESS/` y `CRA/` (como quedó) o en la raíz del mes?
+  - ¿Un botón "Reorganizar" que mueva un caso de antes a `BESS/`/`CRA/`?
+    Hoy un caso viejo se usa tal cual y no se mueve nada.
+  - El nombre `5_REMUNERACION_CRA_AAMM.xlsx` (sin tilde ni `_Definitivo`)
+    es propuesta: confirmar.
 
 ---
 
@@ -335,3 +346,62 @@ acá; el resto en `BITACORA_BESS.md`. `REGLAS.md` ahora pide leer la
 bitácora de la herramienta que se toca (las dos si el cambio toca código
 compartido) y anotar en la que corresponda. En el CRA no cambió código en
 esta sesión (los arreglos del día fueron del BESS: ver su bitácora).
+
+---
+
+## 2026-11-16 — Carpeta del mes compartida con el BESS; el CRA toma lo del BESS
+
+**Pedido del usuario:** retomar el CRA. La carpeta que se elige en
+`Balance_CRA.py` es la misma del mes que usa `Balance_BESS.py`: lo propio de
+cada uno en su subcarpeta (`BESS/Auxiliares`, `CRA/Auxiliares`, `CRA/SC y
+CO`, ...) y lo compartido (FD, prorrata) en la raíz, sin romper el BESS. Y
+"si al estudiar el BESS ves preferencias o mejoras que no están en CRA,
+agrégalas".
+
+**Carpetas** (código común en `Script/nucleo/carpetas.py`, anotado también
+en `BITACORA_BESS.md`):
+
+```
+<mes>/BESS/   Auxiliares Medidas Ofertas Cmg Subastas Log 11_PAGOS_BESS_AAMM.xlsx SAE_AAMM.csv
+<mes>/CRA/    Auxiliares Energia FP CO "SC y CO" Log 5_REMUNERACION_CRA_AAMM.xlsx
+<mes>/FD y FMA/          común (el CRA deja de tener su FD/ propia)
+<mes>/Prorrata retiros/  común
+```
+
+- `cra.resolver_rutas(base, aamm=None)`: `raiz_cra` (= `<mes>/CRA`), las
+  propias adentro, `fd` = la `FD y FMA` del BESS, `prorrata` en la raíz,
+  `log_dir`/`registro`. Caso de antes (sin `CRA/` y con `Energia/`, `FP/`,
+  `CO/` o `SC y CO/` sueltas, o la planilla suelta): todo como estaba,
+  incluida su `FD/` (`carpeta_fd(base, antiguas=("FD",))`).
+  `crear_carpetas_caso` no le crea `CRA/` a un caso de antes.
+- El árbol muestra las carpetas relativas al mes (`CRA/FP/`, `FD y FMA/`).
+
+**Tomado del BESS:**
+
+- **Planilla con el período:** `5_REMUNERACION_CRA_AAMM.xlsx` (como
+  `11_PAGOS_BESS_AAMM.xlsx`); un `Balance_CRA.xlsx` de antes se renombra
+  solo al abrir el caso con el AAMM (nunca pisa; si está abierto se sigue
+  usando el viejo).
+- **Formato de cuadros:** fila 1 vacía, `Cuadro N° 1 — <título>` en la 2
+  (`TITULOS_HOJAS`), encabezados en la 3, columna A de margen.
+- **Escritura rápida:** `cra/escritura.py` usa `_escribir_tabla_con_titulo`
+  + `relleno_rapido` + `xlsx_rapido.pegar_hojas` del BESS. Antes cada hoja se
+  escribía celda a celda con openpyxl y se reabría el libro entero. Medido
+  acá: una hoja de 370.000 filas (el tamaño de `FD_CTF` en agosto) en 5,5 s;
+  actualizar después una hoja chica, 0,02 s (las demás quedan en el zip).
+- **Ventana:** línea de cambio de hora bajo el AAMM
+  (`nucleo.cambio_hora.describir_periodo`), registro de cada corrida en
+  `CRA/Log/Registro_ultima_corrida.txt`, "Carpeta del mes".
+
+**No se tomó todavía (por tamaño, para conversar):** "Ejecutar todo",
+regla "un período, una carpeta" con su diálogo, sellos de desactualizado,
+`Control_corrida.xlsx`, unidades entre corchetes (las hojas del CRA son
+copias de entradas; se verá con `CÁLCULO_CRA`).
+
+**Verificación:** `py_compile` de todo, `pyflakes` del CRA limpio, 513
+pruebas (6 nuevas en `tests/test_carpetas_mes.py`: mes nuevo con los dos,
+CRA primero y BESS después, árbol, BESS de antes, BESS con solo la
+planilla, CRA de antes con su `FD/` y la planilla renombrada). Las pruebas
+del CRA ahora toman las carpetas de `cra.resolver_rutas`. Sin tkinter acá:
+la ventana no se abrió.
+
