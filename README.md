@@ -32,6 +32,17 @@ más rápido. Si no está instalado el programa funciona igual, más lento:
 pip install python-calamine
 ```
 
+## Actualizar el código desde GitHub (sin Git)
+
+```bash
+python Actualizar_desde_GitHub.py
+```
+
+Se elige la rama (`main` por defecto), *Revisar cambios* baja el zip y
+muestra qué archivos cambiaron, y *Actualizar* copia solo esos. Lo que se
+reemplaza queda respaldado en `__config__/respaldos_actualizacion/<fecha>/`.
+No borra nada ni toca `__config__`, tokens ni salidas.
+
 ## Uso
 
 ```bash
