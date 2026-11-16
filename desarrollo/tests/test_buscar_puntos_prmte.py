@@ -47,7 +47,7 @@ class TestPuntos(unittest.TestCase):
             return {"page": n, "pageSize": 2, "totalElements": 5, "totalPages": total,
                     "content": [{"subStation": f"SE {n}{k}", "region": "II", "tension": "220",
                                  "coordinatorId": "C1", "measurePointId": f"P{n}{k}"}
-                                for k in range(2 if n < 2 else 1)]}
+                                for k in range(2 if n < 2 else 1 if n == 2 else 0)]}
 
         class R:
             status_code, text = 200, ""
@@ -67,7 +67,8 @@ class TestPuntos(unittest.TestCase):
         with mock.patch("requests.get", side_effect=get):
             puntos, url = bp.bajar_puntos("t", avisar=lambda *_: None)
         self.assertEqual(url, bp.URL_PUNTOS)
-        self.assertEqual(pedidas, [0, 1, 2])
+        # Pide una mas (la 3, que viene vacia) para confirmar el final.
+        self.assertEqual(pedidas, [0, 1, 2, 3])
         self.assertEqual([p["id"] for p in puntos], ["P00", "P01", "P10", "P11", "P20"])
         self.assertEqual(puntos[0]["subStation"], "SE 00")
         self.assertEqual(puntos[0]["tension"], "220")
@@ -129,6 +130,58 @@ class TestListaIncompletaYComprobar(unittest.TestCase):
             bp.bajar_puntos("t", avisar=avisos.append)
         self.assertIn("OJO", avisos[-1])
         self.assertIn("10", avisos[-1])
+
+    def test_sigue_despues_de_totalpages_y_para_en_el_error(self):
+        """La API dice 1 pagina pero hay 3; la cuarta da error: se queda con 3."""
+
+        def get(url, params=None, **_):
+            n = params["page"]
+            if n >= 3:
+                return R(None, 500, "no existe")
+            return R({"totalPages": 1, "content": [{"measurePointId": f"P{n}"}]})
+
+        avisos = []
+        with mock.patch("requests.get", side_effect=get):
+            puntos, _ = bp.bajar_puntos("t", avisar=avisos.append)
+        self.assertEqual([p["id"] for p in puntos], ["P0", "P1", "P2"])
+        self.assertIn("dio error", avisos[-1])
+
+    def test_para_si_la_pagina_solo_trae_puntos_ya_bajados(self):
+        def get(url, params=None, **_):
+            n = params["page"]
+            ids = ["A", "B"] if n == 0 else ["C"] if n == 1 else ["B", "A"]
+            return R({"content": [{"measurePointId": i} for i in ids]})
+
+        pedidas = []
+        with mock.patch("requests.get", side_effect=lambda *a, **k: (
+                pedidas.append(k["params"]["page"]) or get(*a, **k))):
+            puntos, _ = bp.bajar_puntos("t", avisar=lambda *_: None)
+        self.assertEqual([p["id"] for p in puntos], ["A", "B", "C"])
+        self.assertEqual(pedidas, [0, 1, 2])
+
+    def test_de_a_10_por_pagina_pasa_el_tope_de_500(self):
+        """Lo real: 6.886 puntos de a 10 (la API ignora el pageSize)."""
+
+        total = 6886
+
+        def get(url, params=None, **_):
+            n = params["page"]
+            contenido = [{"measurePointId": f"P{i:05d}"}
+                         for i in range(n * 10, min(n * 10 + 10, total))]
+            return R({"totalElements": total, "totalPages": 689,
+                      "content": contenido})
+
+        avisos = []
+        with mock.patch("requests.get", side_effect=get):
+            puntos, _ = bp.bajar_puntos("t", avisar=avisos.append)
+        self.assertEqual(len(puntos), total)
+        self.assertNotIn("OJO", avisos[-1])
+        self.assertIn("vino vacia", avisos[-1])
+
+    def test_error_en_la_primera_pagina_si_es_error(self):
+        with mock.patch("requests.get", return_value=R(None, 500, "caida")):
+            with self.assertRaisesRegex(RuntimeError, "pagina 0"):
+                bp.bajar_puntos("t", avisar=lambda *_: None)
 
     def test_comprobar_punto_con_medidas(self):
         pedidos = []

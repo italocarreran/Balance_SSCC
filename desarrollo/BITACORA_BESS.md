@@ -12,10 +12,9 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
-- **Buscar_Puntos_PRMTE (2026-11-16 (3)):** en Windows, "Actualizar lista"
-  y ver si avisa que faltan puntos; "Comprobar en la API" con el punto que
-  no salía. Si la API dice que llegaron todos, el endpoint `/all` no lista
-  ese punto (preguntar al Coordinador).
+- **Buscar_Puntos_PRMTE (2026-11-16 (6)):** confirmar en Windows que ahora
+  llegan los 6.886 puntos y si con `size` la API entrega más de 10 por
+  página (si sigue de a 10, la descarga hace ~690 pedidos).
 
 - **Verificadores de signo (2026-11-16 (1) y (2)):** en la corrida real
   de 2610 salieron SOC-019 ARICA2, ALFALFAL-VR2 y ELENA (97 % al revés):
@@ -6594,4 +6593,53 @@ HOM-001 de LILE y nada más.
 falsa); suite completa OK. La ventana no se pudo abrir aquí (sin tkinter);
 falta probarla en Windows contra la API real y ver qué dice el aviso de
 cantidad: eso dirá si es el endpoint o la paginación.
+
+## 2026-11-16 (4) — La matriz de Control_corrida perdía los colores
+
+- Aviso del usuario: "quitaste los colores de la matriz de la hoja de
+  centrales por origen". No venía de los cambios del día: cuando una pasada
+  reescribe `Control_corrida.xlsx` sin la matriz (el Log de las entradas,
+  el Reporte), `_preservar_ajenas` copia la hoja **solo con valores**
+  (`_copiar_hoja_existente`), y los colores se perdían.
+- `escribir_control`: si la matriz no se reescribe en la pasada, se le
+  copia el formato del libro anterior (`_copiar_formato_hoja`: relleno,
+  letra, bordes, alineación, formato de número y panel congelado), después
+  de `formatear_libro` para que el panel quede en C4.
+
+**Verificación:** prueba nueva `test_control_matriz_colores.py` (matriz y
+después Log: mismos colores y panel); suite completa OK.
+
+## 2026-11-16 (5) — Buscar_Puntos_PRMTE: seguir pidiendo hasta que la API diga que no hay más
+
+- Pedido: que no se fíe del número de páginas y siga bajando "hasta que dé
+  error y se detenga". `bajar_puntos` ya no usa `totalPages` ni
+  `totalElements` para parar: pide la página siguiente hasta que venga
+  vacía, repita la anterior, traiga solo puntos ya bajados o dé error. Un
+  error en la primera página sigue siendo error (token, red); en las
+  siguientes, se queda con lo bajado. El aviso final dice por qué paró.
+- Dato real del usuario (con la versión anterior): "la API informa 6,886
+  puntos y llegaron 5,000". 5 páginas de 1.000 y la sexta no trajo nada
+  nuevo: parece un tope de la API (ventana de 5.000 resultados), no del
+  programa. Pendiente: ver con la versión nueva por qué para, y buscar en
+  el portal de la API si `/measurement-point/all` acepta filtros (región,
+  coordinado, subestación) u orden, para pedir en tandas de menos de 5.000.
+
+**Verificación:** 3 pruebas nuevas en `test_buscar_puntos_prmte.py`; suite
+completa OK.
+
+## 2026-11-16 (6) — Buscar_Puntos_PRMTE: la API entrega de a 10 por página
+
+- Con la versión (5) el aviso dijo "5,000 puntos en 500 página(s); se paró
+  porque tope de páginas". No era un tope de la API: la API ignora
+  `pageSize=1000` y entrega **10 por página**, y el programa cortaba en su
+  propio `MAXIMO_PAGINAS = 500` (6.886 puntos son 689 páginas). La
+  hipótesis de la entrada (5) de una ventana de 5.000 de la API queda
+  descartada.
+- Arreglo: el tope crece solo con `totalElements` / puntos por página + 5
+  (máximo absoluto `TOPE_ABSOLUTO_PAGINAS = 5000`), y se manda también
+  `size` (el nombre de Spring) además de `pageSize`, por si así la API
+  entrega páginas grandes. El aviso de avance muestra los puntos bajados.
+
+**Verificación:** prueba nueva con 6.886 puntos de a 10 (llegan todos);
+suite completa OK.
 

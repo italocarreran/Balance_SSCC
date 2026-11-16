@@ -474,8 +474,48 @@ def escribir_control(
                 writer.sheets[HOJA_MATRIZ_CENTRALES],
                 df_matriz_centrales.attrs.get("estados"),
             )
+        else:
+            # La matriz es chica y sus colores SON el control: si esta
+            # pasada no la reescribe (el Log, el Reporte...), se
+            # preserva con su formato, no solo con los valores.
+            _copiar_formato_hoja(
+                wb_existente, writer.book, HOJA_MATRIZ_CENTRALES
+            )
 
     return ruta_control
+
+
+def _copiar_formato_hoja(wb_origen, wb_destino, nombre):
+    """
+    Copia el formato (relleno, letra, bordes, alineacion, formato de
+    numero) de la hoja 'nombre' de wb_origen a la misma hoja de
+    wb_destino, ya copiada con sus valores por _copiar_hoja_existente.
+    Tambien el panel congelado. Para hojas chicas: celda por celda.
+    """
+
+    from copy import copy
+
+    if (
+        wb_origen is None or isinstance(wb_origen, _LibroEnZip)
+        or nombre not in wb_origen.sheetnames
+        or nombre not in wb_destino.sheetnames
+    ):
+        return False
+
+    origen = wb_origen[nombre]
+    destino = wb_destino[nombre]
+    for fila in origen.iter_rows():
+        for celda in fila:
+            if not celda.has_style:
+                continue
+            nueva = destino.cell(row=celda.row, column=celda.column)
+            nueva.fill = copy(celda.fill)
+            nueva.font = copy(celda.font)
+            nueva.border = copy(celda.border)
+            nueva.alignment = copy(celda.alignment)
+            nueva.number_format = celda.number_format
+    destino.freeze_panes = origen.freeze_panes
+    return True
 
 
 def _pintar_matriz(ws, estados=None):
