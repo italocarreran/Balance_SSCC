@@ -35,7 +35,7 @@ pip install python-calamine
 ## Actualizar el código desde GitHub (sin Git)
 
 ```bash
-python Actualizar_desde_GitHub.py
+python Herramientas/Actualizar_desde_GitHub.py
 ```
 
 Se elige la rama (`main` por defecto), *Revisar cambios* baja el zip y

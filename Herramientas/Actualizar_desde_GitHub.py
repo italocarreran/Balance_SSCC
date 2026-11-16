@@ -5,7 +5,9 @@ Actualizar_desde_GitHub.py
 Trae los cambios del repositorio de GitHub a esta carpeta, sin Git y sin
 copiar a mano desde el zip.
 
-    python Actualizar_desde_GitHub.py
+    python Herramientas/Actualizar_desde_GitHub.py
+
+Actualiza la carpeta del proyecto (la de arriba de Herramientas/).
 
 1. Se elige la rama (por defecto "main", que es donde quedan los cambios
    una vez aceptado el pull request; las "claude/..." son las de trabajo).
@@ -39,7 +41,9 @@ DUENO = "italocarreran"
 REPO = "Balance_SSCC"
 RAMA_POR_DEFECTO = "main"
 
-AQUI = Path(__file__).resolve().parent
+# La carpeta del proyecto: la de arriba si este archivo esta en Herramientas/.
+_ESTA = Path(__file__).resolve().parent
+AQUI = _ESTA.parent if _ESTA.name.lower() == "herramientas" else _ESTA
 
 # Lo que nunca se escribe aunque viniera en el zip.
 PROTEGIDOS = {"config.json", "tks.json"}
