@@ -12,6 +12,11 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **Buscar_Puntos_PRMTE (2026-11-16 (3)):** en Windows, "Actualizar lista"
+  y ver si avisa que faltan puntos; "Comprobar en la API" con el punto que
+  no salía. Si la API dice que llegaron todos, el endpoint `/all` no lista
+  ese punto (preguntar al Coordinador).
+
 - **Verificadores de signo (2026-11-16 (1) y (2)):** en la corrida real
   de 2610 salieron SOC-019 ARICA2, ALFALFAL-VR2 y ELENA (97 % al revés):
   el usuario corrige el Flujo en `homol`. Falta: volver a correr y mirar la
@@ -6568,4 +6573,25 @@ saliera con SOC-019, ajustar los umbrales al inicio del módulo).
 **Verificación:** `py_compile` OK; 494 pruebas OK (36 salteadas: sin
 tkinter). `revisar_homologacion` sobre el archivo real del usuario da las 4
 HOM-001 de LILE y nada más.
+
+## 2026-11-16 (3) — Buscar_Puntos_PRMTE: lista incompleta y "Comprobar en la API"
+
+- El usuario busca un punto con el id exacto, que sí trae medidas, y no le
+  aparece aunque acababa de actualizar la lista. O `/measurement-point/all`
+  no trae todos los puntos, o la paginación se cortó (antes se confiaba solo
+  en `totalPages`).
+- `bajar_puntos`: sigue pidiendo páginas mientras lleguen menos registros
+  que `totalElements` (por si la API recorta el pageSize) y al final dice
+  cuántos llegaron contra cuántos informa la API ("OJO: ... la lista quedó
+  incompleta" si faltan).
+- Botón **Comprobar en la API**: el id escrito se consulta en
+  `/medidas-v2/measurement` (canales 1 y 3, mes anterior, igual que la
+  descarga). Si tiene medidas se agrega a la lista y se guarda en
+  `encontrados_por_medidas` de `puntos_prmte.json`, que se vuelve a unir
+  al actualizar.
+
+**Verificación:** 6 pruebas nuevas en `test_buscar_puntos_prmte.py` (API
+falsa); suite completa OK. La ventana no se pudo abrir aquí (sin tkinter);
+falta probarla en Windows contra la API real y ver qué dice el aviso de
+cantidad: eso dirá si es el endpoint o la paginación.
 
