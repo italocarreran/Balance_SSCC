@@ -183,9 +183,9 @@ python Herramientas/Comparar_Meses.py
      abierta con el AAMM cambiado (`Balance BESS 2607` → `Balance BESS
      2608`) y dónde crearla, y las dos cosas se pueden editar antes de
      confirmar. Se crean la carpeta y sus subcarpetas vacías
-     (`BESS/Medidas/`, `BESS/Auxiliares/`, `BESS/Ofertas/`, `BESS/Cmg/`,
-     `BESS/Subastas/DB subastas/` y las comunes con el CRA `FD y FMA/` y
-     `Prorrata retiros/`) y el caso queda abierto
+     (`BESS/Medidas/`, `BESS/Auxiliares/`, `BESS/Ofertas/`,
+     `BESS/Subastas/DB subastas/` y las comunes con el CRA `Cmg/`, `FD y
+     FMA/` y `Prorrata retiros/`) y el caso queda abierto
      en ese período. También está el botón **Crear carpeta del caso**,
      abajo de todo.
    - A un caso al que le falte alguna subcarpeta se la completa desde ahí
@@ -343,8 +343,8 @@ Ver `desarrollo/MAPA.md` para qué hace cada módulo.
 
 La carpeta que se elige en las dos ventanas es la **del mes**, y es la
 misma para `Balance_BESS.py` y `Balance_CRA.py`: lo propio de cada uno va
-en `BESS/` y `CRA/`, y lo que usan los dos (`FD y FMA/`, `Prorrata
-retiros/`) queda en la raíz. Un caso armado antes de esta división (todo
+en `BESS/` y `CRA/`, y lo que usan los dos (`Cmg/`, `FD y FMA/`,
+`Prorrata retiros/`) queda en la raíz. Un caso armado antes de esta división (todo
 suelto en la carpeta) se sigue usando tal cual, sin mover nada.
 
 ```text
@@ -353,6 +353,7 @@ suelto en la carpeta) se sigue usando tal cual, sin mover nada.
 ├── CRA/                     <- Auxiliares/ (centrales_cra.xlsx), Energia/,
 │                               FP/, CO/, SC y CO/, Log/ y
 │                               5_REMUNERACION_CRA_AAMM.xlsx
+├── Cmg/                     <- comun: cmg<AAMM>_def_15minutal.csv y cmg.xlsx
 ├── FD y FMA/                <- comun: SSCC_Desempeño_* (y los fma_* del BESS)
 └── Prorrata retiros/        <- comun: Prorrata_Retiros_<AAMM>_pre/_def.xlsx
 ```
@@ -378,7 +379,7 @@ Detalle de `BESS/` (las dos comunes se repiten para ver qué lee de ahí):
 │                            (hojas "homol" y "Gen real")
 ├── Ofertas/
 │   └── <algún archivo Excel cuyo nombre contenga "OfertasSSCC">
-├── Cmg/
+├── ../Cmg/                        <- en la raíz del mes (común)
 │   ├── cmg<AAMM>_def_15minutal.csv   (botón "Traer")
 │   └── cmg.xlsx                      (botón "Generar")
 ├── ../FD y FMA/                   <- en la raíz del mes (común)

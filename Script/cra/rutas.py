@@ -121,6 +121,7 @@ def resolver_rutas(carpeta_base, aamm=None):
         # Comunes con el BESS. Un caso CRA de antes tenia su propia FD/.
         "fd": carpeta_fd(base, antiguas=(p.CARPETA_FD_ANTIGUA,)),
         "prorrata": base / p.CARPETA_PRORRATA,
+        "cmg": base / p.CARPETA_CMG,
         "salida": salida,
         "log_dir": raiz / p.CARPETA_LOG,
         "registro": raiz / p.CARPETA_LOG / p.ARCHIVO_REGISTRO,
@@ -255,7 +256,9 @@ def subcarpetas_del_caso(carpeta_base):
         nombre if raiz == base else f"{CARPETA_CRA}/{nombre}"
         for nombre in p.CARPETAS_PROPIAS
     ]
-    return tuple(propias) + (rutas["fd"].name, p.CARPETA_PRORRATA)
+    return tuple(propias) + (
+        p.CARPETA_CMG, rutas["fd"].name, p.CARPETA_PRORRATA,
+    )
 
 
 def crear_carpetas_caso(carpeta_base):

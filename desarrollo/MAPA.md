@@ -27,7 +27,7 @@ Script/
         conciliacion.py        <- Medidores = E Costos + RE545 (TRA)
         verificaciones.py      <- Medidores coherente: signo vs SoC/mediodia PFV (SOC-019/020/021), barra sin CMg (CMG-007); base de la columna 'SoC vs medida' de la matriz
         manifiesto.py          <- que archivo exacto alimento la corrida
-        carpetas.py            <- la carpeta del MES compartida: BESS/, CRA/ y las comunes (FD y FMA, Prorrata retiros); reconoce los casos de antes
+        carpetas.py            <- la carpeta del MES compartida: BESS/, CRA/ y las comunes (Cmg, FD y FMA, Prorrata retiros); reconoce los casos de antes
         rutas.py               <- rutas del caso y busqueda de entradas
         estructura.py          <- el arbol que dibuja la ventana
         origenes.py            <- de donde viene lo que se trae (links)
@@ -109,8 +109,9 @@ Script/
 
 ```
 <carpeta del mes>/
-    BESS/      Auxiliares/ Medidas/ Ofertas/ Cmg/ Subastas/ Log/ 11_PAGOS_BESS_AAMM.xlsx SAE_AAMM.csv
+    BESS/      Auxiliares/ Medidas/ Ofertas/ Subastas/ Log/ 11_PAGOS_BESS_AAMM.xlsx SAE_AAMM.csv
     CRA/       Auxiliares/ Energia/ FP/ CO/ SC y CO/ Log/ 5_REMUNERACION_CRA_AAMM.xlsx
+    Cmg/               <- comun (cmg_15min y cmg.xlsx; el TC del CRA saldra de aca)
     FD y FMA/          <- comun (SSCC_Desempeño_*; los fma_* son del BESS)
     Prorrata retiros/  <- comun
 ```

@@ -8,11 +8,12 @@ y lo que usan los dos queda en la raiz:
 
     <carpeta del mes>/
         BESS/                       (Balance_BESS.py)
-            Auxiliares/  Medidas/  Ofertas/  Cmg/  Subastas/  Log/
+            Auxiliares/  Medidas/  Ofertas/  Subastas/  Log/
             11_PAGOS_BESS_AAMM.xlsx, SAE_AAMM.csv
         CRA/                        (Balance_CRA.py)
             Auxiliares/  Energia/  FP/  CO/  SC y CO/  Log/
             5_REMUNERACION_CRA_AAMM.xlsx
+        Cmg/                        (comun: cmg_15min y cmg.xlsx)
         FD y FMA/                   (comun: SSCC_Desempeño_*; los fma_* son del BESS)
         Prorrata retiros/           (comun)
 
@@ -35,8 +36,11 @@ CARPETA_CRA = "CRA"
 CARPETA_FD_FMA = "FD y FMA"
 CARPETA_FD_FMA_ANTIGUA = "SSCC_Desempeño"
 CARPETA_PRORRATA_RETIROS = "Prorrata retiros"
+# El CMg (cmg_15min y cmg.xlsx): comun porque el TC del CRA tambien sale
+# de ahi (pedido del usuario 2026-11-16).
+CARPETA_CMG = "Cmg"
 
-CARPETAS_COMUNES = (CARPETA_FD_FMA, CARPETA_PRORRATA_RETIROS)
+CARPETAS_COMUNES = (CARPETA_CMG, CARPETA_FD_FMA, CARPETA_PRORRATA_RETIROS)
 
 
 def es_caso_antiguo(base, herramienta, distintivas, archivos=()):

@@ -39,9 +39,6 @@ la carpeta, se sigue usando tal cual, sin mover nada.
                     hoja 'Gen real'
             Ofertas/
                 <algo>OfertasSSCC<algo>.xlsx (o .xlsm/.xlsb/.xls)
-            Cmg/
-                cmg<AAMM>_def_15minutal.csv  [Traer]
-                cmg.xlsx                   [Generar]
             Subastas/
                 DB subastas/               [Traer]
             11_PAGOS_BESS_AAMM.xlsx        [Actualizar]
@@ -51,6 +48,9 @@ la carpeta, se sigue usando tal cual, sin mover nada.
                 Control_corrida.xlsx
                 Registro_ultima_corrida.txt
         CRA/                               (Balance_CRA.py)
+        Cmg/                               (comun con el CRA)
+            cmg<AAMM>_def_15minutal.csv    [Traer]
+            cmg.xlsx                       [Generar]
         FD y FMA/                          (comun con el CRA)
             SSCC_Desempeño_<algo>.xlsx     [Traer]
             fma_cpf_<AAMM>.xlsx            [Generar]

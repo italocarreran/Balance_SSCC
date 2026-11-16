@@ -67,9 +67,6 @@ se adivinó: lo que depende de una respuesta quedó como constante en
   y pasó `pyflakes`). Revisar también la línea nueva de cambio de hora bajo
   el AAMM y que el registro quede en `CRA/Log/`.
 - **Carpeta del mes compartida (2026-11-16):** a decidir con el usuario:
-  - ¿`Cmg/` pasa a común? Hoy es del BESS (`BESS/Cmg/`); el `TC` del CRA
-    tiene "origen CMg" pendiente: si sale del mismo `cmg_15min`, conviene
-    subirla a la raíz.
   - ¿Las planillas (`11_PAGOS_BESS_AAMM.xlsx`, `5_REMUNERACION_CRA_AAMM.xlsx`)
     quedan dentro de `BESS/` y `CRA/` (como quedó) o en la raíz del mes?
   - ¿Un botón "Reorganizar" que mueva un caso de antes a `BESS/`/`CRA/`?
@@ -404,4 +401,13 @@ CRA primero y BESS después, árbol, BESS de antes, BESS con solo la
 planilla, CRA de antes con su `FD/` y la planilla renombrada). Las pruebas
 del CRA ahora toman las carpetas de `cra.resolver_rutas`. Sin tkinter acá:
 la ventana no se abrió.
+
+## 2026-11-16 (2) — `Cmg/` pasa a común
+
+Respuesta del usuario a la primera pregunta de la sesión anterior: "Déjalo
+afuera. El cmg.xlsx igual." `Cmg/` (con el `cmg_15min` y `cmg.xlsx`) va en
+la raíz del mes, al lado de `FD y FMA/` y `Prorrata retiros/`
+(`carpetas.CARPETA_CMG`, en `CARPETAS_COMUNES`). El CRA la crea y la expone
+como `rutas["cmg"]`, todavía sin uso: es para el TC. Anotado también en
+`BITACORA_BESS.md`. 513 pruebas en verde.
 

@@ -36,11 +36,12 @@ class TestMesNuevo(unittest.TestCase):
 
         for sub in ("BESS/Medidas", "BESS/Auxiliares", "BESS/Subastas/DB subastas",
                     "CRA/Auxiliares", "CRA/Energia", "CRA/SC y CO",
-                    "FD y FMA", "Prorrata retiros"):
+                    "Cmg", "FD y FMA", "Prorrata retiros"):
             self.assertTrue((self.mes / sub).is_dir(), sub)
 
         # Nada propio suelto en la raiz.
-        for suelta in ("Medidas", "Auxiliares", "Energia", "FD", "Log"):
+        for suelta in ("Medidas", "Auxiliares", "Energia", "FD", "Log",
+                       "BESS/Cmg"):
             self.assertFalse((self.mes / suelta).exists(), suelta)
 
         bess = nucleo.resolver_rutas(self.mes, "2608")
@@ -50,6 +51,8 @@ class TestMesNuevo(unittest.TestCase):
         self.assertEqual(bess["sscc_desempeno_dir"], rutas_cra["fd"])
         self.assertEqual(bess["prorrata_retiros_dir"], rutas_cra["prorrata"])
         self.assertEqual(rutas_cra["fd"], self.mes / "FD y FMA")
+        self.assertEqual(bess["cmg"], self.mes / "Cmg" / "cmg.xlsx")
+        self.assertEqual(rutas_cra["cmg"], bess["cmg_dir"])
 
         # Planillas y Log, cada una en lo suyo.
         self.assertEqual(bess["salida"], self.mes / "BESS" / "11_PAGOS_BESS_2608.xlsx")
@@ -76,6 +79,7 @@ class TestMesNuevo(unittest.TestCase):
         textos = {f["id"]: f["etiqueta"] for f in filas}
         self.assertEqual(textos["medidas_dir"], "BESS/Medidas/")
         self.assertEqual(textos["sscc_dir"], "FD y FMA/")
+        self.assertEqual(textos["cmg_dir"], "Cmg/")
 
         textos_cra = [f["texto"] for f in cra.revisar_estructura(self.mes, "2608")]
         self.assertIn("CRA/Energia/", textos_cra)
@@ -103,6 +107,7 @@ class TestCasosDeAntes(unittest.TestCase):
         self.assertEqual(rutas["sscc_desempeno_dir"], self.base / "SSCC_Desempeño")
         self.assertEqual(rutas["salida"], self.base / "11_PAGOS_BESS_2607.xlsx")
         self.assertEqual(rutas["log_dir"], self.base / "Log")
+        self.assertEqual(rutas["cmg_dir"], self.base / "Cmg")
 
         # Completarlo no le crea BESS/ ni "FD y FMA" vacias al lado.
         creadas = nucleo.crear_estructura_caso(self.base, registrar=_nada)
@@ -132,7 +137,8 @@ class TestCasosDeAntes(unittest.TestCase):
         self.assertEqual(rutas["salida"].read_bytes(), b"planilla")
         self.assertFalse((self.base / "Balance_CRA.xlsx").exists())
 
-        self.assertEqual(cra.crear_carpetas_caso(self.base), [])
+        # Solo le falta la comun Cmg/ (en la raiz, como en un mes nuevo).
+        self.assertEqual(cra.crear_carpetas_caso(self.base), ["Cmg"])
         self.assertFalse((self.base / "CRA").exists())
 
         # Energia/ suelta es del CRA: el BESS de ese mes va en BESS/.

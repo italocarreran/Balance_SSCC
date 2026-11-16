@@ -14,9 +14,9 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 - **Carpeta del mes con `BESS/` (2026-11-16 (8)):** abrir en Windows un
   caso de antes (debe seguir igual, sin crear `BESS/`) y crear un mes nuevo
-  (debe quedar `BESS/...` + `FD y FMA/` + `Prorrata retiros/`). Decidir con
-  el usuario si `Cmg/` pasa a común y si se quiere un botón que mueva un
-  caso de antes a `BESS/` (ver `BITACORA_CRA.md`).
+  (debe quedar `BESS/...` + `Cmg/` + `FD y FMA/` + `Prorrata retiros/`).
+  Decidir con el usuario si se quiere un botón que mueva un caso de antes a
+  `BESS/` (ver `BITACORA_CRA.md`).
 
 - **Buscar_Puntos_PRMTE (2026-11-16 (6)):** confirmar en Windows que ahora
   llegan los 6.886 puntos y si con `size` la API entrega más de 10 por
@@ -6693,4 +6693,14 @@ completa OK. Sin caso real para correr el botón de punta a punta.
 - Pruebas: las que armaban el caso con `SUBCARPETAS_CASO` y después usaban
   `base / "Subastas"` a mano ahora toman la ruta de `resolver_rutas`; nuevas
   en `tests/test_carpetas_mes.py`. 513 pruebas, 36 salteadas (sin tkinter).
+
+## 2026-11-16 (9) — `Cmg/` pasa a común (raíz del mes)
+
+Pedido del usuario: "Déjalo afuera. El cmg.xlsx igual." `Cmg/` sale de
+`BESS/` y va a la raíz del mes, como `FD y FMA/` y `Prorrata retiros/`:
+`carpetas.CARPETA_CMG` (re-exportada por `parametros`), fuera de
+`CARPETAS_PROPIAS` (y de las que delatan un caso de antes: un mes nuevo con
+`Cmg/` en la raíz no se confunde con uno viejo). `rutas["cmg_dir"]` y
+`rutas["cmg"]` = `<mes>/Cmg/...`; en un caso de antes ya estaba ahí, no
+cambia nada. 513 pruebas en verde.
 

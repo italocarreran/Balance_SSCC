@@ -139,12 +139,13 @@ def resolver_rutas(carpeta_base, aamm=None):
     medidas_dir = raiz / CARPETA_MEDIDAS
     auxiliares_dir = raiz / CARPETA_AUXILIARES
     ofertas_dir = raiz / CARPETA_OFERTAS
-    cmg_dir = raiz / CARPETA_CMG
     subastas_dir = raiz / CARPETA_SUBASTAS
-    # Comunes con el CRA, en la raiz del mes. La del FD se llama "FD y
+    # Comunes con el CRA, en la raiz del mes (Cmg, FD y FMA, Prorrata
+    # retiros). La del FD se llama "FD y
     # FMA"; si un caso viejo todavia tiene la de nombre anterior y no
     # la nueva, se usa esa.
     fd_fma_dir = carpeta_fd(base)
+    cmg_dir = base / CARPETA_CMG
     prorrata_retiros_dir = base / CARPETA_PRORRATA_RETIROS
 
     periodo = _aamm_o_none(aamm)
@@ -199,7 +200,6 @@ CARPETAS_PROPIAS = (
     CARPETA_MEDIDAS,
     CARPETA_AUXILIARES,
     CARPETA_OFERTAS,
-    CARPETA_CMG,
     CARPETA_SUBASTAS,
     f"{CARPETA_SUBASTAS}/{CARPETA_DB_SUBASTAS}",
 )
@@ -218,7 +218,7 @@ CARPETAS_DISTINTIVAS = tuple(
 # caso que ya existe, ver subcarpetas_del_caso().
 SUBCARPETAS_CASO = tuple(
     f"{CARPETA_BESS}/{nombre}" for nombre in CARPETAS_PROPIAS
-) + (CARPETA_FD_FMA, CARPETA_PRORRATA_RETIROS)
+) + (CARPETA_CMG, CARPETA_FD_FMA, CARPETA_PRORRATA_RETIROS)
 
 
 def subcarpetas_del_caso(carpeta_base):
@@ -239,7 +239,7 @@ def subcarpetas_del_caso(carpeta_base):
         Path(nombre) if raiz == base else Path(CARPETA_BESS) / nombre
         for nombre in CARPETAS_PROPIAS
     ]
-    comunes = [Path(fd.name), Path(CARPETA_PRORRATA_RETIROS)]
+    comunes = [Path(CARPETA_CMG), Path(fd.name), Path(CARPETA_PRORRATA_RETIROS)]
 
     return tuple(ruta.as_posix() for ruta in propias + comunes)
 

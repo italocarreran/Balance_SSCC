@@ -29,6 +29,7 @@ raiz del mes (ver Script/nucleo/carpetas.py):
                 hoja 'FD_CTF' / 'FD_CSF' / 'FD_CPF'  [Actualizar]
                 hoja 'SC y CO' / 'CO' / 'FP' / 'ENERGIA'  [Actualizar]
         BESS/                              (Balance_BESS.py)
+        Cmg/                               (comun con el BESS; para el TC)
         FD y FMA/                          (comun con el BESS)
             SSCC_Desempeño_*.xlsx          [Traer]
         Prorrata retiros/                  (comun con el BESS)

@@ -78,14 +78,14 @@ ORDEN_HOJAS_SALIDA = [
 #
 #   <mes>/CRA/Auxiliares/  Energia/  FP/  CO/  SC y CO/  Log/
 #   <mes>/CRA/5_REMUNERACION_CRA_AAMM.xlsx
-#   <mes>/FD y FMA/        <mes>/Prorrata retiros/
+#   <mes>/Cmg/   <mes>/FD y FMA/   <mes>/Prorrata retiros/   (comunes)
 #
 # Un caso de antes (todo suelto en la raiz, con FD/ propia) se sigue
 # leyendo tal cual.
 # ============================================================
 
 from ..nucleo.carpetas import (  # noqa: E402
-    CARPETA_CRA, CARPETA_FD_FMA, CARPETA_PRORRATA_RETIROS,
+    CARPETA_CMG, CARPETA_CRA, CARPETA_FD_FMA, CARPETA_PRORRATA_RETIROS,
 )
 
 CARPETA_ENERGIA = "Energia"
@@ -93,7 +93,8 @@ CARPETA_FP = "FP"
 CARPETA_CO = "CO"
 CARPETA_SC_CO = "SC y CO"
 CARPETA_AUXILIARES = "Auxiliares"
-# Comunes con el BESS (en la raiz del mes).
+# Comunes con el BESS (en la raiz del mes). Cmg/ todavia no la usa
+# ninguna hoja: es para el TC (origen CMg, pendiente).
 CARPETA_FD = CARPETA_FD_FMA
 CARPETA_PRORRATA = CARPETA_PRORRATA_RETIROS
 # La FD/ propia que tenia el caso CRA antes de compartir la del BESS.
@@ -113,7 +114,7 @@ CARPETAS_DISTINTIVAS = (
 # Las de un caso NUEVO, relativas a la carpeta del mes.
 SUBCARPETAS_CASO = tuple(
     f"{CARPETA_CRA}/{nombre}" for nombre in CARPETAS_PROPIAS
-) + (CARPETA_FD, CARPETA_PRORRATA)
+) + (CARPETA_CMG, CARPETA_FD, CARPETA_PRORRATA)
 
 # Los maestros del CRA, en un libro con tres hojas (ver maestros.py):
 # "centrales_cra" (filtra cvar_cra), "empresas" y "diccionario" (que

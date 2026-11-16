@@ -26,7 +26,6 @@ UMBRAL_SOC = 0.06
 CARPETA_MEDIDAS = "Medidas"
 CARPETA_AUXILIARES = "Auxiliares"
 CARPETA_OFERTAS = "Ofertas"
-CARPETA_CMG = "Cmg"
 # El usuario le cambio el nombre a esta carpeta: antes "SSCC_Desempeño"
 # y ahora "FD y FMA", porque adentro van las dos cosas -el archivo
 # SSCC_Desempeño_* del que sale la hoja FD, y las salidas de los FMA
@@ -34,11 +33,11 @@ CARPETA_CMG = "Cmg"
 # Se sigue aceptando el nombre viejo si la carpeta nueva no existe, para
 # que los casos ya armados no se rompan (ver resolver_rutas).
 #
-# "FD y FMA" y "Prorrata retiros" son COMUNES con el CRA: van en la raiz
+# "Cmg", "FD y FMA" y "Prorrata retiros" son COMUNES con el CRA: van en la raiz
 # de la carpeta del mes; las demas son propias del BESS y van adentro de
 # BESS/ (ver carpetas.py).
 from .carpetas import (  # noqa: E402,F401  (se re-exportan)
-    CARPETA_BESS, CARPETA_FD_FMA, CARPETA_FD_FMA_ANTIGUA,
+    CARPETA_BESS, CARPETA_CMG, CARPETA_FD_FMA, CARPETA_FD_FMA_ANTIGUA,
     CARPETA_PRORRATA_RETIROS,
 )
 CARPETA_SUBASTAS = "Subastas"
