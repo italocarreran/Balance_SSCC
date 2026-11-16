@@ -67,10 +67,8 @@ se adivinó: lo que depende de una respuesta quedó como constante en
   y pasó `pyflakes`). Revisar también la línea nueva de cambio de hora bajo
   el AAMM y que el registro quede en `CRA/Log/`.
 - **Carpeta del mes compartida (2026-11-16):** a decidir con el usuario:
-  - ¿Un botón "Reorganizar" que mueva un caso de antes a `BESS/`/`CRA/`?
-    Hoy un caso viejo se usa tal cual y no se mueve nada.
-  - El nombre `5_REMUNERACION_CRA_AAMM.xlsx` (sin tilde ni `_Definitivo`)
-    es propuesta: confirmar.
+  - Probar `Herramientas/Reorganizar_Carpetas.py` en Windows con un mes
+    real de antes (y con algo abierto en Excel, para ver que se para bien).
 
 ---
 
@@ -414,4 +412,29 @@ como `rutas["cmg"]`, todavía sin uso: es para el TC. Anotado también en
 Respuesta del usuario: "déjalo en sus carpetas mejor". Se confirma lo que
 ya estaba: `BESS/11_PAGOS_BESS_AAMM.xlsx` (y `SAE_AAMM.csv`) y
 `CRA/5_REMUNERACION_CRA_AAMM.xlsx`. Sin cambios de código.
+
+## 2026-11-16 (4) — Nombre de la planilla confirmado; herramienta para reorganizar
+
+- El usuario confirma `5_REMUNERACION_CRA_AAMM.xlsx` ("como está ahora").
+- Pide, en vez de un botón, "en herramientas agrega un código para
+  reorganizar las carpetas, porque lo usaré un par de veces no más":
+  `Herramientas/Reorganizar_Carpetas.py` (ventana o
+  `python Herramientas/Reorganizar_Carpetas.py <carpeta>`). `planear()`
+  arma la lista de movimientos según qué es de antes (`raiz_bess`/`raiz_cra`
+  == la carpeta): propias del BESS y su planilla/CSV/Log a `BESS/`, propias
+  del CRA y su planilla a `CRA/`, `Auxiliares/` al dueño (con los dos de
+  antes, `centrales_cra.xlsx` al CRA y el resto al BESS),
+  `SSCC_Desempeño/` → `FD y FMA/`, la `FD/` del CRA archivo por archivo a
+  `FD y FMA/`. Destino existente y no vacío = conflicto y no se mueve nada;
+  un error a mitad de camino se informa y se puede volver a correr.
+- **Arreglo de la sesión anterior (BESS):** los sellos de `__config__` se
+  identificaban por la carpeta de la planilla; con la planilla en `BESS/`
+  todos los meses quedaban como `BESS_<marca>` y al reorganizar un caso se
+  perdían sus sellos. `sellos._carpeta_del_mes`: si la planilla está en
+  `BESS/`, la carpeta es la de arriba (la del mes). Anotado en
+  `BITACORA_BESS.md`.
+- `tests/test_reorganizar_carpetas.py` (5): BESS de antes queda igual a uno
+  nuevo (sellos incluidos), CRA de antes con su `FD/`, los dos con
+  `Auxiliares/` repartida, conflicto sin mover nada, mes nuevo sin nada que
+  hacer. 518 pruebas en verde.
 

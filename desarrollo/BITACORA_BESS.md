@@ -15,8 +15,9 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 - **Carpeta del mes con `BESS/` (2026-11-16 (8)):** abrir en Windows un
   caso de antes (debe seguir igual, sin crear `BESS/`) y crear un mes nuevo
   (debe quedar `BESS/...` + `Cmg/` + `FD y FMA/` + `Prorrata retiros/`).
-  Decidir con el usuario si se quiere un botón que mueva un caso de antes a
-  `BESS/` (ver `BITACORA_CRA.md`).
+  Probar `Herramientas/Reorganizar_Carpetas.py` con un mes real de antes y
+  confirmar que la ventana no marca hojas desactualizadas después (los
+  sellos se conservan).
 
 - **Buscar_Puntos_PRMTE (2026-11-16 (6)):** confirmar en Windows que ahora
   llegan los 6.886 puntos y si con `size` la API entrega más de 10 por
@@ -6703,4 +6704,14 @@ Pedido del usuario: "Déjalo afuera. El cmg.xlsx igual." `Cmg/` sale de
 `Cmg/` en la raíz no se confunde con uno viejo). `rutas["cmg_dir"]` y
 `rutas["cmg"]` = `<mes>/Cmg/...`; en un caso de antes ya estaba ahí, no
 cambia nada. 513 pruebas en verde.
+
+## 2026-11-16 (10) — Sellos por carpeta del mes; herramienta Reorganizar_Carpetas
+
+- `sellos.ruta_sellos`: la carpeta del caso en `__config__` es la del MES
+  (`_carpeta_del_mes`: si la planilla está en `<mes>/BESS/`, la de arriba).
+  Antes de este arreglo, con la estructura de (8), todos los meses nuevos
+  quedaban como `BESS_<marca>`; y un caso de antes que se reorganice
+  conserva sus sellos (misma carpeta).
+- `Herramientas/Reorganizar_Carpetas.py`: pasa un mes de antes a `BESS/` /
+  `CRA/` (detalle en `BITACORA_CRA.md` 2026-11-16 (4)). 518 pruebas.
 

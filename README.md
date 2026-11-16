@@ -108,6 +108,18 @@ python Herramientas/Buscar_Rutas_PI.py
 python Herramientas/Comparar_Meses.py
 ```
 
+- `Reorganizar_Carpetas.py` — pasa la carpeta de un mes armada antes de la
+  división BESS/CRA (todo suelto) a la estructura nueva: lo del BESS a
+  `BESS/`, lo del CRA a `CRA/`, `SSCC_Desempeño/` (o la `FD/` del CRA) a
+  `FD y FMA/`; `Cmg/` y `Prorrata retiros/` quedan. Primero muestra el plan
+  y pide confirmar; nunca pisa nada (si un destino ya existe, no mueve
+  nada); si algo está abierto en Excel se para y se vuelve a correr. Los
+  sellos de `__config__` se conservan. Usa el programa (`Script/`).
+
+```bash
+python Herramientas/Reorganizar_Carpetas.py
+```
+
 0. **La configuración vive en `__config__/`**, la carpeta hermana de la de
    este programa (la misma del Revisor y los comparadores), nunca en las
    carpetas de trabajo:
