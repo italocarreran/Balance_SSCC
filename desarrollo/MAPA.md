@@ -17,6 +17,7 @@ Script/
     __init__.py
     config.py              <- lo unico que lee y escribe config.json
     arbol.py               <- prefijos del arbol (las dos ventanas)
+    ventana_estilo.py      <- aspecto comun de las dos ventanas: colores, anchos, rueda, colores del registro, abrir carpetas
     nucleo/                <- el calculo del caso, una etapa por modulo
         __init__.py            <- la fachada: nucleo.<lo que sea>
         externos.py            <- los paquetes hermanos, en un solo lugar
@@ -1175,16 +1176,20 @@ importable como cualquier módulo.
   hojas de entrada con carga definida**: `ENERGIA`, `FP`, `CO`, `SC y CO`,
   `FD_CPF`/`FD_CSF`/`FD_CTF` y el bloque 1 de `PRORRATA_RETIROS` (estas
   cuatro, con las mismas fuentes y lectores del BESS: `fuentes_bess.py`).
-- **Ventana (`Balance_CRA.py`):** mismo patrón que la del BESS, más
-  acotada: carpeta **del mes** (la misma del BESS) + AAMM + línea de cambio
-  de hora + árbol (`cra.revisar_estructura()`, carpetas mostradas relativas
-  al mes: `CRA/FP/`, `FD y FMA/`) con un botón **Actualizar** en la fila de
-  la planilla (todas las hojas) y en cada hoja, y **Traer** en la fila del
-  `SSCC_Desempeño_*` (misma función del BESS, destino la carpeta común `FD
-  y FMA/`); registro, barra y tiempo; al terminar deja el registro en
-  `CRA/Log/Registro_ultima_corrida.txt`. Recuerda carpeta y AAMM en la
-  sección `modo_cra` de `__config__/config.json`. Todavía **no** tiene la
-  regla "un período, una carpeta" ni "Ejecutar todo" del BESS.
+- **Ventana (`Balance_CRA.py`):** con el **formato del BESS** (2026-11-16):
+  mismo diseño (marco "Carpeta del mes" con Examinar/Actualizar, "Periodo
+  del caso" con "Ir a este mes" y la línea de cambio de hora, diagrama
+  Estructura | Estado | Accion | Detalle en celdas de ancho fijo con links y
+  botones beige, estado + tiempo, registro con colores, hora, encabezado y
+  cierre de cada paso, guardado en `CRA/Log/Registro_ultima_corrida.txt`;
+  ventana desplazable con la rueda del BESS; botones fijos abajo "Crear
+  carpeta del caso", "Abrir carpeta del caso", "Salir"). Colores, anchos y
+  registro salen de `Script/ventana_estilo.py`, el mismo módulo del BESS.
+  Regla "un período, una carpeta" del BESS: al cambiar el AAMM vuelve a la
+  carpeta del período (la que recuerda el CRA o, si no, la del BESS en
+  `modo_bess`, porque es la misma carpeta del mes) o pregunta (examinar /
+  crear / "esta es la de AAMM"). Recuerda lo suyo en `modo_cra` de
+  `__config__/config.json`. Todavía **no** tiene "Ejecutar todo".
 - **Caso (confirmado):** dentro de `<mes>/CRA/`:
   `Auxiliares/centrales_cra.xlsx`,
   `Energia/Formato_Solicitud_SSAA_SSCC_Hidro_<Mes><AAAA>.xlsx`,

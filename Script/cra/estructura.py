@@ -44,7 +44,11 @@ def revisar_estructura(carpeta_base, aamm):
     """Lista plana de filas, en el orden en que se dibujan."""
 
     rutas = resolver_rutas(carpeta_base, aamm)
-    filas = []
+    # Primera fila, como en el arbol del BESS: la carpeta del mes.
+    filas = [_fila(
+        0, "base", "Carpeta del mes", "ok" if rutas["base"].is_dir() else "falta",
+        ruta=rutas["base"], es_carpeta=True,
+    )]
 
     carpetas = {}
     for id_, carpeta, patron, _ in ENTRADAS:
@@ -72,9 +76,8 @@ def revisar_estructura(carpeta_base, aamm):
                 continue
 
             if ruta is None:
-                filas.append(_fila(
-                    1, id_, patron, "falta", "no esta", ruta=ruta_carpeta,
-                ))
+                # Sin detalle: "FALTA" ya lo dice (como en el BESS).
+                filas.append(_fila(1, id_, patron, "falta", ruta=ruta_carpeta))
             else:
                 filas.append(_fila(1, id_, ruta.name, "ok", ruta=ruta))
 
@@ -83,14 +86,14 @@ def revisar_estructura(carpeta_base, aamm):
     filas.append(_fila(
         0, "salida", relativa(salida, rutas["base"]),
         "ok" if salida.exists() else "pendiente",
-        "" if salida.exists() else "todavia no se genero",
+        "",
         ruta=salida,
     ))
 
     por_hoja = {hoja: seccion for seccion, (hoja, _) in SECCIONES.items()}
     for hoja in p.ORDEN_HOJAS_SALIDA:
         escrita = hoja in hojas_escritas
-        detalle = "" if escrita else "sin generar"
+        detalle = ""
         if hoja == p.HOJA_PRORRATA:
             detalle = "solo el bloque 1 (matriz de prorratas)"
         filas.append(_fila(

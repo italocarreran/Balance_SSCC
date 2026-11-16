@@ -197,7 +197,7 @@ ENTRADAS = [
     ("centrales_cra", "auxiliares", p.ARCHIVO_CENTRALES_CRA,
      _buscar_centrales_cra),
     ("energia", "energia",
-     "Formato_Solicitud_SSAA_SSCC_Hidro_<Mes><AAAA>.xlsx", _buscar_energia),
+     "Formato_Solicitud_*Hidro_<Mes><AAAA>.xlsx", _buscar_energia),
     ("fp", "fp", "fp_<AAMM>*.xlsx", _buscar_fp),
     ("co", "co", "cvar_cra_<AAMM>_*.xlsx", _buscar_co),
     ("reporte_cra", "sc_co", "Reporte_CRA*.csv", _buscar_reporte_cra),

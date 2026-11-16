@@ -63,9 +63,10 @@ se adivinó: lo que depende de una respuesta quedó como constante en
   `días × 96`; revisar con un mes con cambio de hora.
 - Validar todas las hojas contra los archivos reales de un período (hoy
   solo hay pruebas sintéticas).
-- Abrir `Balance_CRA.py` en Windows (acá no hay tkinter: solo se compiló
-  y pasó `pyflakes`). Revisar también la línea nueva de cambio de hora bajo
-  el AAMM y que el registro quede en `CRA/Log/`.
+- Abrir `Balance_CRA.py` en Windows (acá se probó con la ventana real bajo
+  xvfb, pero no en Windows): el formato nuevo, "Ir a este mes", el cambio
+  de mes que va solo a la carpeta del BESS, y que el registro quede en
+  `CRA/Log/`.
 - **Carpeta del mes compartida (2026-11-16):** a decidir con el usuario:
   - Probar `Herramientas/Reorganizar_Carpetas.py` en Windows con un mes
     real de antes (y con algo abierto en Excel, para ver que se para bien).
@@ -437,4 +438,34 @@ ya estaba: `BESS/11_PAGOS_BESS_AAMM.xlsx` (y `SAE_AAMM.csv`) y
   nuevo (sellos incluidos), CRA de antes con su `FD/`, los dos con
   `Auxiliares/` repartida, conflicto sin mover nada, mes nuevo sin nada que
   hacer. 518 pruebas en verde.
+
+## 2026-11-16 (5) — La ventana del CRA con el formato del BESS
+
+Pedido del usuario: "la ventana del CRA déjala en el formato del BESS".
+
+- `Balance_CRA.py` reescrita con el diseño de `Balance_BESS.py` (ver MAPA):
+  "Cargando…" mientras importa, canvas desplazable con la rueda del BESS,
+  marcos "Carpeta del mes" y "Periodo del caso (AAMM)" con "Ir a este mes",
+  diagrama en celdas de ancho fijo con links, estados y botones iguales,
+  registro con colores/hora/encabezado/cierre (las marcas y la duración
+  salen de `nucleo.orquestador`, como en el BESS), botones fijos abajo, y
+  la regla "un período, una carpeta" con su diálogo y "Crear la carpeta".
+  Al cambiar de mes busca la carpeta que recuerda el CRA y, si no, la que
+  recuerda el BESS (solo la lee).
+- `Script/ventana_estilo.py` (nuevo): colores, anchos, rueda, colores del
+  registro y abrir carpetas, sacados tal cual de `Balance_BESS.py`, que
+  ahora los importa de ahí (mismos nombres en el módulo, así las pruebas que
+  los usan siguen igual). Anotado en `BITACORA_BESS.md`.
+- `cra.revisar_estructura`: fila "Carpeta del mes" arriba (como "Carpeta
+  base" del BESS); sin los detalles que repetían el estado ("no esta",
+  "sin generar", "todavia no se genero"); el patrón de energía más corto
+  (`Formato_Solicitud_*Hidro_<Mes><AAAA>.xlsx`), cabe en la columna.
+- `tests/test_ventana_cra.py` (2): columnas y botones como el BESS, y
+  "Actualizar" de una hoja corre, escribe encabezado/cierre y guarda el
+  registro en `CRA/Log/`.
+- Acá se pudo correr por primera vez la ventana: tkinter del sistema
+  (`apt-get install python3-tk`, Python 3.12) en un venv con
+  `requirements.txt`, y `xvfb-run -a <venv>/bin/python -m unittest
+  discover`: 520 pruebas, 0 salteadas. Con las capturas se comparó el CRA
+  contra el BESS.
 

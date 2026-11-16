@@ -6715,3 +6715,19 @@ cambia nada. 513 pruebas en verde.
 - `Herramientas/Reorganizar_Carpetas.py`: pasa un mes de antes a `BESS/` /
   `CRA/` (detalle en `BITACORA_CRA.md` 2026-11-16 (4)). 518 pruebas.
 
+## 2026-11-16 (11) — Aspecto de la ventana en `Script/ventana_estilo.py`; pruebas de ventana con `BESS/`
+
+- Para que la ventana del CRA tenga el mismo formato (pedido del usuario),
+  los colores, símbolos, anchos del diagrama, rueda, colores del registro,
+  `nivel_del_mensaje`, `formatear_reloj`, `formato_tiempo`,
+  `carpeta_a_abrir`, `abrir_en_explorador` y `abrir_archivo` pasaron tal
+  cual a `Script/ventana_estilo.py` (solo stdlib: el arranque sigue
+  liviano). `Balance_BESS.py` los importa con los mismos nombres; no cambia
+  nada de lo que se ve.
+- Por primera vez corrieron acá las pruebas de ventana (xvfb + tkinter del
+  sistema en un venv). Tres fallaban desde (8), por la carpeta `BESS/`: el
+  registro se busca en `resolver_rutas(caso)["registro"]` y los títulos del
+  diálogo "Ejecutar todo" son `BESS/Medidas/`, `BESS/Subastas/`. Se
+  ajustaron las pruebas (el comportamiento es el pedido). 520 pruebas, 0
+  salteadas con pantalla.
+
