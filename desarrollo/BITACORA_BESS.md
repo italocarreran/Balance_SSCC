@@ -6643,3 +6643,16 @@ completa OK.
 **Verificación:** prueba nueva con 6.886 puntos de a 10 (llegan todos);
 suite completa OK.
 
+## 2026-11-16 (7) — El control de signo también al armar Medidores
+
+- Pedido: que la alerta salga "cuando se arma la hoja" Medidores, no recién
+  al pagar. `generar_entradas` (botón Actualizar de Medidores) llama a
+  `verificar_soc_vs_energia` apenas `construir_medidores` junta energía y
+  SoC; SOC-019/020/021 van al Log de Control_corrida como `[AVISO]`.
+- Se mantiene en el pago (`verificar_medidores`) para que la corrida quede
+  NO APROBADA si el signo sigue mal. CMG-007 queda solo en el pago (necesita
+  la hoja CMg).
+
+**Verificación:** 2 pruebas nuevas en `test_verificaciones.py`; suite
+completa OK. Sin caso real para correr el botón de punta a punta.
+
