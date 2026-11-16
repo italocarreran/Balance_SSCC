@@ -91,6 +91,13 @@ def _registros(datos):
     return []
 
 
+def _ids(registros):
+    """(id, registro) de cada registro que trae un id de punto reconocible."""
+
+    for punto in a_puntos(registros):
+        yield punto["id"], punto
+
+
 def a_puntos(registros):
     """[{'id':..., 'detalle':...}] sin repetidos, de cualquier forma de respuesta."""
 
@@ -119,18 +126,23 @@ def bajar_puntos(token, avisar=print):
     Todos los puntos de /measurement-point/all, pagina por pagina
     (page empieza en 0). Devuelve (puntos, url).
 
-    No se confia solo en 'totalPages': se sigue pidiendo mientras
-    lleguen menos registros que 'totalElements' (por si la API recorta
-    el pageSize) y, al final, se avisa si igual faltan.
+    No se confia en 'totalPages' ni en 'totalElements' para parar: se
+    sigue pidiendo la pagina siguiente hasta que la API conteste vacio,
+    repita la pagina anterior o de error. Un error en la PRIMERA pagina
+    es un error de verdad (token, red); despues, es el fin de la lista y
+    se queda con lo bajado. Al final se compara con 'totalElements'.
     """
 
     import requests
 
     registros, pagina, total, anterior = [], 0, None, None
     total_elementos = None
+    vistos = set()
+    fin = "tope de paginas"
     while pagina < MAXIMO_PAGINAS:
         avisar(f"Bajando la pagina {pagina + 1}"
-               + (f" de {total}" if total else "") + "...")
+               + (f" (la API dice {total})" if total else "") + "...")
+        problema = None
         try:
             r = requests.get(
                 URL_PUNTOS, timeout=TIMEOUT,
@@ -138,22 +150,36 @@ def bajar_puntos(token, avisar=print):
                         "user_key": token},
                 headers={"accept": "application/json"},
             )
+            if r.status_code != 200:
+                problema = f"HTTP {r.status_code} {r.text[:300]}"
+            else:
+                try:
+                    datos = r.json()
+                except ValueError:
+                    problema = "la respuesta no es JSON"
         except requests.RequestException as error:
-            raise RuntimeError(f"{URL_PUNTOS}: {error}") from error
-        if r.status_code != 200:
-            raise RuntimeError(
-                f"{URL_PUNTOS} (pagina {pagina}): HTTP {r.status_code} "
-                f"{r.text[:300]}"
-            )
-        try:
-            datos = r.json()
-        except ValueError as error:
-            raise RuntimeError(f"{URL_PUNTOS}: la respuesta no es JSON") from error
-        contenido = _registros(datos)
-        # Sin contenido, o la misma pagina otra vez (la API ignoro 'page'):
-        # no hay mas.
-        if not contenido or contenido == anterior:
+            problema = str(error)
+
+        if problema is not None:
+            if pagina == 0:
+                raise RuntimeError(f"{URL_PUNTOS} (pagina 0): {problema}")
+            fin = f"la pagina {pagina + 1} dio error ({problema[:80]})"
             break
+
+        contenido = _registros(datos)
+        if not contenido:
+            fin = f"la pagina {pagina + 1} vino vacia"
+            break
+        if contenido == anterior:
+            fin = f"la pagina {pagina + 1} repitio la anterior"
+            break
+        nuevos = {str(i) for i, _ in _ids(contenido)} - vistos
+        if not nuevos:
+            # La API ignora 'page' pasado el final y devuelve algo ya
+            # bajado (otra pagina, no la anterior): no hay mas.
+            fin = f"la pagina {pagina + 1} solo traia puntos ya bajados"
+            break
+        vistos |= nuevos
         registros += contenido
         anterior = contenido
         if isinstance(datos, dict):
@@ -161,23 +187,20 @@ def bajar_puntos(token, avisar=print):
                 total = int(datos["totalPages"])
             if datos.get("totalElements") is not None:
                 total_elementos = int(datos["totalElements"])
-        if total_elementos is not None:
-            if len(registros) >= total_elementos:
-                break
-        elif total is not None and pagina + 1 >= total:
-            break
         pagina += 1
+
     puntos = a_puntos(registros)
     if not puntos:
         raise RuntimeError(f"{URL_PUNTOS} respondio sin puntos de medida.")
+    resumen = (f"{len(puntos):,} puntos en {pagina} pagina(s); se paro "
+               f"porque {fin}")
     if total_elementos is not None and len(registros) < total_elementos:
         avisar(f"OJO: la API informa {total_elementos:,} puntos y llegaron "
-               f"{len(registros):,}: la lista quedo incompleta. Usa "
-               f"'Comprobar en la API' para un punto que no aparezca.")
+               f"{len(registros):,} ({resumen}): la lista quedo incompleta. "
+               f"Usa 'Comprobar en la API' para un punto que no aparezca.")
     else:
-        avisar(f"{len(puntos):,} puntos"
-               + (f" (la API informa {total_elementos:,})."
-                  if total_elementos is not None else "."))
+        avisar(resumen + (f"; la API informa {total_elementos:,}."
+                          if total_elementos is not None else "."))
     return puntos, URL_PUNTOS
 
 

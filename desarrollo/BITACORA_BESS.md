@@ -12,10 +12,10 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
-- **Buscar_Puntos_PRMTE (2026-11-16 (3)):** en Windows, "Actualizar lista"
-  y ver si avisa que faltan puntos; "Comprobar en la API" con el punto que
-  no salía. Si la API dice que llegaron todos, el endpoint `/all` no lista
-  ese punto (preguntar al Coordinador).
+- **Buscar_Puntos_PRMTE (2026-11-16 (3) y (5)):** la API informa 6.886
+  puntos y llegan 5.000. Ver con la versión nueva por qué para (el aviso lo
+  dice) y si el endpoint acepta filtros u orden para pedir en tandas.
+  Mientras, "Comprobar en la API" agrega a mano los que falten.
 
 - **Verificadores de signo (2026-11-16 (1) y (2)):** en la corrida real
   de 2610 salieron SOC-019 ARICA2, ALFALFAL-VR2 y ELENA (97 % al revés):
@@ -6609,4 +6609,22 @@ cantidad: eso dirá si es el endpoint o la paginación.
 
 **Verificación:** prueba nueva `test_control_matriz_colores.py` (matriz y
 después Log: mismos colores y panel); suite completa OK.
+
+## 2026-11-16 (5) — Buscar_Puntos_PRMTE: seguir pidiendo hasta que la API diga que no hay más
+
+- Pedido: que no se fíe del número de páginas y siga bajando "hasta que dé
+  error y se detenga". `bajar_puntos` ya no usa `totalPages` ni
+  `totalElements` para parar: pide la página siguiente hasta que venga
+  vacía, repita la anterior, traiga solo puntos ya bajados o dé error. Un
+  error en la primera página sigue siendo error (token, red); en las
+  siguientes, se queda con lo bajado. El aviso final dice por qué paró.
+- Dato real del usuario (con la versión anterior): "la API informa 6,886
+  puntos y llegaron 5,000". 5 páginas de 1.000 y la sexta no trajo nada
+  nuevo: parece un tope de la API (ventana de 5.000 resultados), no del
+  programa. Pendiente: ver con la versión nueva por qué para, y buscar en
+  el portal de la API si `/measurement-point/all` acepta filtros (región,
+  coordinado, subestación) u orden, para pedir en tandas de menos de 5.000.
+
+**Verificación:** 3 pruebas nuevas en `test_buscar_puntos_prmte.py`; suite
+completa OK.
 
