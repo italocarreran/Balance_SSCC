@@ -12,10 +12,9 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
-- **Buscar_Puntos_PRMTE (2026-11-16 (3) y (5)):** la API informa 6.886
-  puntos y llegan 5.000. Ver con la versión nueva por qué para (el aviso lo
-  dice) y si el endpoint acepta filtros u orden para pedir en tandas.
-  Mientras, "Comprobar en la API" agrega a mano los que falten.
+- **Buscar_Puntos_PRMTE (2026-11-16 (6)):** confirmar en Windows que ahora
+  llegan los 6.886 puntos y si con `size` la API entrega más de 10 por
+  página (si sigue de a 10, la descarga hace ~690 pedidos).
 
 - **Verificadores de signo (2026-11-16 (1) y (2)):** en la corrida real
   de 2610 salieron SOC-019 ARICA2, ALFALFAL-VR2 y ELENA (97 % al revés):
@@ -6627,4 +6626,20 @@ después Log: mismos colores y panel); suite completa OK.
 
 **Verificación:** 3 pruebas nuevas en `test_buscar_puntos_prmte.py`; suite
 completa OK.
+
+## 2026-11-16 (6) — Buscar_Puntos_PRMTE: la API entrega de a 10 por página
+
+- Con la versión (5) el aviso dijo "5,000 puntos en 500 página(s); se paró
+  porque tope de páginas". No era un tope de la API: la API ignora
+  `pageSize=1000` y entrega **10 por página**, y el programa cortaba en su
+  propio `MAXIMO_PAGINAS = 500` (6.886 puntos son 689 páginas). La
+  hipótesis de la entrada (5) de una ventana de 5.000 de la API queda
+  descartada.
+- Arreglo: el tope crece solo con `totalElements` / puntos por página + 5
+  (máximo absoluto `TOPE_ABSOLUTO_PAGINAS = 5000`), y se manda también
+  `size` (el nombre de Spring) además de `pageSize`, por si así la API
+  entrega páginas grandes. El aviso de avance muestra los puntos bajados.
+
+**Verificación:** prueba nueva con 6.886 puntos de a 10 (llegan todos);
+suite completa OK.
 

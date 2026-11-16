@@ -159,6 +159,25 @@ class TestListaIncompletaYComprobar(unittest.TestCase):
         self.assertEqual([p["id"] for p in puntos], ["A", "B", "C"])
         self.assertEqual(pedidas, [0, 1, 2])
 
+    def test_de_a_10_por_pagina_pasa_el_tope_de_500(self):
+        """Lo real: 6.886 puntos de a 10 (la API ignora el pageSize)."""
+
+        total = 6886
+
+        def get(url, params=None, **_):
+            n = params["page"]
+            contenido = [{"measurePointId": f"P{i:05d}"}
+                         for i in range(n * 10, min(n * 10 + 10, total))]
+            return R({"totalElements": total, "totalPages": 689,
+                      "content": contenido})
+
+        avisos = []
+        with mock.patch("requests.get", side_effect=get):
+            puntos, _ = bp.bajar_puntos("t", avisar=avisos.append)
+        self.assertEqual(len(puntos), total)
+        self.assertNotIn("OJO", avisos[-1])
+        self.assertIn("vino vacia", avisos[-1])
+
     def test_error_en_la_primera_pagina_si_es_error(self):
         with mock.patch("requests.get", return_value=R(None, 500, "caida")):
             with self.assertRaisesRegex(RuntimeError, "pagina 0"):

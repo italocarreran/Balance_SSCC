@@ -41,7 +41,11 @@ AQUI = Path(__file__).resolve().parent
 # La lista de puntos de medida, por paginas (portal de la API).
 URL_PUNTOS = "https://medidas.api.coordinador.cl/medidas-v2/measurement-point/all"
 TAMANO_PAGINA = 1000
-MAXIMO_PAGINAS = 500   # tope de seguridad
+# Tope de seguridad. La API real entrega de a 10 por pagina aunque se
+# le pidan 1000 (2026-11-16: 6.886 puntos = 689 paginas): el tope se
+# agranda solo segun 'totalElements' y lo que trae cada pagina.
+MAXIMO_PAGINAS = 500
+TOPE_ABSOLUTO_PAGINAS = 5000
 # Los datos de cada punto que se muestran, en este orden.
 CAMPOS = (("subStation", "Subestación"), ("tension", "Tensión"),
           ("region", "Región"), ("coordinatorId", "Coordinado"))
@@ -139,15 +143,19 @@ def bajar_puntos(token, avisar=print):
     total_elementos = None
     vistos = set()
     fin = "tope de paginas"
-    while pagina < MAXIMO_PAGINAS:
+    tope = MAXIMO_PAGINAS
+    while pagina < tope:
         avisar(f"Bajando la pagina {pagina + 1}"
-               + (f" (la API dice {total})" if total else "") + "...")
+               + (f" de ~{tope - 5}" if total_elementos else "")
+               + f" ({len(registros):,} puntos)...")
         problema = None
         try:
             r = requests.get(
                 URL_PUNTOS, timeout=TIMEOUT,
+                # 'size' es el nombre que usan las API Spring; si esta
+                # no lo conoce, lo ignora.
                 params={"page": pagina, "pageSize": TAMANO_PAGINA,
-                        "user_key": token},
+                        "size": TAMANO_PAGINA, "user_key": token},
                 headers={"accept": "application/json"},
             )
             if r.status_code != 200:
@@ -187,6 +195,10 @@ def bajar_puntos(token, avisar=print):
                 total = int(datos["totalPages"])
             if datos.get("totalElements") is not None:
                 total_elementos = int(datos["totalElements"])
+        # Las paginas que de verdad hacen falta, con lo que trae cada una.
+        if total_elementos:
+            necesarias = -(-total_elementos // len(contenido)) + 5
+            tope = min(max(tope, necesarias), TOPE_ABSOLUTO_PAGINAS)
         pagina += 1
 
     puntos = a_puntos(registros)
