@@ -10,6 +10,7 @@ from .externos import (
     Claves_Balance, Descarga_PRMTE, ErrorMedidas, Generacion_Real,
     Homologacion,
 )
+from .alertas import ALTA, Alerta, anotar
 from .formato import formatear_hoja
 from .parametros import (
     ARCHIVO_MEDIDAS_SAE, ARCHIVO_PUNTOS_FALLIDOS, COLUMNAS_AI,
@@ -188,6 +189,16 @@ def generar_medidas_sae(
     try:
         registrar(f"Leyendo {archivo_homol.name}...")
         df_homol = Homologacion.leer_homologacion(archivo_homol)
+        for problema in Homologacion.revisar_homologacion(df_homol):
+            anotar(registrar, Alerta(
+                problema["id"], ALTA, "Medidas_SAE",
+                f"{problema['mensaje']}.",
+                central=problema["clave"], clave=problema["punto"],
+                accion=f"corregir la hoja '{Homologacion.HOJA_HOMOL}' y "
+                       f"volver a traer Medidas_SAE",
+                archivo=archivo_homol.name, hoja=Homologacion.HOJA_HOMOL,
+                origen_control="CONTROL NUEVO",
+            ))
         puntos = Homologacion.puntos_de_medida(df_homol)
         registrar(
             f"  puntos de medida a consultar: {len(puntos):,} "

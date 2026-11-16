@@ -884,6 +884,10 @@ Revisión del catálogo contra el código, hecha el 2026-09-14.
 | `PAG-001` | Una hoja del libro de pagos quedó vacía porque no se pidió recalcularla y no había versión anterior. |
 | `SOC-019` | Por central, bloques donde la energía tomada como descarga (`Gen_Unidad > 0`) coincide con subidas del SoC, o la tomada como carga con bajadas. ≥ 50 % de los bloques evaluables → ALTA; 25–50 % → MEDIA (mín. 20 bloques; se prueba SoC de inicio y de fin de bloque y se queda con la lectura más favorable). Típico de una CRCA con PFV y BESS medidos juntos. `nucleo/verificaciones.py`. |
 | `CMG-007` | Central con barra asignada en `Centrales` que no está en la hoja `CMg` (o está y ningún cuarto cruza): todos sus bloques sin CMg, C1/C2 nulos y compensación 0. Una por central, ALTA. `nucleo/verificaciones.py`. |
+| `SOC-020` | Central cuyo signo de carga/descarga no se pudo verificar (sin SoC, o menos de 20 bloques útiles, y sin PFV para la prueba del mediodía). MEDIA: que no salga `SOC-019` no quiere decir que el signo esté bien. `nucleo/verificaciones.py`. |
+| `SOC-021` | Sin SoC, central con PFV en el nombre: de los bloques de 11:00 a 15:59 (hora local) con energía, ≤ 50 % inyectando → ALTA, ≤ 75 % → MEDIA. Con el PFV generando el neto debería ser inyección. `nucleo/verificaciones.py`. |
+| `HOM-001` | En la hoja `homol` el mismo Punto de Medida + Canal aparece más de una vez: el cruce suma la medida una vez por fila (energía duplicada). ALTA, al traer `Medidas_SAE`. `Medidas/Homologacion.revisar_homologacion`. |
+| `HOM-002` | Un Punto de Medida con sus dos canales (kWhD y kWhR) con el mismo signo de Flujo: entrega y recepción se suman. ALTA. No se exige una regla canal→signo: kWhD/kWhR dependen de la orientación del medidor. |
 
 ## Pendiente
 

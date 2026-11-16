@@ -103,7 +103,8 @@ from .conciliacion import (
     TOLERANCIA_ABSOLUTA, TOLERANCIA_RELATIVA, conciliar_energia,
 )
 from .verificaciones import (
-    diagnosticar_soc_central, verificar_barras_con_cmg, verificar_medidores,
+    diagnosticar_soc_central, evaluar_mediodia_pfv, evaluar_soc_central,
+    signo_por_central, verificar_barras_con_cmg, verificar_medidores,
     verificar_soc_vs_energia,
 )
 from .manifiesto import (
@@ -280,7 +281,8 @@ __all__ = [
     "CRITICA", "FALLIDA", "INFO", "MEDIA", "NO_APROBADA", "SEVERIDADES",
     "Alerta", "Registro", "anotar", "anotar_muchas",
     "TOLERANCIA_ABSOLUTA", "TOLERANCIA_RELATIVA", "conciliar_energia",
-    "diagnosticar_soc_central", "verificar_barras_con_cmg",
+    "diagnosticar_soc_central", "evaluar_mediodia_pfv",
+    "evaluar_soc_central", "signo_por_central", "verificar_barras_con_cmg",
     "verificar_medidores", "verificar_soc_vs_energia",
     "COLUMNAS_MANIFIESTO", "construir_manifiesto", "sha256_de",
     "externos", "Claves_Balance", "Descarga_PRMTE", "ErrorMedidas",

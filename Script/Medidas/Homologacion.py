@@ -289,3 +289,68 @@ def puntos_de_medida(df_homol):
     """Los puntos de medida distintos a consultar en la API."""
 
     return list(pd.unique(df_homol[COLUMNA_PUNTO].dropna()))
+
+
+def revisar_homologacion(df_homol):
+    """
+    Problemas de la hoja 'homol' que el cruce no detecta solo. Devuelve
+    una lista de dicts (id, clave, punto, mensaje), vacia si esta bien:
+
+      HOM-001  el mismo Punto de Medida + Canal aparece mas de una vez.
+               El cruce con la descarga es 'inner', asi que la medida
+               se suma una vez por fila: la energia sale duplicada (o
+               repartida entre dos claves).
+      HOM-002  un mismo Punto de Medida con sus dos canales (kWhD y
+               kWhR) con el MISMO signo de Flujo: entrega y recepcion
+               se suman en vez de restarse.
+
+    No hay una regla fija canal -> signo (kWhD/kWhR son desde el punto
+    de vista del medidor, que depende de como se instalo), asi que eso
+    no se revisa aqui: lo revisa el SoC (SOC-019) al pagar.
+    """
+
+    problemas = []
+    if df_homol is None or df_homol.empty:
+        return problemas
+
+    df = df_homol.assign(
+        _punto=df_homol[COLUMNA_PUNTO].astype(str).str.strip(),
+        _canal=df_homol[COLUMNA_CANAL].astype(str).str.strip(),
+        _flujo=pd.to_numeric(df_homol[COLUMNA_FLUJO], errors="coerce"),
+    )
+
+    for (punto, canal), filas in df.groupby(["_punto", "_canal"], sort=True):
+        if len(filas) < 2:
+            continue
+        claves = sorted(set(filas[COLUMNA_CLAVE].astype(str)))
+        problemas.append(dict(
+            id="HOM-001",
+            clave=", ".join(claves),
+            punto=f"{punto} / {canal}",
+            mensaje=(
+                f"'{punto}' canal {canal} aparece {len(filas)} veces en "
+                f"'{HOJA_HOMOL}' (clave(s): {', '.join(claves)}): su medida "
+                f"se suma {len(filas)} veces"
+            ),
+        ))
+
+    for punto, filas in df.groupby("_punto", sort=True):
+        filas = filas.drop_duplicates(subset=["_canal", "_flujo"])
+        if filas["_canal"].nunique() < 2:
+            continue
+        signos = set(filas["_flujo"].dropna().map(lambda v: v > 0))
+        if len(signos) == 1:
+            claves = sorted(set(filas[COLUMNA_CLAVE].astype(str)))
+            problemas.append(dict(
+                id="HOM-002",
+                clave=", ".join(claves),
+                punto=punto,
+                mensaje=(
+                    f"'{punto}' tiene sus canales "
+                    f"({', '.join(sorted(filas['_canal']))}) con el mismo "
+                    f"signo de Flujo: entrega y recepcion se suman en vez "
+                    f"de restarse"
+                ),
+            ))
+
+    return problemas

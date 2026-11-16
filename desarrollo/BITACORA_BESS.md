@@ -12,10 +12,14 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
-- **Verificadores SOC-019 / CMG-007 (2026-11-16 (1)):** correr el pago de
-  2610 real y confirmar que SAE-CRCA-PFV-ELENA sale con las dos alertas y
-  que ninguna BESS sana dispara SOC-019 (si no, ajustar los umbrales de
-  `nucleo/verificaciones.py`).
+- **Verificadores de signo (2026-11-16 (1) y (2)):** en la corrida real
+  de 2610 salieron SOC-019 ARICA2, ALFALFAL-VR2 y ELENA (97 % al revés):
+  el usuario corrige el Flujo en `homol`. Falta: volver a correr y mirar la
+  columna "SoC vs medida" de Control_corrida.xlsx para ARENA, ESTEPA,
+  GABRIELA, DEL-DESIERTO y LILE (misma convención kWhD −1 / kWhR +1 que las
+  tres alertadas); borrar las 4 filas repetidas de LILE en `homol`
+  (HOM-001: su energía sale al doble); y confirmar los umbrales de SOC-021
+  con un PFV real.
 
 - **SoC desde PI (2026-11-11 (49)):** probar el botón **Traer** de la fila
   del SoC en el PC con AF (Windows, `pip install pythonnet`): que las rutas
@@ -6532,4 +6536,36 @@ tkinter). 8 nuevas en `desarrollo/tests/test_verificaciones.py`. No hay
 caso real de 2610 acá: falta correrlo con la planilla real y ver que
 ELENA salga con las dos alertas y las demás BESS no (si alguna sana
 saliera con SOC-019, ajustar los umbrales al inicio del módulo).
+
+## 2026-11-16 (2) — SOC-020/021, control de la homologación y "SoC vs medida"
+
+- Contexto: la corrida real de 2610 dio SOC-019 para ARICA2, ALFALFAL-VR2
+  y ELENA. El usuario sospecha más centrales con el signo cambiado y pidió
+  ver si hay un patrón canal↔signo. Revisado su
+  `Homologacion_ClavesTF_y_PRMTE.xlsx`: **no hay regla fija** (kWhD/kWhR
+  son desde el medidor). Hay dos convenciones: kWhD +1 / kWhR −1
+  (LA-CABANA, DON-HUMBERTO, MANZANO, NUEVO-QUILLAGUA(-2), VICTOR-JARA,
+  TOCOPILLA) y kWhD −1 / kWhR +1 (ARENA, ARICA2, ALFALFAL-VR2, ELENA,
+  ESTEPA, GABRIELA, DEL-DESIERTO, LILE). Las tres alertadas son del
+  segundo grupo. LILE tiene sus 4 filas repetidas.
+- Pedido: "2 y 3" (avisar lo que no se pudo verificar + prueba de
+  mediodía para PFV; alerta de filas repetidas en la homologación) y en
+  Control_corrida, matriz de centrales, "una columna de soc vs medida" con
+  el % de coincidencia.
+- `nucleo/verificaciones.py`: `evaluar_soc_central` (siempre devuelve
+  motivo), `evaluar_mediodia_pfv`, `signo_por_central` (base común).
+  Alertas nuevas `SOC-020` (MEDIA, no se pudo verificar) y `SOC-021` (sin
+  SoC, PFV que al mediodía sale como retiro).
+- `Medidas/Homologacion.revisar_homologacion` → `HOM-001` (punto+canal
+  repetido) y `HOM-002` (dos canales del punto con el mismo signo), ALTA,
+  al traer Medidas_SAE (`nucleo/medidas_sae.py`). Solo avisa: no borra
+  filas.
+- Matriz de centrales: columna nueva `SoC vs medida` después de `SoC`:
+  "97 % coincide (n de m bloques)" o "Sin SoC; mediodía PFV: x % inyecta".
+  Verde ≥ 75 %, amarillo 50–75 % o no verificable, rojo < 50 % ("signo
+  invertido?").
+
+**Verificación:** `py_compile` OK; 494 pruebas OK (36 salteadas: sin
+tkinter). `revisar_homologacion` sobre el archivo real del usuario da las 4
+HOM-001 de LILE y nada más.
 
