@@ -37,6 +37,7 @@ from .lectura import (
 from .lector import abrir_excel, leer_excel
 from .matriz_centrales import construir_matriz_centrales
 from .unidades import sin_unidades
+from .verificaciones import verificar_medidores
 from .medidores import (
     completar_ofertas_en_medidores, construir_medidores,
     construir_ofertas_sscc, reponer_auxiliares_medidores,
@@ -1020,6 +1021,19 @@ def generar_pagos_bess(
             dic_capacidad = construir_dic_resumen_capacidad(resumen)
 
         dic_cmg = construir_dic_cmg(df_cmg)
+
+        # SOC-019 / CMG-007: carga y descarga contra el SoC, y barras
+        # sin CMg, por central. Solo avisan: no cambian ningun numero.
+        try:
+            verificar_medidores(
+                df_medidores, mapa_barra, dic_cmg, registrar=registrar,
+                hoja_centrales=(
+                    "Centrales" if origen_centrales == "hoja"
+                    else f"{HOJA_RESUMEN_BESS}' de '{ARCHIVO_CENTRALES}"
+                ),
+            )
+        except Exception as error:  # noqa: BLE001 - es solo un control
+            registrar(f"  [AVISO] no se pudo verificar Medidores: {error}")
 
         # Control: cada central y si se encontro en cada origen (va a
         # Control_corrida.xlsx). Con lo ya leido: no abre nada.

@@ -14,6 +14,7 @@ ahora en el modulo de su etapa:
     alertas.py               El registro de alertas y el estado de la corrida.
     avisos.py                Diagnostico comun de los cruces que terminan en cero.
     conciliacion.py          Medidores = E Costos + RE545 (control TRA).
+    verificaciones.py        Medidores coherente: SoC vs carga/descarga, barras sin CMg.
     manifiesto.py            Que archivo exacto alimento esta corrida.
     rutas.py                 Rutas del caso y busqueda de los archivos de entrada.
     estructura.py            El arbol de carpetas y archivos que dibuja la ventana.
@@ -100,6 +101,10 @@ from .alertas import (
 from .avisos import _avisar_claves_sin_mapeo
 from .conciliacion import (
     TOLERANCIA_ABSOLUTA, TOLERANCIA_RELATIVA, conciliar_energia,
+)
+from .verificaciones import (
+    diagnosticar_soc_central, verificar_barras_con_cmg, verificar_medidores,
+    verificar_soc_vs_energia,
 )
 from .manifiesto import (
     COLUMNAS_MANIFIESTO, construir_manifiesto, sha256_de,
@@ -275,6 +280,8 @@ __all__ = [
     "CRITICA", "FALLIDA", "INFO", "MEDIA", "NO_APROBADA", "SEVERIDADES",
     "Alerta", "Registro", "anotar", "anotar_muchas",
     "TOLERANCIA_ABSOLUTA", "TOLERANCIA_RELATIVA", "conciliar_energia",
+    "diagnosticar_soc_central", "verificar_barras_con_cmg",
+    "verificar_medidores", "verificar_soc_vs_energia",
     "COLUMNAS_MANIFIESTO", "construir_manifiesto", "sha256_de",
     "externos", "Claves_Balance", "Descarga_PRMTE", "ErrorMedidas",
     "Generacion_Real", "Homologacion", "desempeno_fd", "extrae_cmg",

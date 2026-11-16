@@ -25,6 +25,7 @@ Script/
         alertas.py             <- el registro de alertas y el estado
         avisos.py              <- los avisos de cruces que darian cero
         conciliacion.py        <- Medidores = E Costos + RE545 (TRA)
+        verificaciones.py      <- Medidores coherente: SoC vs carga/descarga (SOC-019), barra sin CMg (CMG-007)
         manifiesto.py          <- que archivo exacto alimento la corrida
         rutas.py               <- rutas del caso y busqueda de entradas
         estructura.py          <- el arbol que dibuja la ventana

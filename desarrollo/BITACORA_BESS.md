@@ -12,6 +12,11 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **Verificadores SOC-019 / CMG-007 (2026-11-16 (1)):** correr el pago de
+  2610 real y confirmar que SAE-CRCA-PFV-ELENA sale con las dos alertas y
+  que ninguna BESS sana dispara SOC-019 (si no, ajustar los umbrales de
+  `nucleo/verificaciones.py`).
+
 - **SoC desde PI (2026-11-11 (49)):** probar el botón **Traer** de la fila
   del SoC en el PC con AF (Windows, `pip install pythonnet`): que las rutas
   AF1 pasadas a AF2 existan tal cual, qué ruta encuentra la búsqueda para
@@ -6498,3 +6503,33 @@ Centrales.xlsx real: elegir SAE-LILE → posible ruta → Guardar → queda ✓.
   queda con `bold=False` (también al reescribir una que ya estaba en
   negrita). Prueba nueva `test_la_ruta_queda_sin_negrita`; verificado sobre
   una copia del Centrales.xlsx real.
+
+## 2026-11-16 (1) — Verificadores SOC-019 y CMG-007 (observación 2610, ELENA)
+
+- Pedido: agregar al balance BESS un verificador (alerta) para la
+  observación a `11_PAGOS_BESS_2610` sobre SAE-CRCA-PFV-ELENA: (1) en la
+  hoja Medidores la descarga coincide con subidas del SoC y la carga con
+  bajadas (CRCA con PFV y BESS medidos juntos); (2) la hoja Centrales le
+  asigna KIMAL_________220 y la hoja CMg no trae esa barra, así que C1/C2
+  dan 0 y la compensación queda en 0 sin aviso por central.
+- `Script/nucleo/verificaciones.py` (nuevo), llamado desde
+  `generar_pagos_bess` apenas se arma `dic_cmg` (una vez, sirve a E Costos
+  y RE545). Solo avisa, no cambia ningún número:
+  - `SOC-019`: por central, signo de `Gen_Unidad` contra el cambio de
+    SoC (se prueban SoC siguiente−actual y actual−anterior, gana la más
+    favorable; energía < 1 % de la máxima de la central no cuenta; mínimo
+    20 bloques). ≥ 50 % contrarios → ALTA, 25–50 % → MEDIA. Si la central
+    es CRCA el mensaje lo dice.
+  - `CMG-007`: central con barra asignada y sin ningún bloque con CMg
+    (barra ausente de la hoja CMg, o presente sin cruce de cuartos), ALTA,
+    con la barra en `clave`. Sin barra lo sigue avisando `MAE-001`; CMg
+    parcial lo sigue contando `CMG-004`.
+- Catálogo (`docs/Alertas_y_Controles…`, "Controles nuevos") y `MAPA.md`
+  actualizados.
+
+**Verificación:** `py_compile` OK; 486 pruebas OK (36 salteadas: sin
+tkinter). 8 nuevas en `desarrollo/tests/test_verificaciones.py`. No hay
+caso real de 2610 acá: falta correrlo con la planilla real y ver que
+ELENA salga con las dos alertas y las demás BESS no (si alguna sana
+saliera con SOC-019, ajustar los umbrales al inicio del módulo).
+
