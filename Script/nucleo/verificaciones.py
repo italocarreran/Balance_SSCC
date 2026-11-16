@@ -22,6 +22,17 @@ SAE-CRCA-PFV-ELENA, que tenia dos problemas que el calculo no avisaba:
 
 Las dos son ALTA: la corrida queda NO APROBADA - REQUIERE REVISION,
 pero el calculo sigue (no se cambia ningun numero).
+
+Despues (2026-11-16 (2)), al ver que habia centrales con el signo
+cambiado que no salian en el reporte:
+
+3. SOC-020 (MEDIA) -- la central no se pudo verificar (sin SoC, pocos
+   bloques): antes se la saltaba en silencio.
+4. SOC-021 -- sin SoC, una central con PFV se revisa por el mediodia:
+   con el PFV generando el neto tiene que salir como inyeccion.
+
+`signo_por_central` es la base de las alertas y de la columna "SoC vs
+medida" de la matriz de centrales (Control_corrida.xlsx).
 """
 
 import pandas as pd
@@ -90,7 +101,7 @@ def _contar_signos(energia, delta_soc):
     return coherentes, contrarios
 
 
-def diagnosticar_soc_central(sub):
+def evaluar_soc_central(sub):
     """
     Cuenta, para una central, los bloques donde el signo de Gen_Unidad
     contradice el cambio de SoC.
@@ -100,92 +111,262 @@ def diagnosticar_soc_central(sub):
     actual y actual - anterior) y se queda con la MAS favorable. Asi la
     alerta solo sale cuando ninguna de las dos explica la medida.
 
-    Devuelve dict con evaluados, contrarios, fraccion (o None si no hay
-    bloques suficientes para opinar).
+    Devuelve SIEMPRE un dict: evaluados, coherentes, contrarios,
+    fraccion (contrarios / evaluados, o None si no se pudo opinar) y
+    motivo (por que no se pudo, o "").
     """
+
+    vacio = dict(evaluados=0, coherentes=0, contrarios=0, fraccion=None)
 
     sub = _orden_temporal(sub)
 
     energia = pd.to_numeric(sub["Gen_Unidad"], errors="coerce")
     soc = pd.to_numeric(sub["SoC"], errors="coerce")
 
+    if soc.notna().sum() == 0:
+        return dict(vacio, motivo="sin SoC")
+
     maximo = energia.abs().max()
     if pd.isna(maximo) or maximo == 0:
-        return None
+        return dict(vacio, motivo="sin energia medida")
 
     energia = energia.where(energia.abs() > maximo * FRACCION_ENERGIA_MINIMA)
 
     mejor = None
+    mas_evaluados = 0
     for delta in (soc.shift(-1) - soc, soc - soc.shift(1)):
         coherentes, contrarios = _contar_signos(energia, delta)
         evaluados = coherentes + contrarios
+        mas_evaluados = max(mas_evaluados, evaluados)
         if evaluados < MINIMO_BLOQUES_SOC:
             continue
         fraccion = contrarios / evaluados
         if mejor is None or fraccion < mejor["fraccion"]:
             mejor = dict(
                 evaluados=evaluados, contrarios=contrarios,
-                coherentes=coherentes, fraccion=fraccion,
+                coherentes=coherentes, fraccion=fraccion, motivo="",
             )
+
+    if mejor is None:
+        return dict(
+            vacio, evaluados=mas_evaluados,
+            motivo=(
+                f"solo {mas_evaluados} bloque(s) con energia y cambio de "
+                f"SoC (minimo {MINIMO_BLOQUES_SOC})"
+            ),
+        )
 
     return mejor
 
 
-def verificar_soc_vs_energia(df_medidores, registrar=print, hoja="Medidores"):
+def diagnosticar_soc_central(sub):
+    """Como evaluar_soc_central, pero None si no se pudo opinar."""
+
+    resultado = evaluar_soc_central(sub)
+    return None if resultado["fraccion"] is None else resultado
+
+
+# ------------------------------------------------------------
+# SOC-021: sin SoC, una central con PFV se revisa por el mediodia
+# ------------------------------------------------------------
+
+# Horas locales (inicio del cuarto) en que el PFV genera de lleno. En
+# una CRCA con el PFV y el BESS medidos juntos el neto del medidor a
+# esa hora es inyeccion: si sale mayoritariamente negativo, el signo
+# esta dado vuelta.
+HORAS_MEDIODIA = range(11, 16)
+
+
+def evaluar_mediodia_pfv(central, sub):
     """
-    SOC-019: por central, que la carga y la descarga de Medidores
-    vayan en el sentido del SoC. Devuelve la lista de alertas.
+    Para una central con PFV ("PFV" en el nombre): de los bloques de
+    11:00 a 15:59 (hora local de 'intervalo') con energia, que fraccion
+    es inyeccion (Gen_Unidad > 0). Devuelve dict con evaluados,
+    fraccion_inyeccion (o None) y motivo.
     """
 
-    alertas = []
+    vacio = dict(evaluados=0, fraccion_inyeccion=None)
+
+    if "PFV" not in str(central).upper():
+        return dict(vacio, motivo="no tiene PFV")
+    if "intervalo" not in sub.columns:
+        return dict(vacio, motivo="sin hora local (intervalo)")
+
+    hora = pd.to_datetime(sub["intervalo"], errors="coerce").dt.hour
+    energia = pd.to_numeric(sub["Gen_Unidad"], errors="coerce")
+
+    maximo = energia.abs().max()
+    if pd.isna(maximo) or maximo == 0:
+        return dict(vacio, motivo="sin energia medida")
+
+    util = hora.isin(HORAS_MEDIODIA) & (
+        energia.abs() > maximo * FRACCION_ENERGIA_MINIMA
+    )
+    evaluados = int(util.sum())
+    if evaluados < MINIMO_BLOQUES_SOC:
+        return dict(
+            vacio, evaluados=evaluados,
+            motivo=f"solo {evaluados} bloque(s) de mediodia con energia",
+        )
+
+    inyeccion = int((energia[util] > 0).sum())
+    return dict(
+        evaluados=evaluados, fraccion_inyeccion=inyeccion / evaluados,
+        motivo="",
+    )
+
+
+# ------------------------------------------------------------
+# Lo que se sabe del signo de cada central (alertas y matriz)
+# ------------------------------------------------------------
+
+SOC = "SoC"
+MEDIODIA = "mediodia PFV"
+
+
+def signo_por_central(df_medidores):
+    """
+    central (como viene en Medidores) -> dict con:
+        metodo        SOC, MEDIODIA o None (no se pudo verificar)
+        coincidencia  fraccion de bloques que calzan (0..1) o None
+        evaluados     bloques usados
+        motivo        por que no se pudo (si metodo es None) o por que
+                      no se uso el SoC (si metodo es MEDIODIA)
+
+    Con SoC manda el SoC; sin el, una central con PFV se revisa por el
+    mediodia. Vacio si a Medidores le faltan columnas.
+    """
 
     columnas = {"clave", "Gen_Unidad", "SoC"}
     if df_medidores is None or not columnas.issubset(df_medidores.columns):
-        return alertas
+        return {}
 
+    resultado = {}
     for central, sub in df_medidores.groupby("clave", sort=True):
 
         if not str(central).strip():
             continue
 
-        resultado = diagnosticar_soc_central(sub)
-        if resultado is None:
+        soc = evaluar_soc_central(sub)
+        if soc["fraccion"] is not None:
+            resultado[central] = dict(
+                metodo=SOC, coincidencia=1 - soc["fraccion"],
+                evaluados=soc["evaluados"], contrarios=soc["contrarios"],
+                motivo="",
+            )
             continue
 
-        fraccion = resultado["fraccion"]
-        if fraccion >= UMBRAL_CONTRARIOS_ALTA:
-            severidad = ALTA
-        elif fraccion >= UMBRAL_CONTRARIOS_MEDIA:
-            severidad = MEDIA
-        else:
+        sol = evaluar_mediodia_pfv(central, sub)
+        if sol["fraccion_inyeccion"] is not None:
+            resultado[central] = dict(
+                metodo=MEDIODIA, coincidencia=sol["fraccion_inyeccion"],
+                evaluados=sol["evaluados"],
+                contrarios=sol["evaluados"] - round(
+                    sol["fraccion_inyeccion"] * sol["evaluados"]
+                ),
+                motivo=soc["motivo"],
+            )
             continue
 
-        es_crca = "CRCA" in str(central).upper()
-        detalle_crca = (
-            " Es una CRCA: mientras las medidas del PFV y del BESS no esten "
-            "separadas, los flujos del PFV se mezclan con los del BESS."
-            if es_crca else ""
+        motivo = soc["motivo"]
+        if "PFV" in str(central).upper():
+            motivo += f"; mediodia PFV: {sol['motivo']}"
+        resultado[central] = dict(
+            metodo=None, coincidencia=None, evaluados=0, contrarios=0,
+            motivo=motivo,
         )
 
-        alertas.append(anotar(registrar, Alerta(
-            "SOC-019", severidad, "Coherencia Medidores",
-            f"En {resultado['contrarios']:,} de {resultado['evaluados']:,} "
-            f"bloques ({fraccion:.0%}) la energia tomada como descarga "
-            f"coincide con subidas del SoC o la tomada como carga con "
-            f"bajadas.{detalle_crca} La energia de carga/descarga y las "
-            f"curvas del costo de oportunidad no representan la operacion "
-            f"real del BESS.",
-            central=str(central),
-            valor_encontrado=f"{fraccion:.1%} de bloques contrarios",
-            valor_esperado=f"< {UMBRAL_CONTRARIOS_MEDIA:.0%}",
-            accion=(
-                "revisar los canales de carga/descarga (y su signo) de la "
-                "central; en una CRCA, separar la medida del PFV de la del "
-                "BESS. La compensacion de esta central no es confiable"
-            ),
-            hoja=hoja,
-            origen_control="CONTROL NUEVO (observacion 11_PAGOS_BESS_2610)",
-        )))
+    return resultado
+
+
+def _severidad(coincidencia):
+    """ALTA si calza menos de la mitad, MEDIA si menos de 3/4."""
+
+    if coincidencia <= 1 - UMBRAL_CONTRARIOS_ALTA:
+        return ALTA
+    if coincidencia <= 1 - UMBRAL_CONTRARIOS_MEDIA:
+        return MEDIA
+    return None
+
+
+def verificar_soc_vs_energia(df_medidores, registrar=print, hoja="Medidores"):
+    """
+    SOC-019 / SOC-020 / SOC-021: por central, que la carga y la descarga
+    de Medidores vayan en el sentido correcto. Devuelve las alertas.
+
+      SOC-019  con SoC: descarga con subidas de SoC o carga con bajadas.
+      SOC-021  sin SoC, central con PFV: al mediodia el neto sale como
+               retiro (el PFV deberia estar inyectando).
+      SOC-020  no se pudo verificar de ninguna forma (MEDIA): que no
+               haya alerta de signo NO quiere decir que este bien.
+    """
+
+    alertas = []
+    origen = "CONTROL NUEVO (observacion 11_PAGOS_BESS_2610)"
+    accion = (
+        "revisar canal y Flujo de los puntos de la central en la hoja "
+        "'homol' del archivo de homologacion; en una CRCA, separar la "
+        "medida del PFV de la del BESS. La compensacion de esta central "
+        "no es confiable"
+    )
+
+    for central, dato in signo_por_central(df_medidores).items():
+
+        if dato["metodo"] is None:
+            alertas.append(anotar(registrar, Alerta(
+                "SOC-020", MEDIA, "Coherencia Medidores",
+                f"No se pudo verificar el signo de carga/descarga "
+                f"({dato['motivo']}). Que no salga SOC-019 no quiere decir "
+                f"que el signo este bien.",
+                central=str(central),
+                valor_encontrado=dato["motivo"],
+                accion="revisar a mano el Flujo de la central en 'homol' o "
+                       "traer su SoC",
+                hoja=hoja, origen_control=origen,
+            )))
+            continue
+
+        coincidencia = dato["coincidencia"]
+        severidad = _severidad(coincidencia)
+        if severidad is None:
+            continue
+
+        contrario = 1 - coincidencia
+
+        if dato["metodo"] == SOC:
+            es_crca = "CRCA" in str(central).upper()
+            detalle_crca = (
+                " Es una CRCA: mientras las medidas del PFV y del BESS no "
+                "esten separadas, los flujos del PFV se mezclan con los "
+                "del BESS."
+                if es_crca else ""
+            )
+            alertas.append(anotar(registrar, Alerta(
+                "SOC-019", severidad, "Coherencia Medidores",
+                f"En {dato['contrarios']:,} de {dato['evaluados']:,} "
+                f"bloques ({contrario:.0%}) la energia tomada como "
+                f"descarga coincide con subidas del SoC o la tomada como "
+                f"carga con bajadas.{detalle_crca} La energia de "
+                f"carga/descarga y las curvas del costo de oportunidad no "
+                f"representan la operacion real del BESS.",
+                central=str(central),
+                valor_encontrado=f"{contrario:.1%} de bloques contrarios",
+                valor_esperado=f"< {UMBRAL_CONTRARIOS_MEDIA:.0%}",
+                accion=accion, hoja=hoja, origen_control=origen,
+            )))
+        else:
+            alertas.append(anotar(registrar, Alerta(
+                "SOC-021", severidad, "Coherencia Medidores",
+                f"Sin SoC para verificar ({dato['motivo']}). Al mediodia "
+                f"(11:00-15:59), con el PFV generando, {dato['contrarios']:,} "
+                f"de {dato['evaluados']:,} bloques ({contrario:.0%}) salen "
+                f"como retiro: el signo de la medida esta probablemente "
+                f"invertido.",
+                central=str(central),
+                valor_encontrado=f"{coincidencia:.1%} de bloques inyectando",
+                valor_esperado=f"> {1 - UMBRAL_CONTRARIOS_MEDIA:.0%}",
+                accion=accion, hoja=hoja, origen_control=origen,
+            )))
 
     return alertas
 
@@ -289,6 +470,6 @@ def verificar_medidores(
     )
 
     if not alertas:
-        registrar("  Sin inconsistencias de SoC ni de barras sin CMg.")
+        registrar("  Sin inconsistencias de signo ni de barras sin CMg.")
 
     return alertas

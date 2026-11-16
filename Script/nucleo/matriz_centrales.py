@@ -39,6 +39,10 @@ from .lectura import (
     filas_diccionario,
 )
 from .utiles import _texto_seguro, normalizar
+from .verificaciones import (
+    MEDIODIA, UMBRAL_CONTRARIOS_ALTA, UMBRAL_CONTRARIOS_MEDIA,
+    signo_por_central,
+)
 
 OK, AVISO, FALTA, PENDIENTE = "ok", "aviso", "falta", "pendiente"
 TEXTO_PENDIENTE = "Aún no se corre"
@@ -49,6 +53,7 @@ COL_RESUMEN = "Centrales (Resumen BESS)"
 COL_DICCIONARIO = "Diccionario"
 COL_MEDIDORES = "Medidores (Medidas_SAE)"
 COL_SOC = "SoC"
+COL_SOC_VS_MEDIDA = "SoC vs medida"
 COL_CMG = "CMg (por barra)"
 COL_OFERTAS = "Ofertas SSCC"
 COL_SUBASTAS = "Subastas"
@@ -56,7 +61,8 @@ COL_FD_CSF = "FD CSF"
 COL_FD_CPF = "FD CPF"
 COL_FMA_CPF = "FMA CPF"
 COLUMNAS_MATRIZ = (
-    COL_RESUMEN, COL_DICCIONARIO, COL_MEDIDORES, COL_SOC, COL_CMG,
+    COL_RESUMEN, COL_DICCIONARIO, COL_MEDIDORES, COL_SOC, COL_SOC_VS_MEDIDA,
+    COL_CMG,
     COL_OFERTAS, COL_SUBASTAS, COL_FD_CSF, COL_FD_CPF, COL_FMA_CPF,
 )
 
@@ -120,6 +126,58 @@ def _servicios_adjudicados(df_subastas, centrales, fila_de):
         ])
         for c in centrales
     }
+
+
+def _porcentaje(fraccion):
+    return f"{fraccion:.0%}".replace("%", " %")
+
+
+def _celdas_soc_vs_medida(df_medidores, centrales):
+    """
+    Columna "SoC vs medida": % de bloques donde el signo de la medida
+    calza con el SoC (descarga baja el SoC, carga lo sube). Sin SoC, en
+    una central con PFV, el % de bloques de mediodia que inyectan.
+    Verde >= 75 %, amarillo 50-75 % o sin poder verificar, rojo < 50 %
+    (signo probablemente invertido). Ver nucleo/verificaciones.py.
+    """
+
+    columnas = {"clave", "Gen_Unidad", "SoC"}
+    if df_medidores is None or not columnas.issubset(df_medidores.columns):
+        return [(TEXTO_PENDIENTE, PENDIENTE)] * len(centrales)
+
+    por_central = {
+        normalizar(c): dato for c, dato in signo_por_central(df_medidores).items()
+    }
+
+    celdas = []
+    for central in centrales:
+        dato = por_central.get(normalizar(central))
+        if dato is None:
+            celdas.append(("No (sin medidas)", FALTA))
+            continue
+        if dato["metodo"] is None:
+            celdas.append((f"No se pudo verificar ({dato['motivo']})", AVISO))
+            continue
+
+        coincidencia = dato["coincidencia"]
+        texto = (
+            f"{_porcentaje(coincidencia)} coincide "
+            f"({dato['evaluados'] - dato['contrarios']:,} de "
+            f"{dato['evaluados']:,} bloques)"
+        ).replace(",", ".")
+        if dato["metodo"] == MEDIODIA:
+            texto = (
+                f"Sin SoC; mediodía PFV: {_porcentaje(coincidencia)} inyecta "
+                f"({dato['evaluados']:,} bloques)"
+            ).replace(",", ".")
+
+        if coincidencia <= 1 - UMBRAL_CONTRARIOS_ALTA:
+            celdas.append((texto + " — signo invertido?", FALTA))
+        elif coincidencia <= 1 - UMBRAL_CONTRARIOS_MEDIA:
+            celdas.append((texto, AVISO))
+        else:
+            celdas.append((texto, OK))
+    return celdas
 
 
 def construir_matriz_centrales(
@@ -216,6 +274,8 @@ def construir_matriz_centrales(
     else:
         poner(COL_MEDIDORES, pendiente())
         poner(COL_SOC, pendiente())
+
+    poner(COL_SOC_VS_MEDIDA, _celdas_soc_vs_medida(df_medidores, centrales))
 
     # --- CMg -----------------------------------------------------------
     if df_cmg is not None and df_cmg.shape[1] > 3:
