@@ -6595,3 +6595,18 @@ falsa); suite completa OK. La ventana no se pudo abrir aquí (sin tkinter);
 falta probarla en Windows contra la API real y ver qué dice el aviso de
 cantidad: eso dirá si es el endpoint o la paginación.
 
+## 2026-11-16 (4) — La matriz de Control_corrida perdía los colores
+
+- Aviso del usuario: "quitaste los colores de la matriz de la hoja de
+  centrales por origen". No venía de los cambios del día: cuando una pasada
+  reescribe `Control_corrida.xlsx` sin la matriz (el Log de las entradas,
+  el Reporte), `_preservar_ajenas` copia la hoja **solo con valores**
+  (`_copiar_hoja_existente`), y los colores se perdían.
+- `escribir_control`: si la matriz no se reescribe en la pasada, se le
+  copia el formato del libro anterior (`_copiar_formato_hoja`: relleno,
+  letra, bordes, alineación, formato de número y panel congelado), después
+  de `formatear_libro` para que el panel quede en C4.
+
+**Verificación:** prueba nueva `test_control_matriz_colores.py` (matriz y
+después Log: mismos colores y panel); suite completa OK.
+
