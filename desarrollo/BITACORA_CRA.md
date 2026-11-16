@@ -67,8 +67,6 @@ se adivinó: lo que depende de una respuesta quedó como constante en
   y pasó `pyflakes`). Revisar también la línea nueva de cambio de hora bajo
   el AAMM y que el registro quede en `CRA/Log/`.
 - **Carpeta del mes compartida (2026-11-16):** a decidir con el usuario:
-  - ¿Las planillas (`11_PAGOS_BESS_AAMM.xlsx`, `5_REMUNERACION_CRA_AAMM.xlsx`)
-    quedan dentro de `BESS/` y `CRA/` (como quedó) o en la raíz del mes?
   - ¿Un botón "Reorganizar" que mueva un caso de antes a `BESS/`/`CRA/`?
     Hoy un caso viejo se usa tal cual y no se mueve nada.
   - El nombre `5_REMUNERACION_CRA_AAMM.xlsx` (sin tilde ni `_Definitivo`)
@@ -410,4 +408,10 @@ la raíz del mes, al lado de `FD y FMA/` y `Prorrata retiros/`
 (`carpetas.CARPETA_CMG`, en `CARPETAS_COMUNES`). El CRA la crea y la expone
 como `rutas["cmg"]`, todavía sin uso: es para el TC. Anotado también en
 `BITACORA_BESS.md`. 513 pruebas en verde.
+
+## 2026-11-16 (3) — Las planillas quedan en su carpeta
+
+Respuesta del usuario: "déjalo en sus carpetas mejor". Se confirma lo que
+ya estaba: `BESS/11_PAGOS_BESS_AAMM.xlsx` (y `SAE_AAMM.csv`) y
+`CRA/5_REMUNERACION_CRA_AAMM.xlsx`. Sin cambios de código.
 
