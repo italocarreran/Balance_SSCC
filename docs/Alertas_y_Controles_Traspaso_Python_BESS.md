@@ -882,6 +882,8 @@ Revisión del catálogo contra el código, hecha el 2026-09-14.
 | `VAL-001` | Filas de `Calculo E Costos` con energía asignada y sin precio en la curva monótona: no entran al promedio de CMg de su grupo. |
 | `SUB-011` | Central que no aparece en ninguna fila de `Subastas`: sus reservas `AC:AT` y `AU` quedan en 0 y se paga como si no hubiera tenido reservas. |
 | `PAG-001` | Una hoja del libro de pagos quedó vacía porque no se pidió recalcularla y no había versión anterior. |
+| `SOC-019` | Por central, bloques donde la energía tomada como descarga (`Gen_Unidad > 0`) coincide con subidas del SoC, o la tomada como carga con bajadas. ≥ 50 % de los bloques evaluables → ALTA; 25–50 % → MEDIA (mín. 20 bloques; se prueba SoC de inicio y de fin de bloque y se queda con la lectura más favorable). Típico de una CRCA con PFV y BESS medidos juntos. `nucleo/verificaciones.py`. |
+| `CMG-007` | Central con barra asignada en `Centrales` que no está en la hoja `CMg` (o está y ningún cuarto cruza): todos sus bloques sin CMg, C1/C2 nulos y compensación 0. Una por central, ALTA. `nucleo/verificaciones.py`. |
 
 ## Pendiente
 
