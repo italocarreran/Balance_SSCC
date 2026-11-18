@@ -79,8 +79,9 @@ class PruebaPoliticas(unittest.TestCase):
 
         self.base = raiz / "CRA 2602"
         cra.crear_carpetas_caso(self.base)
+        self.rutas = cra.resolver_rutas(self.base)
         maestro_cra(
-            self.base / p.CARPETA_AUXILIARES / p.ARCHIVO_CENTRALES_CRA,
+            self.rutas["auxiliares"] / p.ARCHIVO_CENTRALES_CRA,
             ["CONF_A", "CONF_B", "CONF_NUEVA"],
         )
 
@@ -163,14 +164,14 @@ class PruebaPoliticas(unittest.TestCase):
         self.assertEqual(co.iloc[0].tolist(), ["CONF_A", 1, 1, 11])
 
     def test_cvar_sin_maestro_se_detiene(self):
-        (self.base / p.CARPETA_AUXILIARES / p.ARCHIVO_CENTRALES_CRA).unlink()
+        (self.rutas["auxiliares"] / p.ARCHIVO_CENTRALES_CRA).unlink()
 
         with self.assertRaises(cra.ErrorEntrada):
             cra.generar_politicas(self.base, AAMM, que=["cvar"])
 
     def test_no_deja_dos_archivos_del_periodo(self):
         pd.DataFrame({"x": [1]}).to_excel(
-            self.base / p.CARPETA_FP / "fp_2602_a_mano.xlsx", index=False)
+            self.rutas["fp"] / "fp_2602_a_mano.xlsx", index=False)
 
         with self.assertRaises(cra.ErrorEntrada):
             cra.generar_politicas(self.base, AAMM, que=["fp"])

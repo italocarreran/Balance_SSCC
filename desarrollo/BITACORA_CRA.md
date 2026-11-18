@@ -63,8 +63,13 @@ se adivinó: lo que depende de una respuesta quedó como constante en
   `días × 96`; revisar con un mes con cambio de hora.
 - Validar todas las hojas contra los archivos reales de un período (hoy
   solo hay pruebas sintéticas).
-- Abrir `Balance_CRA.py` en Windows (acá no hay tkinter: solo se compiló
-  y pasó `pyflakes`).
+- Abrir `Balance_CRA.py` en Windows (acá se probó con la ventana real bajo
+  xvfb, pero no en Windows): el formato nuevo, "Ir a este mes", el cambio
+  de mes que va solo a la carpeta del BESS, y que el registro quede en
+  `CRA/Log/`.
+- **Carpeta del mes compartida (2026-11-16):** a decidir con el usuario:
+  - Probar `Herramientas/Reorganizar_Carpetas.py` en Windows con un mes
+    real de antes (y con algo abierto en Excel, para ver que se para bien).
 
 ---
 
@@ -335,3 +340,132 @@ acá; el resto en `BITACORA_BESS.md`. `REGLAS.md` ahora pide leer la
 bitácora de la herramienta que se toca (las dos si el cambio toca código
 compartido) y anotar en la que corresponda. En el CRA no cambió código en
 esta sesión (los arreglos del día fueron del BESS: ver su bitácora).
+
+---
+
+## 2026-11-16 — Carpeta del mes compartida con el BESS; el CRA toma lo del BESS
+
+**Pedido del usuario:** retomar el CRA. La carpeta que se elige en
+`Balance_CRA.py` es la misma del mes que usa `Balance_BESS.py`: lo propio de
+cada uno en su subcarpeta (`BESS/Auxiliares`, `CRA/Auxiliares`, `CRA/SC y
+CO`, ...) y lo compartido (FD, prorrata) en la raíz, sin romper el BESS. Y
+"si al estudiar el BESS ves preferencias o mejoras que no están en CRA,
+agrégalas".
+
+**Carpetas** (código común en `Script/nucleo/carpetas.py`, anotado también
+en `BITACORA_BESS.md`):
+
+```
+<mes>/BESS/   Auxiliares Medidas Ofertas Cmg Subastas Log 11_PAGOS_BESS_AAMM.xlsx SAE_AAMM.csv
+<mes>/CRA/    Auxiliares Energia FP CO "SC y CO" Log 5_REMUNERACION_CRA_AAMM.xlsx
+<mes>/FD y FMA/          común (el CRA deja de tener su FD/ propia)
+<mes>/Prorrata retiros/  común
+```
+
+- `cra.resolver_rutas(base, aamm=None)`: `raiz_cra` (= `<mes>/CRA`), las
+  propias adentro, `fd` = la `FD y FMA` del BESS, `prorrata` en la raíz,
+  `log_dir`/`registro`. Caso de antes (sin `CRA/` y con `Energia/`, `FP/`,
+  `CO/` o `SC y CO/` sueltas, o la planilla suelta): todo como estaba,
+  incluida su `FD/` (`carpeta_fd(base, antiguas=("FD",))`).
+  `crear_carpetas_caso` no le crea `CRA/` a un caso de antes.
+- El árbol muestra las carpetas relativas al mes (`CRA/FP/`, `FD y FMA/`).
+
+**Tomado del BESS:**
+
+- **Planilla con el período:** `5_REMUNERACION_CRA_AAMM.xlsx` (como
+  `11_PAGOS_BESS_AAMM.xlsx`); un `Balance_CRA.xlsx` de antes se renombra
+  solo al abrir el caso con el AAMM (nunca pisa; si está abierto se sigue
+  usando el viejo).
+- **Formato de cuadros:** fila 1 vacía, `Cuadro N° 1 — <título>` en la 2
+  (`TITULOS_HOJAS`), encabezados en la 3, columna A de margen.
+- **Escritura rápida:** `cra/escritura.py` usa `_escribir_tabla_con_titulo`
+  + `relleno_rapido` + `xlsx_rapido.pegar_hojas` del BESS. Antes cada hoja se
+  escribía celda a celda con openpyxl y se reabría el libro entero. Medido
+  acá: una hoja de 370.000 filas (el tamaño de `FD_CTF` en agosto) en 5,5 s;
+  actualizar después una hoja chica, 0,02 s (las demás quedan en el zip).
+- **Ventana:** línea de cambio de hora bajo el AAMM
+  (`nucleo.cambio_hora.describir_periodo`), registro de cada corrida en
+  `CRA/Log/Registro_ultima_corrida.txt`, "Carpeta del mes".
+
+**No se tomó todavía (por tamaño, para conversar):** "Ejecutar todo",
+regla "un período, una carpeta" con su diálogo, sellos de desactualizado,
+`Control_corrida.xlsx`, unidades entre corchetes (las hojas del CRA son
+copias de entradas; se verá con `CÁLCULO_CRA`).
+
+**Verificación:** `py_compile` de todo, `pyflakes` del CRA limpio, 513
+pruebas (6 nuevas en `tests/test_carpetas_mes.py`: mes nuevo con los dos,
+CRA primero y BESS después, árbol, BESS de antes, BESS con solo la
+planilla, CRA de antes con su `FD/` y la planilla renombrada). Las pruebas
+del CRA ahora toman las carpetas de `cra.resolver_rutas`. Sin tkinter acá:
+la ventana no se abrió.
+
+## 2026-11-16 (2) — `Cmg/` pasa a común
+
+Respuesta del usuario a la primera pregunta de la sesión anterior: "Déjalo
+afuera. El cmg.xlsx igual." `Cmg/` (con el `cmg_15min` y `cmg.xlsx`) va en
+la raíz del mes, al lado de `FD y FMA/` y `Prorrata retiros/`
+(`carpetas.CARPETA_CMG`, en `CARPETAS_COMUNES`). El CRA la crea y la expone
+como `rutas["cmg"]`, todavía sin uso: es para el TC. Anotado también en
+`BITACORA_BESS.md`. 513 pruebas en verde.
+
+## 2026-11-16 (3) — Las planillas quedan en su carpeta
+
+Respuesta del usuario: "déjalo en sus carpetas mejor". Se confirma lo que
+ya estaba: `BESS/11_PAGOS_BESS_AAMM.xlsx` (y `SAE_AAMM.csv`) y
+`CRA/5_REMUNERACION_CRA_AAMM.xlsx`. Sin cambios de código.
+
+## 2026-11-16 (4) — Nombre de la planilla confirmado; herramienta para reorganizar
+
+- El usuario confirma `5_REMUNERACION_CRA_AAMM.xlsx` ("como está ahora").
+- Pide, en vez de un botón, "en herramientas agrega un código para
+  reorganizar las carpetas, porque lo usaré un par de veces no más":
+  `Herramientas/Reorganizar_Carpetas.py` (ventana o
+  `python Herramientas/Reorganizar_Carpetas.py <carpeta>`). `planear()`
+  arma la lista de movimientos según qué es de antes (`raiz_bess`/`raiz_cra`
+  == la carpeta): propias del BESS y su planilla/CSV/Log a `BESS/`, propias
+  del CRA y su planilla a `CRA/`, `Auxiliares/` al dueño (con los dos de
+  antes, `centrales_cra.xlsx` al CRA y el resto al BESS),
+  `SSCC_Desempeño/` → `FD y FMA/`, la `FD/` del CRA archivo por archivo a
+  `FD y FMA/`. Destino existente y no vacío = conflicto y no se mueve nada;
+  un error a mitad de camino se informa y se puede volver a correr.
+- **Arreglo de la sesión anterior (BESS):** los sellos de `__config__` se
+  identificaban por la carpeta de la planilla; con la planilla en `BESS/`
+  todos los meses quedaban como `BESS_<marca>` y al reorganizar un caso se
+  perdían sus sellos. `sellos._carpeta_del_mes`: si la planilla está en
+  `BESS/`, la carpeta es la de arriba (la del mes). Anotado en
+  `BITACORA_BESS.md`.
+- `tests/test_reorganizar_carpetas.py` (5): BESS de antes queda igual a uno
+  nuevo (sellos incluidos), CRA de antes con su `FD/`, los dos con
+  `Auxiliares/` repartida, conflicto sin mover nada, mes nuevo sin nada que
+  hacer. 518 pruebas en verde.
+
+## 2026-11-16 (5) — La ventana del CRA con el formato del BESS
+
+Pedido del usuario: "la ventana del CRA déjala en el formato del BESS".
+
+- `Balance_CRA.py` reescrita con el diseño de `Balance_BESS.py` (ver MAPA):
+  "Cargando…" mientras importa, canvas desplazable con la rueda del BESS,
+  marcos "Carpeta del mes" y "Periodo del caso (AAMM)" con "Ir a este mes",
+  diagrama en celdas de ancho fijo con links, estados y botones iguales,
+  registro con colores/hora/encabezado/cierre (las marcas y la duración
+  salen de `nucleo.orquestador`, como en el BESS), botones fijos abajo, y
+  la regla "un período, una carpeta" con su diálogo y "Crear la carpeta".
+  Al cambiar de mes busca la carpeta que recuerda el CRA y, si no, la que
+  recuerda el BESS (solo la lee).
+- `Script/ventana_estilo.py` (nuevo): colores, anchos, rueda, colores del
+  registro y abrir carpetas, sacados tal cual de `Balance_BESS.py`, que
+  ahora los importa de ahí (mismos nombres en el módulo, así las pruebas que
+  los usan siguen igual). Anotado en `BITACORA_BESS.md`.
+- `cra.revisar_estructura`: fila "Carpeta del mes" arriba (como "Carpeta
+  base" del BESS); sin los detalles que repetían el estado ("no esta",
+  "sin generar", "todavia no se genero"); el patrón de energía más corto
+  (`Formato_Solicitud_*Hidro_<Mes><AAAA>.xlsx`), cabe en la columna.
+- `tests/test_ventana_cra.py` (2): columnas y botones como el BESS, y
+  "Actualizar" de una hoja corre, escribe encabezado/cierre y guarda el
+  registro en `CRA/Log/`.
+- Acá se pudo correr por primera vez la ventana: tkinter del sistema
+  (`apt-get install python3-tk`, Python 3.12) en un venv con
+  `requirements.txt`, y `xvfb-run -a <venv>/bin/python -m unittest
+  discover`: 520 pruebas, 0 salteadas. Con las capturas se comparó el CRA
+  contra el BESS.
+

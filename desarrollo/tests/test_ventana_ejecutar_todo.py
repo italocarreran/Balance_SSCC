@@ -58,8 +58,9 @@ class TestVentanaEjecutarTodo(base.TestVentanaActualizar):
             # carpetas como titulo, en el orden del arbol
             medidas = self.nucleo.TAREA_POR_ID["medidas_sae"].etiqueta
             for antes, despues in (
-                ("Medidas/", medidas),
-                ("Subastas/", "Traer subastas (Access del periodo)"),
+                # Las carpetas propias del BESS van en <mes>/BESS/.
+                ("BESS/Medidas/", medidas),
+                ("BESS/Subastas/", "Traer subastas (Access del periodo)"),
                 ("Traer subastas (Access del periodo)",
                  "Consolidar subastas_AAMM.xlsx"),
                 ("Consolidar subastas_AAMM.xlsx", "11_PAGOS_BESS_2609.xlsx"),

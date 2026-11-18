@@ -6,12 +6,13 @@ Rutas del caso y busqueda de los archivos de entrada.
 import re
 from pathlib import Path
 
+from .carpetas import carpeta_fd, raiz_herramienta
 from .parametros import (
-    ARCHIVO_CENTRALES, ARCHIVO_CMG, ARCHIVO_CONTROL, ARCHIVO_MEDIDAS_SAE,
+    ARCHIVO_CENTRALES, CARPETA_BESS, ARCHIVO_CMG, ARCHIVO_CONTROL, ARCHIVO_MEDIDAS_SAE,
     ARCHIVO_PUNTOS_FALLIDOS,
     ARCHIVO_REGISTRO, ARCHIVO_SALIDA_ANTIGUO, CARPETA_AUXILIARES,
     CARPETA_CMG, CARPETA_LOG, PREFIJO_CSV_SAE, PREFIJO_SALIDA,
-    CARPETA_DB_SUBASTAS, CARPETA_FD_FMA, CARPETA_FD_FMA_ANTIGUA,
+    CARPETA_DB_SUBASTAS, CARPETA_FD_FMA,
     CARPETA_MEDIDAS, CARPETA_OFERTAS, CARPETA_PRORRATA_RETIROS,
     CARPETA_SUBASTAS,
     CARPETA_TRABAJO_MEDIDAS, EXTENSIONES_EXCEL, PATRON_AAMM,
@@ -104,10 +105,28 @@ def _migrar_archivos_antiguos(base, salida):
     return salida
 
 
+def raiz_bess(carpeta_base):
+    """
+    Donde van las carpetas propias del BESS y su planilla:
+    <carpeta>/BESS/, o la carpeta misma en un caso de antes de la
+    division BESS/CRA (ver carpetas.py).
+    """
+
+    return raiz_herramienta(
+        carpeta_base, CARPETA_BESS, CARPETAS_DISTINTIVAS,
+        archivos=(f"{PREFIJO_SALIDA}*.xlsx", ARCHIVO_SALIDA_ANTIGUO),
+    )
+
+
 def resolver_rutas(carpeta_base, aamm=None):
     """
     Deriva todas las rutas desde la carpeta base elegida por el
     usuario. Nada depende de donde vive el .py.
+
+    La carpeta base es la del MES (la misma que usa Balance_CRA.py):
+    lo propio del BESS va en <base>/BESS/ y lo comun con el CRA (FD y
+    FMA, Prorrata retiros) en la raiz. Un caso de antes, con todo
+    suelto en la raiz, se sigue usando tal cual (ver carpetas.py).
 
     aamm: el periodo del caso. La planilla se llama
     11_PAGOS_BESS_AAMM.xlsx; sin un AAMM valido se usa la que haya en la
@@ -115,29 +134,30 @@ def resolver_rutas(carpeta_base, aamm=None):
     """
 
     base = Path(carpeta_base)
+    raiz = raiz_bess(base)
 
-    medidas_dir = base / CARPETA_MEDIDAS
-    auxiliares_dir = base / CARPETA_AUXILIARES
-    ofertas_dir = base / CARPETA_OFERTAS
+    medidas_dir = raiz / CARPETA_MEDIDAS
+    auxiliares_dir = raiz / CARPETA_AUXILIARES
+    ofertas_dir = raiz / CARPETA_OFERTAS
+    subastas_dir = raiz / CARPETA_SUBASTAS
+    # Comunes con el CRA, en la raiz del mes (Cmg, FD y FMA, Prorrata
+    # retiros). La del FD se llama "FD y
+    # FMA"; si un caso viejo todavia tiene la de nombre anterior y no
+    # la nueva, se usa esa.
+    fd_fma_dir = carpeta_fd(base)
     cmg_dir = base / CARPETA_CMG
-    # La carpeta se llama "FD y FMA"; si un caso viejo todavia tiene la
-    # de nombre anterior y no la nueva, se usa esa.
-    fd_fma_dir = base / CARPETA_FD_FMA
-
-    if not fd_fma_dir.is_dir() and (base / CARPETA_FD_FMA_ANTIGUA).is_dir():
-        fd_fma_dir = base / CARPETA_FD_FMA_ANTIGUA
-    subastas_dir = base / CARPETA_SUBASTAS
     prorrata_retiros_dir = base / CARPETA_PRORRATA_RETIROS
 
     periodo = _aamm_o_none(aamm)
     salida = (
-        base / nombre_salida(periodo) if periodo else _salida_sin_periodo(base)
+        raiz / nombre_salida(periodo) if periodo else _salida_sin_periodo(raiz)
     )
-    if base.is_dir():
-        salida = _migrar_archivos_antiguos(base, salida)
+    if raiz.is_dir():
+        salida = _migrar_archivos_antiguos(raiz, salida)
 
     return {
         "base": base,
+        "raiz_bess": raiz,
         "medidas_dir": medidas_dir,
         "auxiliares_dir": auxiliares_dir,
         "ofertas_dir": ofertas_dir,
@@ -154,10 +174,10 @@ def resolver_rutas(carpeta_base, aamm=None):
         # Una sola planilla (entradas + calculo), el CSV de pagos al
         # lado y lo de cada corrida en Log/.
         "salida": salida,
-        "csv_sae": base / nombre_csv_sae(periodo or "AAMM"),
-        "log_dir": base / CARPETA_LOG,
-        "control": base / CARPETA_LOG / ARCHIVO_CONTROL,
-        "registro": base / CARPETA_LOG / ARCHIVO_REGISTRO,
+        "csv_sae": raiz / nombre_csv_sae(periodo or "AAMM"),
+        "log_dir": raiz / CARPETA_LOG,
+        "control": raiz / CARPETA_LOG / ARCHIVO_CONTROL,
+        "registro": raiz / CARPETA_LOG / ARCHIVO_REGISTRO,
     }
 
 
@@ -165,9 +185,10 @@ def resolver_rutas(carpeta_base, aamm=None):
 # CREAR EL CASO DE UN PERIODO NUEVO
 # ============================================================
 
-# Las carpetas que tiene que tener un caso, en el orden en que se usan.
-# Es la misma estructura que revisa revisar_estructura() y que dibuja
-# la ventana: si aca falta una, el caso nace incompleto.
+# Las carpetas propias del BESS (van en <mes>/BESS/), en el orden en que
+# se usan. Sirven tambien para reconocer un caso de antes de la division
+# BESS/CRA: si alguna de estas esta suelta en la raiz y no hay BESS/, el
+# caso es de antes y se usa tal cual (ver carpetas.py).
 #
 # "Subastas/DB subastas" va con su carpeta adentro porque la ventana ya
 # la creaba sola al revisar (ofertas_adj.asegurar_carpeta_db); crearla
@@ -175,22 +196,67 @@ def resolver_rutas(carpeta_base, aamm=None):
 #
 # NO se crea Medidas/_trabajo: son los andamios de la descarga, los
 # arma generar_medidas_sae cuando corre.
-SUBCARPETAS_CASO = (
+CARPETAS_PROPIAS = (
     CARPETA_MEDIDAS,
     CARPETA_AUXILIARES,
     CARPETA_OFERTAS,
-    CARPETA_CMG,
-    CARPETA_FD_FMA,
     CARPETA_SUBASTAS,
     f"{CARPETA_SUBASTAS}/{CARPETA_DB_SUBASTAS}",
-    CARPETA_PRORRATA_RETIROS,
 )
+
+# Las que delatan un caso de antes: las propias que el CRA no tiene
+# (Auxiliares/ suelta puede ser de un caso CRA de antes).
+CARPETAS_DISTINTIVAS = tuple(
+    nombre for nombre in CARPETAS_PROPIAS
+    if nombre != CARPETA_AUXILIARES and "/" not in nombre
+)
+
+# Las carpetas que tiene que tener un caso NUEVO, relativas a la carpeta
+# del mes: las propias adentro de BESS/ y las comunes con el CRA en la
+# raiz. Es la misma estructura que revisa revisar_estructura() y que
+# dibuja la ventana: si aca falta una, el caso nace incompleto. Para un
+# caso que ya existe, ver subcarpetas_del_caso().
+SUBCARPETAS_CASO = tuple(
+    f"{CARPETA_BESS}/{nombre}" for nombre in CARPETAS_PROPIAS
+) + (CARPETA_CMG, CARPETA_FD_FMA, CARPETA_PRORRATA_RETIROS)
+
+
+def subcarpetas_del_caso(carpeta_base):
+    """
+    Las subcarpetas que tiene que tener ESTE caso, relativas a su
+    carpeta: SUBCARPETAS_CASO para uno nuevo o ya dividido; las de
+    antes (todo suelto en la raiz) para uno de antes de la division, asi
+    completarlo no le crea un BESS/ vacio al lado (que ademas lo haria
+    pasar a buscar todo ahi). Lo mismo con "FD y FMA": si el caso usa
+    la carpeta de nombre anterior, no se le crea la nueva.
+    """
+
+    base = Path(carpeta_base)
+    raiz = raiz_bess(base)
+    fd = carpeta_fd(base)
+
+    propias = [
+        Path(nombre) if raiz == base else Path(CARPETA_BESS) / nombre
+        for nombre in CARPETAS_PROPIAS
+    ]
+    comunes = [Path(CARPETA_CMG), Path(fd.name), Path(CARPETA_PRORRATA_RETIROS)]
+
+    return tuple(ruta.as_posix() for ruta in propias + comunes)
+
+
+def faltan_subcarpetas(carpeta_base):
+    """Las de subcarpetas_del_caso() que todavia no estan."""
+
+    base = Path(carpeta_base)
+    return [
+        sub for sub in subcarpetas_del_caso(base) if not (base / sub).is_dir()
+    ]
 
 
 def crear_estructura_caso(carpeta_base, registrar=print):
     """
     Crea la carpeta base de un caso y todas sus subcarpetas
-    (SUBCARPETAS_CASO). Devuelve la lista de las que se crearon (las
+    (subcarpetas_del_caso). Devuelve la lista de las que se crearon (las
     que ya estaban no se tocan ni se cuentan).
 
     Pedido del usuario: *"cuando yo elija un mes que no exista, me
@@ -200,9 +266,13 @@ def crear_estructura_caso(carpeta_base, registrar=print):
     (crea todo) como para completar un caso al que le falta una
     carpeta (crea solo esa). Nunca borra ni mueve nada.
 
-    Un caso VIEJO que tiene la carpeta con el nombre anterior
-    ("SSCC_Desempeño") no recibe una "FD y FMA" vacia al lado: se
-    respeta la que ya esta usando (ver resolver_rutas).
+    Un caso VIEJO no recibe carpetas vacias de la estructura nueva: si
+    tiene todo suelto en la raiz no se le crea BESS/, y si tiene la
+    carpeta "SSCC_Desempeño" no se le crea una "FD y FMA" al lado (ver
+    subcarpetas_del_caso).
+
+    Si la carpeta ya tiene CRA/ (el mes lo empezo Balance_CRA.py), se
+    agrega BESS/ al lado: es la misma carpeta del mes.
     """
 
     base = Path(carpeta_base)
@@ -212,11 +282,6 @@ def crear_estructura_caso(carpeta_base, registrar=print):
             f"{base} existe y no es una carpeta: elegi otro nombre."
         )
 
-    usa_nombre_viejo = (
-        (base / CARPETA_FD_FMA_ANTIGUA).is_dir()
-        and not (base / CARPETA_FD_FMA).is_dir()
-    )
-
     creadas = []
 
     try:
@@ -224,10 +289,7 @@ def crear_estructura_caso(carpeta_base, registrar=print):
             base.mkdir(parents=True)
             creadas.append(base)
 
-        for relativa in SUBCARPETAS_CASO:
-
-            if relativa == CARPETA_FD_FMA and usa_nombre_viejo:
-                continue
+        for relativa in subcarpetas_del_caso(base):
 
             carpeta = base / relativa
 

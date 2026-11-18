@@ -27,7 +27,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from .rutas import nombre_csv_sae, resolver_rutas, validar_aamm
+from .rutas import resolver_rutas, validar_aamm
 from .utiles import ErrorEntrada
 
 CARPETA_ANTECEDENTES = "03 Antecedentes SAE"
@@ -313,7 +313,7 @@ def generar_antecedentes(carpeta_base, aamm, incluir_codigo=True,
         registrar(f"  codigo de recalculo: {ruta.name} ({ruta.stat().st_size // 1024:,} KB)")
 
     if incluir_csv:
-        csv = rutas["base"] / nombre_csv_sae(aamm)
+        csv = rutas["csv_sae"]
         if csv.is_file():
             shutil.copy2(csv, carpeta / csv.name)
             registrar(f"  {csv.name}")

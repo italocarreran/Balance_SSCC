@@ -173,11 +173,12 @@ class TestSubastasConsolidadas(unittest.TestCase):
                     base, "2609", registrar=lambda *_: None
                 )
             self.assertEqual(destino.name, "subastas_2609.xlsx")
-            self.assertEqual(destino.parent, base / "Subastas")
+            subastas = nucleo.resolver_rutas(base)["subastas_dir"]
+            self.assertEqual(destino.parent, base / "BESS" / "Subastas")
             self.assertEqual(len(pd.read_excel(destino)), 3)
 
             hoja = nucleo.construir_subastas_desde_consolidado(
-                base / "Subastas", "2609", registrar=lambda *_: None
+                subastas, "2609", registrar=lambda *_: None
             )
             directo = nucleo.construir_subastas_desde_crudo(
                 self._crudo(), "2609", registrar=lambda *_: None

@@ -80,7 +80,7 @@ class TestRegistro(base.TestVentanaActualizar):
         self.assertIn("▶ ", lineas_con("encabezado"))
         self.assertIn("listo en", lineas_con("encabezado_fin"))
 
-        guardado = self.caso / "Log" / self.app.ARCHIVO_REGISTRO
+        guardado = self.nucleo.resolver_rutas(self.caso)["registro"]  # <mes>/BESS/Log
         self.assertTrue(guardado.is_file())
         self.assertIn("[AVISO] faltan 2 dias", guardado.read_text(encoding="utf-8"))
 
@@ -110,7 +110,7 @@ class TestRegistro(base.TestVentanaActualizar):
             for _ in range(5):
                 self.root.update()
 
-        guardado = self.caso / "Log" / self.app.ARCHIVO_REGISTRO
+        guardado = self.nucleo.resolver_rutas(self.caso)["registro"]  # <mes>/BESS/Log
         numeros = re.findall(
             r"mensaje numero (\d{5})", guardado.read_text(encoding="utf-8")
         )

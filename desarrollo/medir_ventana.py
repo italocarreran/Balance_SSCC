@@ -48,13 +48,14 @@ def _caso_sintetico(nucleo, carpeta, aamm):
     for sub in nucleo.SUBCARPETAS_CASO:
         (caso / sub).mkdir(parents=True, exist_ok=True)
 
-    libro = caso / "Auxiliares" / "Centrales.xlsx"
+    raiz = nucleo.raiz_bess(caso)          # <caso>/BESS
+    libro = raiz / "Auxiliares" / "Centrales.xlsx"
     pd.DataFrame({"a": [1]}).to_excel(libro, sheet_name="Resumen BESS", index=False)
     contenido = libro.read_bytes()
     for relativo in (
-        "Medidas/Medidas_SAE.xlsx", f"Medidas/SOC_{aamm}.xlsx",
-        "Auxiliares/Homologacion.xlsx", "Ofertas/OfertasSSCC.xlsx",
-        "Cmg/cmg.xlsx", f"FD y FMA/fma_cpf_{aamm}.xlsx",
+        "BESS/Medidas/Medidas_SAE.xlsx", f"BESS/Medidas/SOC_{aamm}.xlsx",
+        "BESS/Auxiliares/Homologacion.xlsx", "BESS/Ofertas/OfertasSSCC.xlsx",
+        "BESS/Cmg/cmg.xlsx", f"FD y FMA/fma_cpf_{aamm}.xlsx",
         f"FD y FMA/fma_csf_{aamm}.xlsx",
     ):
         if (caso / relativo).parent.is_dir():
@@ -70,7 +71,7 @@ def _caso_sintetico(nucleo, carpeta, aamm):
     # pero el programa PREGUNTA por los 24 x dias posibles.
     for dia, hora, nombre in ofertas_adj.nombres_del_periodo(aamm):
         if hora in (0, 14):
-            (caso / "Subastas" / "DB subastas" / nombre).write_bytes(b"x")
+            (raiz / "Subastas" / "DB subastas" / nombre).write_bytes(b"x")
 
     return caso
 

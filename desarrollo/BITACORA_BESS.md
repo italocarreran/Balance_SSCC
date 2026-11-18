@@ -12,6 +12,13 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **Carpeta del mes con `BESS/` (2026-11-16 (8)):** abrir en Windows un
+  caso de antes (debe seguir igual, sin crear `BESS/`) y crear un mes nuevo
+  (debe quedar `BESS/...` + `Cmg/` + `FD y FMA/` + `Prorrata retiros/`).
+  Probar `Herramientas/Reorganizar_Carpetas.py` con un mes real de antes y
+  confirmar que la ventana no marca hojas desactualizadas después (los
+  sellos se conservan).
+
 - **Buscar_Puntos_PRMTE (2026-11-16 (6)):** confirmar en Windows que ahora
   llegan los 6.886 puntos y si con `size` la API entrega más de 10 por
   página (si sigue de a 10, la descarga hace ~690 pedidos).
@@ -6655,4 +6662,72 @@ suite completa OK.
 
 **Verificación:** 2 pruebas nuevas en `test_verificaciones.py`; suite
 completa OK. Sin caso real para correr el botón de punta a punta.
+
+## 2026-11-16 (8) — La carpeta del mes se comparte con el CRA: lo propio del BESS va en `BESS/`
+
+- Pedido del usuario: "al ejecutar el balance CRA de un mes voy a
+  seleccionar una carpeta que será la misma que balance BESS [...] que
+  quede BESS>Auxiliares y CRA>Auxiliares. Las propias igual irían dentro de
+  su respectiva carpeta", "sin que se rompan los BESS que están funcionando
+  perfecto".
+- `Script/nucleo/carpetas.py` (nuevo, lo usan los dos): `CARPETA_BESS`,
+  `CARPETA_CRA`, las comunes (`FD y FMA`, `Prorrata retiros`, que se
+  mudaron ahí desde `parametros.py` y se re-exportan),
+  `raiz_herramienta()`, `es_caso_antiguo()`, `carpeta_fd()`, `relativa()`.
+- `rutas.resolver_rutas`: Medidas, Auxiliares, Ofertas, Cmg, Subastas, la
+  planilla, `SAE_AAMM.csv` y `Log/` en `<mes>/BESS/` (clave nueva
+  `raiz_bess`); `FD y FMA` y `Prorrata retiros` en la raíz.
+- **Casos de antes, sin cambios:** si no hay `BESS/` y hay suelta alguna de
+  `Medidas`, `Ofertas`, `Cmg`, `Subastas` (no `Auxiliares`, que puede ser
+  de un CRA de antes) o la planilla (`11_PAGOS_BESS_*.xlsx` /
+  `Balance_BESS.xlsx`), la raíz del BESS es la carpeta misma, como siempre.
+  No se mueve nada.
+- `SUBCARPETAS_CASO` es la lista de un caso nuevo (`BESS/Medidas`, ...,
+  `FD y FMA`, `Prorrata retiros`); `CARPETAS_PROPIAS`,
+  `subcarpetas_del_caso(base)` y `faltan_subcarpetas(base)` dan las de
+  ESTE caso (las de antes si es de antes), y las usan
+  `crear_estructura_caso` y la ventana, para no crearle un `BESS/` vacío a
+  un caso viejo.
+- Ventana: `guardar_registro` usa `rutas["registro"]` (antes armaba
+  `base/Log` a mano); `antecedentes` toma `rutas["csv_sae"]`. El árbol
+  muestra las carpetas relativas al mes (`BESS/Medidas/`, `FD y FMA/`).
+- Pruebas: las que armaban el caso con `SUBCARPETAS_CASO` y después usaban
+  `base / "Subastas"` a mano ahora toman la ruta de `resolver_rutas`; nuevas
+  en `tests/test_carpetas_mes.py`. 513 pruebas, 36 salteadas (sin tkinter).
+
+## 2026-11-16 (9) — `Cmg/` pasa a común (raíz del mes)
+
+Pedido del usuario: "Déjalo afuera. El cmg.xlsx igual." `Cmg/` sale de
+`BESS/` y va a la raíz del mes, como `FD y FMA/` y `Prorrata retiros/`:
+`carpetas.CARPETA_CMG` (re-exportada por `parametros`), fuera de
+`CARPETAS_PROPIAS` (y de las que delatan un caso de antes: un mes nuevo con
+`Cmg/` en la raíz no se confunde con uno viejo). `rutas["cmg_dir"]` y
+`rutas["cmg"]` = `<mes>/Cmg/...`; en un caso de antes ya estaba ahí, no
+cambia nada. 513 pruebas en verde.
+
+## 2026-11-16 (10) — Sellos por carpeta del mes; herramienta Reorganizar_Carpetas
+
+- `sellos.ruta_sellos`: la carpeta del caso en `__config__` es la del MES
+  (`_carpeta_del_mes`: si la planilla está en `<mes>/BESS/`, la de arriba).
+  Antes de este arreglo, con la estructura de (8), todos los meses nuevos
+  quedaban como `BESS_<marca>`; y un caso de antes que se reorganice
+  conserva sus sellos (misma carpeta).
+- `Herramientas/Reorganizar_Carpetas.py`: pasa un mes de antes a `BESS/` /
+  `CRA/` (detalle en `BITACORA_CRA.md` 2026-11-16 (4)). 518 pruebas.
+
+## 2026-11-16 (11) — Aspecto de la ventana en `Script/ventana_estilo.py`; pruebas de ventana con `BESS/`
+
+- Para que la ventana del CRA tenga el mismo formato (pedido del usuario),
+  los colores, símbolos, anchos del diagrama, rueda, colores del registro,
+  `nivel_del_mensaje`, `formatear_reloj`, `formato_tiempo`,
+  `carpeta_a_abrir`, `abrir_en_explorador` y `abrir_archivo` pasaron tal
+  cual a `Script/ventana_estilo.py` (solo stdlib: el arranque sigue
+  liviano). `Balance_BESS.py` los importa con los mismos nombres; no cambia
+  nada de lo que se ve.
+- Por primera vez corrieron acá las pruebas de ventana (xvfb + tkinter del
+  sistema en un venv). Tres fallaban desde (8), por la carpeta `BESS/`: el
+  registro se busca en `resolver_rutas(caso)["registro"]` y los títulos del
+  diálogo "Ejecutar todo" son `BESS/Medidas/`, `BESS/Subastas/`. Se
+  ajustaron las pruebas (el comportamiento es el pedido). 520 pruebas, 0
+  salteadas con pantalla.
 
