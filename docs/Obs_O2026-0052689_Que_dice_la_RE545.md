@@ -59,3 +59,64 @@ Eso contradice la definición de la propia RE: la batería no vendió porque gua
 - La letra de la RE es confusa: nombra las dos cosas, pero contar las dos siempre deja el pago en 0.
 - La macro lo resolvió contando las dos solo donde hubo venta, y eso crea el problema que reclama AES.
 - Contar **solo lo que la batería realmente vendió** es lo que mejor calza con la definición de la RE. En el ejemplo, por vender 1 kWh en A1 se descuentan 100, y el pago queda en 48.640.
+
+## En fórmulas
+
+La RE no trae fórmula para la Componente 2; esto es su texto escrito matemáticamente. Se deja fuera el ajuste de la última hora de la ventana (numeral 3), que aquí no influye. Se usa el mismo ejemplo de arriba.
+
+### Notación
+
+Los bloques de 15 minutos se ordenan de mayor a menor precio (la "curva descendente"): posición **t = 1** el más caro, **t = n** el más barato.
+
+| Símbolo | Qué es | Ejemplo |
+|---|---|---|
+| $c_t$ | CMg del bloque en la posición $t$ | $c_1 = 100$ (A1), $c_2 = 95$ (A2), $c_3 = 90$ (A3) |
+| $I_t$ | inyección real en ese bloque | $I_1 = 1$ kWh, el resto 0 |
+| $P$ | caja: lo máximo por bloque, $P = P_{max} \cdot 1000 / 4$ | 250 kWh |
+| $E$ | Energía Disponible de la ventana | 500 kWh |
+
+### Componente 1 (numeral 4: "asignar secuencialmente" desde t = 1)
+
+La Energía Disponible se reparte desde el bloque más caro, en el espacio libre de cada caja:
+
+$$ED_t = \max\Big(0,\ \min\big(P - I_t,\ E - \textstyle\sum_{k<t} ED_k\big)\Big)$$
+
+$$C_1 = \sum_{t=1}^{n} ED_t \cdot c_t$$
+
+Ejemplo, con 1 kWh vendido en A1: $ED_1 = 249$, $ED_2 = 250$, $ED_3 = 1$, entonces $C_1 = 24.900 + 23.750 + 90 = 48.740$.
+
+### Componente 2 según la letra de la RE
+
+"Contabilizar las inyecciones físicas y la Energía Disponible t, desde t = n hasta t = 1, hasta alcanzar la Energía Disponible". En cada bloque se cuenta $I_t + ED_t$, partiendo por el más barato, con tope $E$:
+
+$$X_t = \max\Big(0,\ \min\big(I_t + ED_t,\ E - \textstyle\sum_{k>t} X_k\big)\Big)$$
+
+$$C_2 = \sum_{t=1}^{n} X_t \cdot c_t \qquad\qquad \text{Pago} = \max(C_1 - C_2,\ 0)$$
+
+**El problema:** si la batería no vende nada ($I_t = 0$ en todos los bloques), queda $X_t = ED_t$ en cada bloque, porque la suma de los $ED_t$ es justo $E$. Entonces $C_2 = C_1$ y el pago es 0. Con 1 kWh vendido en A1 pasa lo mismo: $X_3 = 1$, $X_2 = 250$ y $X_1 = 249$, así que $C_2 = 48.740 = C_1$. En general, con esta lectura $C_2$ es el valor de los $E$ kWh más baratos entre inyecciones y Energía Disponible, y el pago solo sale positivo si la batería inyectó en bloques baratos.
+
+### Componente 2 como la calcula hoy la planilla (la macro)
+
+Lo mismo, pero solo en los bloques con inyección:
+
+$$X_t = \begin{cases} 0 & \text{si } I_t = 0 \\ \max\Big(0,\ \min\big(I_t + ED_t,\ E - \sum_{k>t} X_k\big)\Big) & \text{si } I_t > 0 \end{cases}$$
+
+Ejemplo: solo A1 tiene inyección, así que $X_1 = \min(1 + 249,\ 500) = 250$. Entonces $C_2 = 250 \cdot 100 = 25.000$ y el pago es $48.740 - 25.000 = 23.740$.
+
+El salto está en la condición $I_t > 0$: basta que $I_t$ sea apenas mayor que 0 para que el bloque cuente $I_t + ED_t$ (casi $P$) en vez de 0. Esa condición no está en la RE.
+
+### Componente 2 contando solo lo vendido (la propuesta)
+
+$$X_t = \max\Big(0,\ \min\big(I_t,\ E - \textstyle\sum_{k>t} X_k\big)\Big)$$
+
+Ejemplo: $X_1 = \min(1,\ 500) = 1$. Entonces $C_2 = 100$ y el pago es $48.740 - 100 = 48.640$.
+
+Esta fórmula es continua: si $I_t$ cambia un poco, $C_2$ cambia un poco, sin saltos. La Energía Disponible queda solo como el tope $E$ del conteo.
+
+### Resumen
+
+| Lectura | Lo que cuenta cada bloque | Pago sin ventas | Pago si vende 1 kWh en A1 |
+|---|---|---|---|
+| Letra de la RE | $I_t + ED_t$, siempre | 0 | 0 |
+| Planilla hoy (macro) | $I_t + ED_t$, solo si $I_t > 0$ | 48.750 | 23.740 |
+| Propuesta | $I_t$ | 48.750 | 48.640 |
