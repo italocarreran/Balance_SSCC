@@ -18,11 +18,9 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
   definir de dónde se traen (¿el 11_ del mes anterior, Definitivo o última
   reliquidación?) y programarlo. Octubre 2026 ya deja su última ventana
   pendiente.
-- **Obs. O2026-0052689, AES (2026-11-18 (4)):** C2 contando solo la
-  inyección. `re545_componentes.C2_SOLO_INYECCION` (False) y
-  `desarrollo/experimentos/c2_solo_inyeccion.py`: falta correrlo con el
-  11_PAGOS_BESS_2610 real para la diferencia en plata y que el usuario
-  decida.
+- **Obs. O2026-0052689, AES (2026-11-18 (8)):** pendiente, probablemente
+  no se acoge. `C2_SOLO_INYECCION` queda en False (cálculo de siempre); en
+  octubre la regla daba +$77 MM en RE545. Notas en `docs/Obs_O2026-0052689_*`.
 
 - **FD "No participó" devuelto (2026-11-18):** recalcular 2610 (E Costos
   y RE545) y confirmar en el `SSCC_Desempeño_2610` las horas de EMOAC (31-32
@@ -6917,4 +6915,20 @@ lo de adentro). Capturas revisadas.
   bloques más caros que antes quedaban fuera.
 
 **Verificación:** prueba nueva en `test_responsables.py`.
+
+## 2026-11-18 (8) — Al main: actualizador sin respaldo; C2 de AES apagada
+
+- Decisión del usuario sobre la obs. O2026-0052689: "parece que no la vamos
+  a acoger o la dejaremos pendiente". `C2_SOLO_INYECCION` vuelve a False y
+  la nota de la columna "Asignacion Edisponible" vuelve a la de siempre. El
+  interruptor, el experimento y las notas en `docs/` quedan.
+- `Herramientas/Actualizar_desde_GitHub.py`: "que no se respalde". `aplicar`
+  escribe encima, sin copia en `__config__/respaldos_actualizacion`.
+- Además: "al principio cuando abro la ventana se pone a cargar, tiene que
+  cargar después de que selecciono la rama". Al abrir solo se carga la lista
+  de ramas; la revisión parte al elegir una (o con "Revisar").
+- Pasa a main con lo demás de la rama: el texto de responsables de RE545
+  (2026-11-18 (7)) y las notas de la observación.
+
+**Verificación:** suite completa con Python 3.12 + tkinter + xvfb: 547 OK.
 

@@ -88,11 +88,11 @@ class TestComparar(unittest.TestCase):
                 "Script/nucleo/nuevo.py": "Nuevo",
                 "Script/nucleo/re545.py": "Modificado",
             })
-            with mock.patch.object(m, "carpeta_config", lambda: base / "__config__"):
-                respaldo = m.aplicar(REMOTOS, ["Script/nucleo/re545.py", "Script/nucleo/nuevo.py"], base)
+            m.aplicar(REMOTOS, ["Script/nucleo/re545.py", "Script/nucleo/nuevo.py"], base)
             self.assertEqual((base / "Script/nucleo/re545.py").read_bytes(), b"cambiado")
             self.assertEqual((base / "Script/nucleo/nuevo.py").read_bytes(), b"nuevo")
-            self.assertEqual((respaldo / "Script/nucleo/re545.py").read_bytes(), b"viejo")
+            # Sin respaldo (pedido del usuario 2026-11-18).
+            self.assertFalse((base / "__config__" / "respaldos_actualizacion").exists())
             self.assertEqual((base / "Balance_BESS.py").read_bytes(), b"viejo")
 
 
@@ -114,8 +114,12 @@ class TestVentana(unittest.TestCase):
             parche.start()
         self.root = tk.Tk()
         self.v = self.m.Ventana(self.root)
-        self._esperar(lambda: self.v.cambios
-                      and "claude/una-rama" in self.v.combo.cget("values"))
+        # Al abrir solo carga las ramas; no revisa hasta elegir una.
+        self._esperar(lambda: "claude/una-rama" in self.v.combo.cget("values"))
+        self.assertEqual(self.v.cambios, {})
+        self.v.combo.set("main")
+        self.v.combo.event_generate("<<ComboboxSelected>>")
+        self._esperar(lambda: self.v.cambios)
 
     def tearDown(self):
         self.root.destroy()

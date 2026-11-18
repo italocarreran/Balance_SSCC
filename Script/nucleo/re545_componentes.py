@@ -18,10 +18,11 @@ from .utiles import _normaliza_valor_vba, normalizar
 # Observacion O2026-0052689 (AES Andes): en la Componente 2, la
 # "Asignacion Edisponible" (BU) de un bloque con inyeccion contaba la
 # inyeccion MAS la Energia asignada de la C1 (BQ = BS + BN): con 1 kWh
-# inyectado se descontaba casi la caja entera. Con True (2026-11-18, en
-# la rama de trabajo, para que el usuario lo corra y compare con main)
-# cuenta solo la inyeccion real (BS), con el mismo orden y tope.
-C2_SOLO_INYECCION = True
+# inyectado se descontaba casi la caja entera. Con True cuenta solo la
+# inyeccion real (BS), con el mismo orden y tope. Se probo en octubre
+# (+$77 MM en RE545) y quedo PENDIENTE (2026-11-18): apagada, el calculo
+# es el de siempre. Para medirla: desarrollo/experimentos/c2_solo_inyeccion.py.
+C2_SOLO_INYECCION = False
 
 
 def calcular_bi_bj_re545(df_re545):

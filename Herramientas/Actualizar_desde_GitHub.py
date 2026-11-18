@@ -14,14 +14,15 @@ carpeta Herramientas/ y la carpeta Script/.
 
 1. Se elige la rama en la lista desplegable (se carga sola al abrir; por
    defecto "main", donde quedan los cambios una vez aceptado el pull
-   request; las "claude/..." son las de trabajo). Al abrir, y al cambiar
-   de rama, se revisa sola.
+   request; las "claude/..." son las de trabajo). Al elegir la rama se
+   revisa sola; al abrir no se revisa nada hasta elegirla o apretar
+   "Revisar".
 2. La lista muestra SOLO lo que cambio, como un arbol de carpetas con
    casillas: las carpetas vienen cerradas (la flecha las abre) y todo
    viene marcado. Marcar o desmarcar una carpeta marca o desmarca lo que
    cambio adentro.
-3. "Actualizar" copia lo marcado. Antes guarda la version anterior de cada
-   archivo que reemplaza en __config__/respaldos_actualizacion/<fecha>/.
+3. "Actualizar" copia lo marcado encima de lo que hay (sin respaldo,
+   pedido del usuario 2026-11-18: lo anterior queda en GitHub).
 
 Nunca borra nada. Nunca toca __config__, tks.json, config.json ni las
 salidas (no vienen en el zip). Solo usa la biblioteca estandar de Python
@@ -32,7 +33,6 @@ proxy de la pega).
 import io
 import json
 import queue
-import shutil
 import ssl
 import threading
 import time
@@ -40,7 +40,6 @@ import tkinter as tk
 import urllib.error
 import urllib.request
 import zipfile
-from datetime import datetime
 from pathlib import Path
 from tkinter import messagebox, ttk
 
@@ -193,24 +192,15 @@ def comparar(remotos, aqui=None):
 
 
 def aplicar(remotos, rutas, aqui=None):
-    """Escribe las rutas; respalda antes lo que reemplaza. Devuelve la carpeta de respaldo."""
+    """Escribe las rutas encima de lo que hay (sin respaldo)."""
 
     aqui = Path(aqui or AQUI)
-    respaldo = (carpeta_config() / "respaldos_actualizacion"
-                / datetime.now().strftime("%Y-%m-%d_%H%M%S"))
-    hubo_respaldo = False
     for relativa in rutas:
         destino = aqui / relativa
-        if destino.exists():
-            copia = respaldo / relativa
-            copia.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(destino, copia)
-            hubo_respaldo = True
         destino.parent.mkdir(parents=True, exist_ok=True)
         tmp = destino.with_name(destino.name + ".tmp_actualizar")
         tmp.write_bytes(remotos[relativa])
         tmp.replace(destino)
-    return respaldo if hubo_respaldo else None
 
 
 # ------------------------------------------------------------
@@ -251,7 +241,7 @@ class Ventana:
                                   values=[self.rama.get()], state="readonly")
         self.combo.pack(side="left", padx=6)
         self.combo.bind("<<ComboboxSelected>>", lambda e: self.revisar())
-        self.btn_revisar = ttk.Button(fila, text="Volver a revisar", command=self.revisar)
+        self.btn_revisar = ttk.Button(fila, text="Revisar", command=self.revisar)
         self.btn_revisar.pack(side="left")
 
         self.estado = ttk.Label(marco, text="")
@@ -282,8 +272,10 @@ class Ventana:
 
         raiz.after(100, self._procesar_cola)
         raiz.after(500, self._reloj)
-        raiz.after(200, self.revisar)
-        raiz.after(300, self.cargar_ramas)
+        # Al abrir solo se carga la lista de ramas: la revision parte al
+        # elegir una rama (o con "Revisar"), pedido del usuario.
+        raiz.after(200, self.cargar_ramas)
+        self.estado.configure(text="Elige la rama en la lista (o aprieta Revisar).")
 
     # --- utilidades ---
 
@@ -470,16 +462,16 @@ class Ventana:
         if not messagebox.askyesno(
                 "Actualizar",
                 f"Se van a escribir {len(rutas)} archivo(s) en\n{AQUI}\n\n"
-                "Los que se reemplazan quedan respaldados en __config__/"
-                "respaldos_actualizacion.\n\nCerrar antes el programa si esta abierto. "
-                "¿Seguir?"):
+                "Cerrar antes el programa si esta abierto. ¿Seguir?"):
             return
         self._ocupar(True, "Escribiendo...")
         remotos = self.remotos
-        self._en_hilo(lambda: self.cola.put(("aplicado", (rutas, aplicar(remotos, rutas)))))
+        def trabajo():
+            aplicar(remotos, rutas)
+            self.cola.put(("aplicado", rutas))
+        self._en_hilo(trabajo)
 
-    def _al_aplicado(self, datos):
-        rutas, respaldo = datos
+    def _al_aplicado(self, rutas):
         for r in rutas:
             self.cambios.pop(r, None)
         self.marcados.clear()
@@ -488,8 +480,6 @@ class Ventana:
         self._ocupar(False, f"Listo: {len(rutas)} archivo(s) actualizado(s)."
                      + (f" Quedan {quedan} sin actualizar." if quedan else ""))
         self._escribir(f"Actualizados: {len(rutas)} archivo(s).")
-        if respaldo:
-            self._escribir(f"Respaldo de lo anterior: {respaldo}")
 
     def _al_error(self, texto):
         self._ocupar(False, "Error")
