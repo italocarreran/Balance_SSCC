@@ -191,12 +191,18 @@ def carpetas_por_periodo():
 
 
 def carpetas_del_bess():
-    """{aamm: carpeta} que recuerda Balance_BESS.py (solo se lee)."""
+    """
+    {aamm: carpeta} que recuerda Balance_BESS.py (solo se lee). Desde
+    2026-11-18 el BESS las anota por balance ("2603_Definitivo"): aca se
+    vuelven al AAMM, que es lo unico que usa el CRA. Si el mes tiene mas
+    de un proceso, gana el que se anoto ultimo.
+    """
 
     try:
-        return _carpetas_de(config.seccion(config.MODO_BESS).get(get_usuario()))
+        datos = _carpetas_de(config.seccion(config.MODO_BESS).get(get_usuario()))
     except Exception:
         return {}
+    return {str(clave).split("_", 1)[0]: ruta for clave, ruta in datos.items()}
 
 
 def carpeta_recordada(aamm):

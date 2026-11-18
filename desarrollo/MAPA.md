@@ -141,31 +141,37 @@ importable como cualquier módulo.
 
 ## `Balance_BESS.py`
 
-- **Qué hace:** ventana tkinter única. Deja elegir la carpeta base del caso
-  e ingresar el **período (AAMM, 4 dígitos, ej. `2607`)** en un campo de
-  texto, y debajo dibuja un **diagrama de la estructura del caso** (árbol de
+- **Qué hace:** ventana tkinter única. Arriba, el **balance del caso**
+  (desde 2026-11-18): tres `ttk.Combobox` de solo lectura, `año _ mes _
+  proceso` (`2026_Marzo_Definitivo`; años 2025..hoy, meses escritos,
+  procesos `PROCESOS_FIJOS` + los que se agregan con
+  `OPCION_AGREGAR_PROCESO`, guardados en `"procesos"` del config). El AAMM
+  del cálculo sale de año + mes (`aamm_de`). Debajo, `NOMBRE - RUTA` y dos
+  botones: **Ir a este balance** (`ir_a_balance`, azul si
+  `carpeta_del_balance()` la encuentra, deshabilitado si no) y **Examinar**
+  (`examinar_balance`, naranja cuando no hay carpeta), más la línea de
+  cambio de hora. Las casillas no cambian el caso abierto: `var_aamm` /
+  `var_proceso` / `var_base` son los del caso ABIERTO y solo los cambia
+  `usar_carpeta()`. Debajo dibuja un **diagrama de la estructura del caso** (árbol de
   texto tipo consola, prefijos `├──`/`└──`/`│`, patrón tomado del
   `Revisor_Reliquidacion.py` que el usuario dio como referencia) con el
-  estado de cada entrada (OK/FALTA/PENDIENTE). El AAMM no se infiere del
-  nombre de ningún archivo: lo escribe el usuario, y **no** es una fila del
-  diagrama (no es parte de la estructura de carpetas) — las dos filas que
-  dependen de él (el SoC dentro de `Medidas/`, el CSV dentro de `Cmg/`) lo
-  dicen en su propio detalle cuando falta.
+  estado de cada entrada (OK/FALTA/PENDIENTE).
 
   **Cada acción es un botón en la fila que le corresponde**, sin ventanas
   intermedias (desde 2026-10-07 tampoco la de `Medidas_SAE.xlsx`, que
-  antes preguntaba "es el proceso más lento… ¿Seguir?"). Junto a
-  **Examinar** está **Actualizar** (`actualizar_vista()`): vuelve a llamar
+  antes preguntaba "es el proceso más lento… ¿Seguir?"). Abajo, junto a
+  **Salir**, está **Actualizar estado** (`actualizar_vista()`): vuelve a llamar
   a `revisar()` para que un archivo pegado a mano en el explorador aparezca
   en el diagrama sin cambiar de mes y volver; mientras corre un proceso no
   hace nada (los botones del árbol están deshabilitados a propósito).
   Desde 2026-11-11 (48) `pintar_arbol` **no recrea** el árbol si su forma
   (ids, niveles, prefijos, origen) no cambió: solo cambia en el lugar el
-  texto, el estado, el link y el aviso de cada fila. Abajo de todo hay además tres botones que no son de una fila
-  sola: **Crear carpeta del caso** (arma el caso del período con todas sus
-  subcarpetas — ver `rutas.py`), **Ejecutar todo** (abre el plan de la
-  corrida y la ejecuta respetando el grafo de dependencias — ver
-  `orquestador.py`) y **Abrir carpeta del caso**. Las columnas del diagrama son
+  texto, el estado, el link y el aviso de cada fila. Debajo del árbol,
+  justo arriba del registro (`frame_acciones`), van **Ejecutar todo** (abre
+  el plan de la corrida y la ejecuta respetando el grafo de dependencias —
+  ver `orquestador.py`) y **Generar antecedentes SAE**. Desde 2026-11-18 ya
+  no están "Crear carpeta del caso" ni "Abrir carpeta del caso" (se crea
+  desde el diálogo de Examinar; la ruta del balance es un link). Las columnas del diagrama son
   `Estructura | Estado | Acción | Origen` — ya **no hay columna de detalle**
   (el usuario la pidió sacar): a la derecha del botón queda solo el
   `Origen: ...` con su link, en las filas que traen algo de afuera del caso.
@@ -279,29 +285,18 @@ importable como cualquier módulo.
   la ventana usa para decidir qué botón le cuelga (`_boton_de_fila`): así
   `nucleo/` no sabe nada de botones.
 
-- **Un período, una carpeta.** Regla del usuario: *"dos meses no pueden
-  tener la misma carpeta"*. Al cambiar el AAMM (`aamm_cambiado()`):
-  1. Si ese período ya tuvo carpeta (`carpeta_recordada()`), se vuelve a
-     ella sola.
-  2. Si no, se pregunta a `nucleo.carpeta_corresponde_al_periodo()`, que
-     responde **tres** cosas, no dos: sí, no, o **no se sabe** (el nombre
-     no trae ningún AAMM y nunca se anotó). Antes ese "no se sabe" se
-     trataba como un sí y la ventana se quedaba trabajando sobre la
-     carpeta del mes anterior sin decir nada — el bug que reportó el
-     usuario.
-  3. Si no es la de este período, `ventana_carpeta_del_periodo()`:
-     **Examinar…** / **Crear la carpeta** / (solo en el "no se sabe")
-     **Esta es la de AAMM** / **Cancelar**, que vuelve al período
-     anterior. Elegir una carpeta la deja anotada
-     (`recordar_carpeta()`), así que el mes siguiente ya no la puede
-     reusar.
-
-  Detalles de tkinter que importan: la ventana del período es modal
-  (`grab_set` + `wait_window`) y `ventana_nuevo_caso()` también, porque
-  hay que **esperar** su resultado (si se cancela, el período sigue sin
-  carpeta). Y mientras se pregunta, el campo del AAMM pierde el foco y
-  `<FocusOut>` vuelve a llamar a `aamm_cambiado()`: la marca
-  `preguntando` es lo que evita que se abran dos ventanas encima.
+- **Un balance, una carpeta.** Regla del usuario: *"dos meses no pueden
+  tener la misma carpeta"*, ahora por balance (mes + proceso):
+  `carpetas_por_periodo` se indexa con `clave_balance(aamm, proceso)`
+  (`"2603_Definitivo"`). `recordar_carpeta()` le saca la carpeta al balance
+  que la tenía; `examinar_balance()` pregunta antes si la carpeta elegida
+  ya era de otro (`balance_de_la_carpeta`). Compatibilidad: una carpeta
+  anotada solo con el AAMM vale para el proceso que diga su nombre
+  (`carpeta_del_balance`), y al arrancar sin `"proceso"` en el config se
+  toma del nombre de la carpeta (`proceso_en_el_nombre`). Se fueron
+  `aamm_cambiado()`, `ventana_carpeta_del_periodo()` y
+  `ventana_nuevo_caso()` (2026-11-18); `nucleo.carpeta_corresponde_al_periodo`
+  queda para el CRA.
 - **Depende de:** el paquete `Script/` (mismo directorio).
 
 ---
@@ -314,8 +309,9 @@ importable como cualquier módulo.
 
 - **Dos clases de sección, y la diferencia importa:**
   - `"<hostname>_<usuario>"` — lo de cada PC/usuario: la última carpeta base,
-    el AAMM y `carpetas_por_periodo` (`{aamm: carpeta}`, la carpeta que usó
-    cada mes). Las escribe la ventana sola.
+    el AAMM, el proceso, los procesos agregados (`procesos`) y
+    `carpetas_por_periodo` (`{"AAMM_Proceso": carpeta}`, la carpeta de
+    cada balance; las de antes, solo `{aamm: carpeta}`). Las escribe la ventana sola.
   - `"claves_api"` — **compartida**: las dos claves de las APIs del
     Coordinador. Nombre reservado (una sección de usuario nunca se llama
     así). El valor es el mismo para todo el equipo, pero como el archivo es

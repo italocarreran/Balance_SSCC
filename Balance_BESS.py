@@ -339,6 +339,151 @@ def recordar_carpeta(aamm, ruta, ademas=None):
 
 
 # ============================================================
+# EL BALANCE DEL CASO: AÑO_MES_PROCESO
+#
+# Pedido del usuario (2026-11-18): en vez de escribir el AAMM, tres
+# casillas -año, mes escrito y proceso- que se leen como
+# "2026_Marzo_Definitivo". Cada balance (mes + proceso) tiene su propia
+# carpeta: el Preliminar y el Definitivo del mismo mes son dos casos.
+# Por dentro el calculo sigue usando el AAMM ("2603"), que sale del año
+# y el mes.
+# ============================================================
+
+ANO_INICIAL = 2025
+
+MESES = (
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
+    "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+)
+
+# Los que estan siempre; los demas (R01P, R01D, ...) los agrega el
+# usuario con el "+" de la lista y quedan en config.json.
+PROCESOS_FIJOS = ("Preliminar", "Definitivo")
+OPCION_AGREGAR_PROCESO = "+ Agregar otro..."
+CLAVE_PROCESOS = "procesos"
+
+
+def anos_disponibles(ano_actual=None):
+    """['2025', '2026', ...] hasta el año de hoy."""
+
+    actual = int(ano_actual or time.localtime().tm_year)
+    return [str(ano) for ano in range(ANO_INICIAL, max(actual, ANO_INICIAL) + 1)]
+
+
+def aamm_de(ano, mes):
+    """('2026', 'Marzo') -> '2603'. '' si falta algo o no es valido."""
+
+    try:
+        numero = MESES.index(str(mes)) + 1
+        ano = int(ano)
+    except (ValueError, TypeError):
+        return ""
+    return f"{ano % 100:02d}{numero:02d}"
+
+
+def ano_mes_de(aamm):
+    """'2603' -> ('2026', 'Marzo'). ('', '') si no es un AAMM."""
+
+    aamm = str(aamm or "").strip()
+    if len(aamm) != 4 or not aamm.isdigit() or not 1 <= int(aamm[2:]) <= 12:
+        return "", ""
+    return str(2000 + int(aamm[:2])), MESES[int(aamm[2:]) - 1]
+
+
+def nombre_balance(ano, mes, proceso):
+    """'2026_Marzo_Definitivo' (lo que falte no se escribe)."""
+
+    return "_".join(str(p) for p in (ano, mes, proceso) if p)
+
+
+def clave_balance(aamm, proceso):
+    """La clave de carpetas_por_periodo: '2603_Definitivo'."""
+
+    return f"{aamm}_{proceso}" if proceso else str(aamm)
+
+
+def limpiar_proceso(texto):
+    """
+    El nombre de un proceso agregado a mano: sin espacios ni
+    caracteres que no van en un nombre de carpeta. '' si no queda nada.
+    """
+
+    texto = "".join(
+        c for c in str(texto or "").strip()
+        if c.isalnum() or c in "-"
+    )
+    return texto
+
+
+def procesos_guardados():
+    """Preliminar, Definitivo y los que agrego este usuario."""
+
+    extra = leer_config().get(CLAVE_PROCESOS)
+    procesos = list(PROCESOS_FIJOS)
+    if isinstance(extra, list):
+        for proceso in extra:
+            proceso = limpiar_proceso(proceso)
+            if proceso and proceso.lower() not in (p.lower() for p in procesos):
+                procesos.append(proceso)
+    return procesos
+
+
+def proceso_en_el_nombre(ruta, procesos=None):
+    """
+    El proceso que dice el nombre de la carpeta ('... 2603 Definitivo' ->
+    'Definitivo'), o '' si no dice ninguno (o dice mas de uno).
+    """
+
+    nombre = Path(str(ruta or "")).name.lower()
+    hallados = [
+        proceso for proceso in (procesos or PROCESOS_FIJOS)
+        if proceso.lower() in nombre
+    ]
+    return hallados[0] if len(hallados) == 1 else ""
+
+
+def carpeta_del_balance(aamm, proceso):
+    """
+    La carpeta de ese balance, si ya tiene una y todavia existe; '' si
+    no. Una carpeta anotada solo con el AAMM (de antes de que hubiera
+    proceso) sirve si su nombre dice ese proceso.
+    """
+
+    carpetas = carpetas_por_periodo()
+    ruta = carpetas.get(clave_balance(aamm, proceso), "")
+    if not ruta and proceso:
+        vieja = carpetas.get(str(aamm), "")
+        if vieja and proceso.lower() in Path(vieja).name.lower():
+            ruta = vieja
+    try:
+        return ruta if ruta and Path(ruta).is_dir() else ""
+    except OSError:
+        return ""
+
+
+def balance_de_la_carpeta(ruta):
+    """La clave del balance que ya usa esa carpeta ('2602_Definitivo'), o ''."""
+
+    if not ruta:
+        return ""
+    for clave, otra in carpetas_por_periodo().items():
+        try:
+            if Path(otra).resolve() == Path(ruta).resolve():
+                return clave
+        except OSError:
+            if str(otra) == str(ruta):
+                return clave
+    return ""
+
+
+def nombre_de_clave(clave):
+    """'2602_Definitivo' -> '2026_Febrero_Definitivo'; '2602' -> '2026_Febrero'."""
+
+    aamm, _, proceso = str(clave).partition("_")
+    ano, mes = ano_mes_de(aamm)
+    return nombre_balance(ano, mes, proceso) if ano else str(clave)
+
+# ============================================================
 # DIAGRAMA DE CARPETAS (arbol de texto tipo consola)
 #
 # revisar_estructura() devuelve una lista plana de filas con su
@@ -382,6 +527,12 @@ def main():
 
     var_base = tk.StringVar(value=cfg.get("carpeta_base", ""))
     var_aamm = tk.StringVar(value=cfg.get("aamm", ""))
+    # El proceso del caso abierto (Preliminar, Definitivo, R01P...). Un
+    # config de antes no lo tiene: se toma del nombre de la carpeta.
+    var_proceso = tk.StringVar(
+        value=limpiar_proceso(cfg.get("proceso", ""))
+        or proceso_en_el_nombre(cfg.get("carpeta_base", ""), procesos_guardados())
+    )
     var_estado = tk.StringVar(value="Listo")
     var_tiempo = tk.StringVar(value="00:00:00")
 
@@ -578,89 +729,82 @@ def main():
         canvas.bind(nombre, rueda)
 
     # --------------------------------------------------------
-    # SELECTOR DE CARPETA BASE
-    # --------------------------------------------------------
-
-    frame_carpeta = tk.LabelFrame(
-        contenedor, text="Carpeta base del caso", padx=10, pady=8
-    )
-    frame_carpeta.pack(fill="x", padx=14, pady=(10, 4))
-
-    # Diseño de esta parte tomado del Revisor_Relq_15min (repo abby),
-    # pedido del usuario: ruta alineada a la izquierda y botones debajo,
-    # marcos mas juntos.
-    lbl_base = tk.Label(
-        frame_carpeta,
-        textvariable=var_base,
-        wraplength=980,
-        justify="left",
-        anchor="w",
-        cursor="hand2",
-        font=("Segoe UI", 9),
-    )
-    lbl_base.pack(anchor="w")
-
-    lbl_base.bind(
-        "<Button-1>",
-        lambda e: abrir_en_explorador(var_base.get()) if var_base.get() else None,
-    )
-
-    # --------------------------------------------------------
-    # PERIODO DEL CASO (AAMM)
+    # EL BALANCE DEL CASO: AÑO _ MES _ PROCESO
     #
-    # Se ingresa aca arriba y ya no aparece como fila del diagrama:
-    # no es parte de la estructura de carpetas. De el dependen dos
-    # filas (el SoC dentro de Medidas/ y el CSV dentro de Cmg/), que
-    # lo dicen en su propio detalle cuando falta.
+    # Pedido del usuario (2026-11-18): tres casillas que se leen
+    # "2026_Marzo_Definitivo", la ruta del balance al lado y dos botones:
+    # "Ir a este balance" (azul si el balance ya tiene carpeta, bloqueado
+    # si no) y "Examinar" (destacado cuando no la tiene). Elegir en las
+    # casillas NO cambia el caso abierto: recien lo cambian los botones.
+    # var_aamm / var_proceso son los del caso ABIERTO.
     # --------------------------------------------------------
 
     frame_periodo = tk.LabelFrame(
-        contenedor, text="Periodo del caso (AAMM)", padx=10, pady=6
+        contenedor, text="Balance del caso", padx=10, pady=6
     )
-    frame_periodo.pack(fill="x", padx=14, pady=4)
+    frame_periodo.pack(fill="x", padx=14, pady=(10, 4))
 
-    fila_aamm = tk.Frame(frame_periodo)
-    fila_aamm.pack(fill="x")
+    fila_balance = tk.Frame(frame_periodo)
+    fila_balance.pack(fill="x")
 
-    validador_aamm = (
-        root.register(lambda s: s == "" or (s.isdigit() and len(s) <= 4)),
-        "%P",
+    ano_abierto, mes_abierto = ano_mes_de(var_aamm.get())
+    hoy = time.localtime()
+    var_sel_ano = tk.StringVar(value=ano_abierto or str(max(hoy.tm_year, ANO_INICIAL)))
+    var_sel_mes = tk.StringVar(value=mes_abierto or MESES[hoy.tm_mon - 1])
+    var_sel_proceso = tk.StringVar(
+        value=var_proceso.get() or PROCESOS_FIJOS[-1]
     )
 
-    entry_aamm = tk.Entry(
-        fila_aamm,
-        textvariable=var_aamm,
-        width=8,
-        justify="center",
-        font=("Consolas", 11, "bold"),
-        validate="key",
-        validatecommand=validador_aamm,
-    )
-    entry_aamm.pack(side="left")
+    def _casilla(valores, variable, ancho):
+        caja = ttk.Combobox(
+            fila_balance, textvariable=variable, values=valores,
+            state="readonly", width=ancho, font=("Consolas", 11, "bold"),
+            justify="center",
+        )
+        caja.pack(side="left")
+        return caja
 
-    # Como en el Revisor_Relq_15min: un boton explicito para aplicar el
-    # mes (ademas de Enter y de salir del campo).
-    boton_ir_mes = tk.Button(
-        fila_aamm, text="Ir a este mes", bg="#1f5fa8", fg="white",
+    def _guion():
+        tk.Label(
+            fila_balance, text="_", font=("Consolas", 11, "bold"),
+        ).pack(side="left", padx=2)
+
+    _casilla(anos_disponibles(), var_sel_ano, 6)
+    _guion()
+    _casilla(list(MESES), var_sel_mes, 11)
+    _guion()
+    cb_proceso = _casilla(
+        procesos_guardados() + [OPCION_AGREGAR_PROCESO], var_sel_proceso, 16,
+    )
+
+    # Nombre del balance y su ruta (la ruta es un link a la carpeta).
+    fila_ruta = tk.Frame(frame_periodo)
+    fila_ruta.pack(fill="x", pady=(6, 0))
+    var_nombre_balance = tk.StringVar(value="")
+    var_ruta_balance = tk.StringVar(value="")
+    tk.Label(
+        fila_ruta, textvariable=var_nombre_balance,
+        font=("Segoe UI", 10, "bold"), anchor="w",
+    ).pack(side="left")
+    lbl_ruta_balance = tk.Label(
+        fila_ruta, textvariable=var_ruta_balance, font=("Segoe UI", 9),
+        anchor="w", justify="left", wraplength=820, cursor="hand2",
+    )
+    lbl_ruta_balance.pack(side="left", padx=(4, 0))
+
+    fila_botones_balance = tk.Frame(frame_periodo)
+    fila_botones_balance.pack(anchor="w", pady=(6, 0))
+    btn_ir_balance = tk.Button(
+        fila_botones_balance, text="Ir a este balance", width=18,
         font=("Segoe UI", 9, "bold"),
     )
-    boton_ir_mes.pack(side="left", padx=8)
+    btn_ir_balance.pack(side="left")
+    btn_examinar_balance = tk.Button(
+        fila_botones_balance, text="Examinar", width=14,
+    )
+    btn_examinar_balance.pack(side="left", padx=8)
 
-    tk.Label(
-        fila_aamm,
-        text=(
-            "4 digitos: año+mes simplificado. Ej. 2607 para julio de "
-            "2026. Con el se buscan el archivo de SoC dentro de "
-            "Medidas/ y el CSV 15-minutal dentro de Cmg/."
-        ),
-        fg="#444444",
-        font=("Segoe UI", 8),
-        wraplength=760,
-        justify="left",
-        anchor="w",
-    ).pack(side="left", padx=6)
-
-    # Cambio de hora del mes: se detecta solo con el AAMM (ver
+    # Cambio de hora del mes elegido: se detecta solo con el AAMM (ver
     # nucleo.cambio_hora) y queda a la vista mientras se trabaja.
     var_cambio_hora = tk.StringVar(value="")
     label_cambio_hora = tk.Label(
@@ -674,8 +818,20 @@ def main():
     )
     label_cambio_hora.pack(fill="x", pady=(6, 0))
 
+    def seleccion():
+        """(aamm, proceso, nombre) de lo elegido en las casillas."""
+
+        proceso = var_sel_proceso.get()
+        if proceso == OPCION_AGREGAR_PROCESO:
+            proceso = ""
+        return (
+            aamm_de(var_sel_ano.get(), var_sel_mes.get()),
+            proceso,
+            nombre_balance(var_sel_ano.get(), var_sel_mes.get(), proceso),
+        )
+
     def mostrar_cambio_hora(*_):
-        aamm = var_aamm.get().strip()
+        aamm = seleccion()[0]
         try:
             nucleo.validar_aamm(aamm)
             texto = nucleo.describir_periodo(aamm)
@@ -686,8 +842,73 @@ def main():
         label_cambio_hora.config(fg=COLOR_AVISO if hay else COLOR_NEUTRO)
         return texto, hay
 
-    var_aamm.trace_add("write", mostrar_cambio_hora)
-    mostrar_cambio_hora()
+    def refrescar_balance(*_):
+        """La ruta y los dos botones segun lo elegido en las casillas."""
+
+        aamm, proceso, nombre = seleccion()
+        ruta = carpeta_del_balance(aamm, proceso) if aamm and proceso else ""
+        abierto = bool(ruta) and ruta == var_base.get() and aamm == var_aamm.get() \
+            and proceso == var_proceso.get()
+
+        var_nombre_balance.set(nombre)
+        if ruta:
+            var_ruta_balance.set(f"- {ruta}" + ("   (abierto)" if abierto else ""))
+            lbl_ruta_balance.config(fg=COLOR_BASE_OK if abierto else COLOR_LINK)
+            btn_ir_balance.config(state="normal", bg="#1f5fa8", fg="white")
+            btn_examinar_balance.config(
+                bg=COLOR_FONDO_BOTON, fg="black", font=("Segoe UI", 9),
+            )
+        else:
+            var_ruta_balance.set("- (sin carpeta: elegila con Examinar)")
+            lbl_ruta_balance.config(fg=COLOR_FALTA)
+            btn_ir_balance.config(
+                state="disabled", bg=COLOR_FONDO_BOTON, fg="black",
+            )
+            btn_examinar_balance.config(
+                bg=COLOR_AVISO, fg="white", font=("Segoe UI", 9, "bold"),
+            )
+        mostrar_cambio_hora()
+
+    COLOR_FONDO_BOTON = btn_examinar_balance.cget("bg")
+
+    proceso_anterior = {"valor": var_sel_proceso.get()}
+
+    def proceso_elegido(*_):
+        """El '+' de la lista: pide el nombre del proceso nuevo y lo guarda."""
+
+        if var_sel_proceso.get() != OPCION_AGREGAR_PROCESO:
+            proceso_anterior["valor"] = var_sel_proceso.get()
+            return
+        from tkinter import simpledialog
+
+        texto = simpledialog.askstring(
+            "Agregar proceso",
+            "Nombre del proceso (por ejemplo R01P o R01D):",
+            parent=root,
+        )
+        nuevo = limpiar_proceso(texto)
+        if not nuevo:
+            var_sel_proceso.set(proceso_anterior["valor"])
+            return
+        procesos = procesos_guardados()
+        existente = next((p for p in procesos if p.lower() == nuevo.lower()), None)
+        if existente is None:
+            extra = [p for p in procesos if p not in PROCESOS_FIJOS] + [nuevo]
+            guardar_config({CLAVE_PROCESOS: extra})
+            procesos.append(nuevo)
+            log(f"Proceso agregado a la lista: {nuevo}")
+        cb_proceso.config(values=procesos + [OPCION_AGREGAR_PROCESO])
+        var_sel_proceso.set(existente or nuevo)
+
+    cb_proceso.bind("<<ComboboxSelected>>", proceso_elegido)
+    for variable in (var_sel_ano, var_sel_mes, var_sel_proceso):
+        variable.trace_add("write", refrescar_balance)
+    lbl_ruta_balance.bind(
+        "<Button-1>",
+        lambda e: abrir_en_explorador(carpeta_del_balance(*seleccion()[:2]))
+        if carpeta_del_balance(*seleccion()[:2]) else None,
+    )
+    refrescar_balance()
 
     # --------------------------------------------------------
     # DIAGRAMA DE LA ESTRUCTURA DEL CASO
@@ -1194,6 +1415,15 @@ def main():
                 pass
 
     # --------------------------------------------------------
+    # EJECUTAR TODO Y ANTECEDENTES: debajo del arbol, justo arriba del
+    # registro (pedido del usuario). Los comandos se ponen al final,
+    # cuando ya estan definidos.
+    # --------------------------------------------------------
+
+    frame_acciones = tk.Frame(contenedor)
+    frame_acciones.pack(fill="x", padx=20, pady=(8, 0))
+
+    # --------------------------------------------------------
     # PROGRESO Y LOG
     # --------------------------------------------------------
 
@@ -1359,12 +1589,8 @@ def main():
         ruta = var_base.get()
 
         if not ruta or not Path(ruta).is_dir():
-            lbl_base.config(fg=COLOR_FALTA)
             pintar_arbol([])
-            btn_abrir_salida.config(state="disabled")
             return
-
-        lbl_base.config(fg=COLOR_BASE_OK)
 
         try:
             _, filas = nucleo.revisar_estructura(ruta, var_aamm.get().strip())
@@ -1382,7 +1608,6 @@ def main():
                     }
                 ]
             )
-            btn_abrir_salida.config(state="disabled")
             return
 
         pintar_arbol(filas)
@@ -1393,8 +1618,6 @@ def main():
             var_estado.set(f"Faltan {len(faltan)} entradas requeridas.")
         else:
             var_estado.set("Entradas completas.")
-
-        btn_abrir_salida.config(state="normal")
 
     def faltan_subcarpetas(base):
         """
@@ -1407,35 +1630,36 @@ def main():
 
     def usar_carpeta(ruta, completar=True, parent=None):
         """
-        Pasa a trabajar sobre esa carpeta: la recuerda como la del
-        periodo que hay escrito arriba, la guarda en config.json y
-        repinta el diagrama.
+        Pasa a trabajar sobre esa carpeta como la del balance elegido en
+        las casillas (año, mes y proceso): la anota como la de ese
+        balance, la guarda en config.json y repinta el diagrama.
 
         completar=True ofrece ademas crear las subcarpetas que le
-        falten (es lo que ya hacia "Examinar"): una carpeta recien
-        elegida no tiene por que estar completa.
+        falten: una carpeta recien elegida no tiene por que estar
+        completa.
         """
 
         ruta = str(ruta)
+        aamm, proceso, nombre = seleccion()
 
         var_base.set(ruta)
+        var_aamm.set(aamm)
+        var_proceso.set(proceso)
 
-        aamm = var_aamm.get().strip()
+        # Una sola escritura de config.json: el balance abierto y la
+        # carpeta de ese balance (una carpeta es de un solo balance).
+        recordar_carpeta(
+            clave_balance(aamm, proceso) if aamm else "", ruta,
+            ademas={"carpeta_base": ruta, "aamm": aamm, "proceso": proceso},
+        )
+        log(f"Balance {nombre}: {ruta}")
 
-        try:
-            nucleo.validar_aamm(aamm)
-        except nucleo.ErrorEntrada:
-            aamm = ""
-
-        # Una sola escritura de config.json: la carpeta base y, si hay
-        # periodo, la carpeta de ese periodo.
-        recordar_carpeta(aamm, ruta, ademas={"carpeta_base": ruta})
-        if aamm:
-            log(f"Carpeta del periodo {aamm}: {ruta}")
-        else:
-            log(f"Carpeta base: {ruta}")
+        texto_cambio, hay_cambio = mostrar_cambio_hora()
+        if hay_cambio:
+            log(f"Periodo {aamm}: {texto_cambio}")
 
         revisar()
+        refrescar_balance()
 
         if not completar:
             return
@@ -1456,35 +1680,64 @@ def main():
         ):
             crear_carpetas_en(ruta)
 
-    def examinar(parent=None, titulo="Selecciona la carpeta base del caso"):
-        """El dialogo de carpeta. Devuelve True si se eligio una."""
+    def ir_a_balance():
+        """Abre la carpeta que ya tiene el balance elegido."""
 
-        inicial = var_base.get()
+        if corriendo["activo"]:
+            return
+        aamm, proceso, nombre = seleccion()
+        ruta = carpeta_del_balance(aamm, proceso)
+        if not ruta:
+            refrescar_balance()
+            return
+        usar_carpeta(ruta, completar=False)
 
+    def examinar_balance():
+        """
+        Elige (o crea, desde el mismo dialogo) la carpeta del balance de
+        las casillas. Si esa carpeta ya era la de otro balance, se
+        pregunta antes: una carpeta es de un solo balance.
+        """
+
+        if corriendo["activo"]:
+            return
+        aamm, proceso, nombre = seleccion()
+        if not aamm or not proceso:
+            messagebox.showwarning(
+                "Falta el balance", "Elegi el año, el mes y el proceso.",
+            )
+            return
+
+        inicial = carpeta_del_balance(aamm, proceso) or var_base.get()
+        if inicial and Path(inicial).is_dir() and inicial == var_base.get():
+            inicial = str(Path(inicial).parent)
         if not inicial or not Path(inicial).is_dir():
             inicial = ""
 
         ruta = filedialog.askdirectory(
-            title=titulo, initialdir=inicial, parent=parent or root,
+            title=f"Selecciona la carpeta del balance {nombre}",
+            initialdir=inicial, parent=root,
         )
-
         if not ruta:
-            return False
+            return
 
-        usar_carpeta(ruta, parent=parent)
+        duena = balance_de_la_carpeta(ruta)
+        if duena and duena != clave_balance(aamm, proceso) and not messagebox.askyesno(
+            "Carpeta de otro balance",
+            f"{ruta}\n\nya es la carpeta de {nombre_de_clave(duena)}.\n\n"
+            f"¿Pasa a ser la de {nombre}? (cada balance tiene su propia "
+            f"carpeta: {nombre_de_clave(duena)} queda sin carpeta)",
+        ):
+            return
 
-        return True
-
-    def seleccionar():
-        examinar()
+        usar_carpeta(ruta)
 
     def actualizar_vista():
         """
         Vuelve a mirar las carpetas del caso y repinta el diagrama: un
         archivo pegado a mano en el explorador no aparece hasta que
-        algo llame a revisar(). Antes habia que cambiar de mes y
-        volver. Mientras corre un proceso no hace nada: repintar el
-        arbol recrea sus botones, que en ese momento estan
+        algo llame a revisar(). Mientras corre un proceso no hace nada:
+        repintar el arbol recrea sus botones, que en ese momento estan
         deshabilitados a proposito.
         """
 
@@ -1492,235 +1745,11 @@ def main():
             return
 
         revisar()
+        refrescar_balance()
         log("Carpetas revisadas de nuevo.")
 
-    frame_botones_carpeta = tk.Frame(frame_carpeta)
-    frame_botones_carpeta.pack(pady=(6, 0))
-    tk.Button(
-        frame_botones_carpeta, text="Examinar", command=seleccionar
-    ).pack(side="left", padx=4)
-    tk.Button(
-        frame_botones_carpeta, text="Actualizar", command=actualizar_vista
-    ).pack(side="left", padx=4)
-
-    # El ultimo AAMM que se proceso, para no volver a preguntar lo
-    # mismo cada vez que el campo pierde el foco sin haber cambiado.
-    # Tambien es a donde se vuelve si el usuario cancela: un periodo
-    # sin carpeta propia no se queda escrito arriba.
-    ultimo_aamm = {"valor": var_aamm.get().strip()}
-
-    # Mientras se pregunta por la carpeta de un periodo, el campo del
-    # AAMM pierde el foco -y <FocusOut> vuelve a llamar a
-    # aamm_cambiado()-. Sin esta marca se abriria una segunda ventana
-    # encima de la primera.
-    preguntando = {"activo": False}
-
-    def volver_al_periodo_anterior():
-        """
-        Deshace el cambio de periodo. Se usa cuando el usuario cancela
-        la eleccion de carpeta: quedarse con el mes nuevo sobre la
-        carpeta del mes viejo es justo lo que no puede pasar.
-        """
-
-        var_aamm.set(ultimo_aamm["valor"])
-        guardar_config({"aamm": ultimo_aamm["valor"]})
-        revisar()
-
-    def ventana_carpeta_del_periodo(aamm, situacion):
-        """
-        El periodo que se acaba de escribir no tiene carpeta propia:
-        se pregunta cual es, en vez de seguir trabajando sobre la del
-        mes anterior.
-
-        Pedido del usuario: *"dos meses no pueden tener la misma
-        carpeta; si cambio el año y el mes no tiene carpeta debe
-        pedirme examinar y seleccionar o crear"*.
-
-        situacion es lo que devolvio
-        nucleo.carpeta_corresponde_al_periodo():
-
-          - CARPETA_DE_OTRO_PERIODO: la carpeta abierta es la de otro
-            mes (lo dice su nombre, o que ya quedo anotada como la de
-            ese otro mes). Solo se puede examinar o crear.
-          - CARPETA_SIN_PERIODO: no hay con que saberlo (el nombre no
-            trae ningun AAMM y nunca se anoto). Se agrega un tercer
-            boton para decir "esta misma es la de este mes", que deja
-            la carpeta anotada y no vuelve a preguntar.
-        """
-
-        base = var_base.get()
-
-        top = tk.Toplevel(root)
-        top.withdraw()
-        top.title(f"Carpeta del periodo {aamm}")
-        top.transient(root)
-        top.resizable(False, False)
-
-        if situacion == nucleo.CARPETA_DE_OTRO_PERIODO:
-            explicacion = (
-                f"La carpeta que esta abierta no es la del periodo "
-                f"{aamm}:\n\n    {base or '(ninguna)'}\n\n"
-                f"Cada periodo trabaja en su propia carpeta. Elegi la "
-                f"de {aamm}, o crea una nueva."
-            )
-        else:
-            explicacion = (
-                f"No se puede saber de que periodo es la carpeta que "
-                f"esta abierta:\n\n    {base}\n\n"
-                f"Su nombre no trae ningun AAMM. Si ESA es la carpeta "
-                f"de {aamm}, decilo con el tercer boton y no se "
-                f"pregunta mas; si no, elegi la de {aamm} o crea una "
-                f"nueva."
-            )
-
-        tk.Label(
-            top, text=explicacion, font=("Segoe UI", 9), justify="left",
-            anchor="w", wraplength=560,
-        ).pack(fill="x", padx=16, pady=(14, 10))
-
-        pie = tk.Frame(top)
-        pie.pack(fill="x", padx=16, pady=(0, 14))
-
-        resuelto = {"si": False}
-
-        def cerrar(ok):
-            resuelto["si"] = ok
-            top.destroy()
-
-        def con_examinar():
-            if examinar(
-                parent=top,
-                titulo=f"Selecciona la carpeta del periodo {aamm}",
-            ):
-                cerrar(True)
-
-        def con_crear():
-            # Se esconde en vez de cerrarse: hay que esperar a ver si
-            # el caso se crea de verdad o se cancela.
-            top.grab_release()
-            top.withdraw()
-            cerrar(ventana_nuevo_caso(aamm))
-
-        def con_esta():
-            usar_carpeta(base, parent=top)
-            cerrar(True)
-
-        tk.Button(
-            pie, text="Examinar...", font=("Segoe UI", 9, "bold"),
-            bg="#fdf0d5", command=con_examinar, width=16,
-        ).pack(side="left")
-
-        tk.Button(
-            pie, text="Crear la carpeta", font=("Segoe UI", 9, "bold"),
-            bg="#fdf0d5", command=con_crear, width=16,
-        ).pack(side="left", padx=8)
-
-        if situacion == nucleo.CARPETA_SIN_PERIODO and base:
-            tk.Button(
-                pie, text=f"Esta es la de {aamm}", command=con_esta,
-                width=18,
-            ).pack(side="left", padx=8)
-
-        tk.Button(
-            pie, text="Cancelar", command=lambda: cerrar(False), width=12,
-        ).pack(side="right")
-
-        top.protocol("WM_DELETE_WINDOW", lambda: cerrar(False))
-
-        presentar(top, modal=True)
-        root.wait_window(top)
-
-        # Sin carpeta para el periodo nuevo se vuelve al anterior: la
-        # ventana nunca queda con un mes apuntando a la carpeta de otro.
-        if not resuelto["si"]:
-            log(
-                f"Periodo {aamm}: no se eligio carpeta, se vuelve a "
-                f"{ultimo_aamm['valor'] or '(sin periodo)'}."
-            )
-            volver_al_periodo_anterior()
-
-        return resuelto["si"]
-
-    def aamm_cambiado(*_):
-
-        if preguntando["activo"]:
-            return
-
-        aamm = var_aamm.get().strip()
-
-        if aamm == ultimo_aamm["valor"]:
-            return
-
-        guardar_config({"aamm": aamm})
-
-        try:
-            nucleo.validar_aamm(aamm)
-        except nucleo.ErrorEntrada:
-            # Todavia no son 4 digitos (lo esta tipeando): se repinta
-            # y no se pregunta nada.
-            revisar()
-            return
-
-        if corriendo["activo"]:
-            revisar()
-            return
-
-        anterior = ultimo_aamm["valor"]
-        ultimo_aamm["valor"] = aamm
-
-        texto_cambio, hay_cambio = mostrar_cambio_hora()
-        if hay_cambio:
-            log(f"Periodo {aamm}: {texto_cambio}")
-
-        # 1. Si este periodo ya tuvo carpeta, se vuelve a ella sola:
-        #    cambiar de mes es cambiar de carpeta.
-        recordada = carpeta_recordada(aamm)
-
-        if recordada and recordada != var_base.get():
-            log(f"Periodo {aamm}: se abre su carpeta, {recordada}")
-            usar_carpeta(recordada, completar=False)
-            return
-
-        # 2. Si no, ¿la carpeta abierta es la de este periodo?
-        situacion = nucleo.carpeta_corresponde_al_periodo(
-            var_base.get(), aamm, carpetas_por_periodo(),
-        )
-
-        if situacion != nucleo.CARPETA_DEL_PERIODO:
-            # Es la de otro mes, o no se sabe: se pregunta. Es el caso
-            # que antes se quedaba callado sobre la carpeta del mes
-            # anterior.
-            ultimo_aamm["valor"] = anterior
-            revisar()
-
-            preguntando["activo"] = True
-            try:
-                elegida = ventana_carpeta_del_periodo(aamm, situacion)
-            finally:
-                preguntando["activo"] = False
-
-            if elegida:
-                ultimo_aamm["valor"] = aamm
-            return
-
-        # 3. Es la de este periodo: queda anotada (asi otro mes no la
-        #    puede reusar) y solo se ofrece completarle lo que falte.
-        recordar_carpeta(aamm, var_base.get())
-        revisar()
-
-        faltan = faltan_subcarpetas(var_base.get()) if var_base.get() else []
-
-        if faltan and messagebox.askyesno(
-            "Faltan carpetas del caso",
-            f"A la carpeta del caso le faltan {len(faltan)} carpeta(s):\n\n"
-            + "\n".join(f"  {sub}/" for sub in faltan)
-            + "\n\n¿Las creo ahora?",
-        ):
-            crear_carpetas_en(var_base.get())
-
-    entry_aamm.bind("<FocusOut>", aamm_cambiado)
-    entry_aamm.bind("<Return>", lambda e: root.focus_set())
-    boton_ir_mes.config(command=lambda: (root.focus_set(), aamm_cambiado()))
+    btn_ir_balance.config(command=ir_a_balance)
+    btn_examinar_balance.config(command=examinar_balance)
 
     # --------------------------------------------------------
     # CURSOR DE TEXTO
@@ -2250,164 +2279,6 @@ def main():
 
         return True
 
-    def ventana_nuevo_caso(aamm_objetivo=None):
-        """
-        Crea la carpeta de un periodo que todavia no existe, con todas
-        sus subcarpetas adentro (pedido del usuario: "cuando yo elija
-        un mes que no exista, me permita elegir y crear la carpeta con
-        las carpetas dentro").
-
-        No impone ninguna convencion de nombre: propone el nombre de
-        la carpeta que se estaba usando con el AAMM cambiado ("Balance
-        BESS 2607" -> "Balance BESS 2608") y deja cambiar tanto el
-        nombre como donde crearla.
-        """
-
-        if corriendo["activo"]:
-            return False
-
-        aamm = (aamm_objetivo or var_aamm.get()).strip()
-
-        base_actual = Path(var_base.get()) if var_base.get() else None
-
-        # Por defecto, al lado de la carpeta del periodo anterior.
-        if base_actual and base_actual.parent.is_dir():
-            padre_inicial = str(base_actual.parent)
-        else:
-            padre_inicial = str(Path.home())
-
-        try:
-            nombre_inicial = nucleo.nombre_caso_sugerido(aamm, base_actual)
-        except nucleo.ErrorEntrada:
-            nombre_inicial = base_actual.name if base_actual else "Caso nuevo"
-
-        top = tk.Toplevel(root)
-        top.withdraw()
-        top.title("Crear la carpeta del caso")
-        top.geometry("760x460")
-        top.transient(root)
-
-        # Quien la abre espera el resultado (ver el final de la
-        # funcion): si se cancela, el periodo nuevo se queda sin
-        # carpeta y quien llamo tiene que hacer algo al respecto.
-        resultado = {"ok": False}
-
-        var_padre = tk.StringVar(value=padre_inicial)
-        var_nombre = tk.StringVar(value=nombre_inicial)
-
-        tk.Label(
-            top,
-            text=(
-                f"Se va a crear la carpeta del periodo {aamm or '(sin AAMM)'} "
-                f"con todas sus subcarpetas vacias adentro.\n"
-                f"No se copia ni se mueve ningun archivo."
-            ),
-            font=("Segoe UI", 9), anchor="w", justify="left",
-        ).pack(fill="x", padx=14, pady=(12, 8))
-
-        frame_padre = tk.LabelFrame(
-            top, text="Donde crearla", padx=10, pady=8
-        )
-        frame_padre.pack(fill="x", padx=14, pady=4)
-
-        tk.Entry(
-            frame_padre, textvariable=var_padre, font=("Segoe UI", 9),
-        ).pack(side="left", fill="x", expand=True)
-
-        def elegir_padre():
-            elegida = filedialog.askdirectory(
-                title="Carpeta donde crear el caso",
-                initialdir=var_padre.get() or str(Path.home()),
-                parent=top,
-            )
-            if elegida:
-                var_padre.set(elegida)
-
-        tk.Button(frame_padre, text="Examinar", command=elegir_padre).pack(
-            side="left", padx=(8, 0)
-        )
-
-        frame_nombre = tk.LabelFrame(
-            top, text="Nombre de la carpeta", padx=10, pady=8
-        )
-        frame_nombre.pack(fill="x", padx=14, pady=4)
-
-        tk.Entry(
-            frame_nombre, textvariable=var_nombre, font=("Segoe UI", 9),
-        ).pack(fill="x")
-
-        frame_lista = tk.LabelFrame(
-            top, text="Subcarpetas que se crean", padx=10, pady=8
-        )
-        frame_lista.pack(fill="both", expand=True, padx=14, pady=4)
-
-        tk.Label(
-            frame_lista,
-            text="\n".join(f"{sub}/" for sub in nucleo.SUBCARPETAS_CASO),
-            font=("Consolas", 9), anchor="w", justify="left", fg=COLOR_NEUTRO,
-        ).pack(fill="both", expand=True)
-
-        frame_pie = tk.Frame(top)
-        frame_pie.pack(fill="x", padx=14, pady=(4, 12))
-
-        def crear():
-
-            padre = var_padre.get().strip()
-            nombre = var_nombre.get().strip()
-
-            if not padre or not Path(padre).is_dir():
-                messagebox.showwarning(
-                    "Falta donde crearla",
-                    "Elegi una carpeta que exista para crear el caso adentro.",
-                    parent=top,
-                )
-                return
-
-            if not nombre:
-                messagebox.showwarning(
-                    "Falta el nombre",
-                    "Escribi como se va a llamar la carpeta del caso.",
-                    parent=top,
-                )
-                return
-
-            destino = Path(padre) / nombre
-
-            if destino.is_dir() and not messagebox.askyesno(
-                "Ya existe",
-                f"{destino} ya existe.\n\nSe le van a crear las "
-                f"subcarpetas que le falten (no se toca nada de lo que "
-                f"ya tiene). ¿Seguir?",
-                parent=top,
-            ):
-                return
-
-            # El periodo se fija ANTES de crear: crear_carpetas_en()
-            # anota la carpeta como la de "el periodo que hay escrito
-            # arriba", y ese tiene que ser ya el nuevo.
-            if aamm:
-                var_aamm.set(aamm)
-                ultimo_aamm["valor"] = aamm
-                guardar_config({"aamm": aamm})
-
-            if crear_carpetas_en(destino):
-                resultado["ok"] = True
-                top.destroy()
-
-        tk.Button(
-            frame_pie, text="Crear y usar", font=("Segoe UI", 9, "bold"),
-            bg="#fdf0d5", command=crear,
-        ).pack(side="right", padx=8)
-
-        tk.Button(frame_pie, text="Cancelar", command=top.destroy).pack(
-            side="right", padx=8
-        )
-
-        presentar(top, modal=True, ancho=760, alto=460)
-        root.wait_window(top)
-
-        return resultado["ok"]
-
     # --------------------------------------------------------
     # EJECUTAR TODO (una ventana con el plan de la corrida)
     # --------------------------------------------------------
@@ -2908,39 +2779,27 @@ def main():
         presentar(top, ancho=720, alto=260)
 
     # --------------------------------------------------------
-    # BOTONES FIJOS ABAJO
+    # BOTONES: Ejecutar todo y antecedentes arriba del registro; abajo
+    # solo Actualizar estado y Salir.
     # --------------------------------------------------------
 
-    def abrir_salida():
-        abrir_en_explorador(var_base.get())
-
     tk.Button(
-        frame_botones,
-        text="Crear carpeta del caso",
-        command=lambda: ventana_nuevo_caso(var_aamm.get().strip()),
-    ).pack(side="left", padx=10, expand=True)
-
-    tk.Button(
-        frame_botones,
+        frame_acciones,
         text="Ejecutar todo",
         font=("Segoe UI", 9, "bold"),
         bg="#fdf0d5",
         command=ventana_ejecutar_todo,
-    ).pack(side="left", padx=10, expand=True)
+    ).pack(side="left", padx=(0, 10))
 
     tk.Button(
-        frame_botones,
+        frame_acciones,
         text="Generar antecedentes SAE",
         command=ventana_antecedentes,
-    ).pack(side="left", padx=10, expand=True)
+    ).pack(side="left", padx=10)
 
-    btn_abrir_salida = tk.Button(
-        frame_botones,
-        text="Abrir carpeta del caso",
-        state="disabled",
-        command=abrir_salida,
-    )
-    btn_abrir_salida.pack(side="left", padx=10, expand=True)
+    tk.Button(
+        frame_botones, text="Actualizar estado", command=actualizar_vista,
+    ).pack(side="left", padx=10, expand=True)
 
     tk.Button(frame_botones, text="Salir", command=root.destroy).pack(
         side="left", padx=10, expand=True
@@ -2952,8 +2811,9 @@ def main():
 
     pintar_arbol([])
     log(
-        "Selecciona la carpeta base del caso e ingresa el periodo "
-        "(AAMM). Cada fila del diagrama de abajo trae su propio boton: "
+        "Elige el balance arriba (año _ mes _ proceso) y entra con 'Ir a "
+        "este balance' o, si todavia no tiene carpeta, con 'Examinar'. "
+        "Cada fila del diagrama de abajo trae su propio boton: "
         "'Traer' y 'Generar' en Cmg/, 'Traer' y un 'Generar' por cada "
         "FMA en 'FD y FMA/', 'Traer' en Subastas/DB subastas/, y en "
         f"{nucleo.ARCHIVO_SALIDA} un boton por hoja ('Actualizar' en "
@@ -2963,27 +2823,24 @@ def main():
         "dicen 'Origen: ...' con un link a la carpeta de origen."
     )
 
-    if var_aamm.get():
-        log(f"Periodo recordado: {var_aamm.get()}")
-
     if var_base.get():
-        log(f"Carpeta recordada: {var_base.get()}")
+        ano, mes = ano_mes_de(var_aamm.get())
+        log(
+            f"Balance abierto: {nombre_balance(ano, mes, var_proceso.get()) or '(sin periodo)'}"
+            f" - {var_base.get()}"
+        )
         revisar()
 
-    # El par (carpeta, periodo) con el que arranca la ventana es el que
-    # quedo de la ultima vez: se anota como la carpeta de ESE periodo.
-    # Sin esto, volver a un mes viejo pediria de nuevo su carpeta, que
-    # es justo lo que se acaba de elegir.
-    if var_base.get() and var_aamm.get():
-        try:
-            nucleo.validar_aamm(var_aamm.get())
-        except nucleo.ErrorEntrada:
-            pass
-        else:
-            if nucleo.carpeta_corresponde_al_periodo(
-                var_base.get(), var_aamm.get(), carpetas_por_periodo(),
-            ) != nucleo.CARPETA_DE_OTRO_PERIODO:
-                recordar_carpeta(var_aamm.get(), var_base.get())
+    # El caso con que arranca la ventana es el que quedo de la ultima
+    # vez: se anota como la carpeta de ESE balance (si se sabe su
+    # proceso), para que "Ir a este balance" lo encuentre.
+    if var_base.get() and var_proceso.get() and ano_mes_de(var_aamm.get())[0] \
+            and Path(var_base.get()).is_dir() \
+            and not carpeta_del_balance(var_aamm.get(), var_proceso.get()):
+        recordar_carpeta(
+            clave_balance(var_aamm.get(), var_proceso.get()), var_base.get(),
+        )
+    refrescar_balance()
 
     root.mainloop()
 

@@ -1,6 +1,6 @@
 """Dos pedidos sobre la ventana del BESS, probados con la ventana real:
 
-  - el boton "Actualizar" (junto a "Examinar") vuelve a mirar las
+  - el boton "Actualizar estado" (abajo, junto a "Salir") vuelve a mirar las
     carpetas: un archivo pegado a mano aparece sin cambiar de mes;
   - el boton de Medidas_SAE.xlsx arranca sin la advertencia previa
     ("Es el proceso mas lento... ¿Seguir?");
@@ -97,13 +97,6 @@ class TestVentanaActualizar(unittest.TestCase):
                 return w
         self.fail(f"no hay boton '{texto}'")
 
-    def _marco_carpeta(self):
-        for w in self._todos(self.root):
-            if (w.winfo_class() == "Labelframe"
-                    and w.cget("text") == "Carpeta base del caso"):
-                return w
-        self.fail("no esta el marco 'Carpeta base del caso'")
-
     def test_actualizar_muestra_un_archivo_pegado_a_mano(self):
         etiqueta = "homologacion"
         antes = self._estado_de_fila(etiqueta)
@@ -117,7 +110,7 @@ class TestVentanaActualizar(unittest.TestCase):
             # Sin tocar nada, el diagrama todavia no lo ve.
             self.assertEqual(self._estado_de_fila(etiqueta), antes)
 
-            self._boton("Actualizar", self._marco_carpeta()).invoke()
+            self._boton("Actualizar estado", self.root).invoke()
             self.root.update()
 
             self.assertEqual(
@@ -125,7 +118,7 @@ class TestVentanaActualizar(unittest.TestCase):
             )
         finally:
             archivo.unlink()
-            self._boton("Actualizar", self._marco_carpeta()).invoke()
+            self._boton("Actualizar estado", self.root).invoke()
             self.root.update()
 
     def test_medidas_arranca_sin_advertencia(self):
@@ -186,7 +179,7 @@ class TestVentanaActualizar(unittest.TestCase):
 
         abiertos = []
         try:
-            self._boton("Actualizar", self._marco_carpeta()).invoke()
+            self._boton("Actualizar estado", self.root).invoke()
             self.root.update()
 
             fila = self._fila(self.nucleo.ARCHIVO_MEDIDAS_SAE)
@@ -220,7 +213,7 @@ class TestVentanaActualizar(unittest.TestCase):
         finally:
             rutas["medidas_sae"].unlink()
             rutas["puntos_fallidos"].unlink()
-            self._boton("Actualizar", self._marco_carpeta()).invoke()
+            self._boton("Actualizar estado", self.root).invoke()
             self.root.update()
 
         # Sin Puntos_fallidos con renglones, no hay aviso.
@@ -243,7 +236,7 @@ class TestVentanaActualizar(unittest.TestCase):
         return [str(w) for w in self._todos(marco)]
 
     def _actualizar(self):
-        self._boton("Actualizar", self._marco_carpeta()).invoke()
+        self._boton("Actualizar estado", self.root).invoke()
         self.root.update()
 
     def test_actualizar_sin_cambios_no_rehace_el_arbol(self):
