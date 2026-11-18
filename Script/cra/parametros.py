@@ -14,7 +14,21 @@ dice al lado (PROPUESTA / PENDIENTE): se cambia aca y nada mas.
 # SALIDA
 # ============================================================
 
-ARCHIVO_SALIDA = "Balance_CRA.xlsx"
+# Se llama como la planilla original, con el periodo:
+# 5_REMUNERACION_CRA_AAMM.xlsx (mismo criterio que la 11_PAGOS_BESS_AAMM
+# del BESS; antes era Balance_CRA.xlsx). ARCHIVO_SALIDA es el nombre
+# generico, para mostrar; el del caso lo da rutas.nombre_salida(aamm).
+# Sin tilde a proposito: el nombre se arma y se compara en el codigo.
+PREFIJO_SALIDA = "5_REMUNERACION_CRA_"
+ARCHIVO_SALIDA = f"{PREFIJO_SALIDA}AAMM.xlsx"
+# El nombre de antes: si un caso lo tiene, se renombra solo (ver
+# rutas._migrar_salida_antigua).
+ARCHIVO_SALIDA_ANTIGUO = "Balance_CRA.xlsx"
+
+# Lo de cada corrida (el registro de la ventana) va en su propia
+# carpeta, como en el BESS.
+CARPETA_LOG = "Log"
+ARCHIVO_REGISTRO = "Registro_ultima_corrida.txt"
 
 HOJA_ENERGIA = "ENERGIA"
 HOJA_FP = "FP"
@@ -32,6 +46,19 @@ HOJA_PRORRATA = "PRORRATA_RETIROS"
 # calculo (CÁLCULO_CRA, cuadros 2 y 3 de PRORRATA_RETIROS, RESUMEN) y
 # las entradas pendientes (TC, COTAS, RENDIMIENTOS, CONDICION_EMBALSE,
 # EMPRESAS) se agregan cuando se cierren.
+# El titulo del cuadro de cada hoja ("Cuadro N° 1 — <titulo>" en la
+# fila 2, como en la planilla del BESS).
+TITULOS_HOJAS = {
+    HOJA_ENERGIA: "Energia inyectada y retirada por unidad",
+    HOJA_FP: "Factores de penalizacion (fp_)",
+    HOJA_CO: "Costos de operacion (cvar_cra_)",
+    HOJA_SC_CO: "Sobrecostos (SC) y costos de oportunidad (CO)",
+    HOJA_FD_CPF: "FD CPF horario",
+    HOJA_FD_CSF: "FD CSF horario",
+    HOJA_FD_CTF: "FD CTF horario",
+    HOJA_PRORRATA: "Prorrata de retiros por empresa",
+}
+
 ORDEN_HOJAS_SALIDA = [
     HOJA_PRORRATA,
     HOJA_FD_CTF, HOJA_FD_CSF, HOJA_FD_CPF,
@@ -40,24 +67,54 @@ ORDEN_HOJAS_SALIDA = [
 
 
 # ============================================================
-# CARPETAS DEL CASO -- una subcarpeta por hoja de entrada (confirmado
-# por el usuario el 2026-09-30). FD y prorrata de retiros son las MISMAS
-# fuentes que usa el BESS; "Prorrata retiros" lleva el mismo nombre que
-# en el caso BESS.
+# CARPETAS DEL CASO
+#
+# La carpeta que se elige es la del MES, la misma que usa
+# Balance_BESS.py (pedido del usuario 2026-11-16). Lo propio del CRA va
+# en <mes>/CRA/ -una subcarpeta por hoja de entrada (confirmado el
+# 2026-09-30)- y lo comun con el BESS en la raiz: el FD (la carpeta
+# "FD y FMA" del BESS, de donde los dos leen el SSCC_Desempeño_*) y
+# "Prorrata retiros". Ver Script/nucleo/carpetas.py.
+#
+#   <mes>/CRA/Auxiliares/  Energia/  FP/  CO/  SC y CO/  Log/
+#   <mes>/CRA/5_REMUNERACION_CRA_AAMM.xlsx
+#   <mes>/Cmg/   <mes>/FD y FMA/   <mes>/Prorrata retiros/   (comunes)
+#
+# Un caso de antes (todo suelto en la raiz, con FD/ propia) se sigue
+# leyendo tal cual.
 # ============================================================
+
+from ..nucleo.carpetas import (  # noqa: E402
+    CARPETA_CMG, CARPETA_CRA, CARPETA_FD_FMA, CARPETA_PRORRATA_RETIROS,
+)
 
 CARPETA_ENERGIA = "Energia"
 CARPETA_FP = "FP"
 CARPETA_CO = "CO"
 CARPETA_SC_CO = "SC y CO"
-CARPETA_FD = "FD"
-CARPETA_PRORRATA = "Prorrata retiros"
 CARPETA_AUXILIARES = "Auxiliares"
+# Comunes con el BESS (en la raiz del mes). Cmg/ todavia no la usa
+# ninguna hoja: es para el TC (origen CMg, pendiente).
+CARPETA_FD = CARPETA_FD_FMA
+CARPETA_PRORRATA = CARPETA_PRORRATA_RETIROS
+# La FD/ propia que tenia el caso CRA antes de compartir la del BESS.
+CARPETA_FD_ANTIGUA = "FD"
 
-SUBCARPETAS_CASO = (
-    CARPETA_ENERGIA, CARPETA_FP, CARPETA_CO, CARPETA_SC_CO,
-    CARPETA_FD, CARPETA_PRORRATA, CARPETA_AUXILIARES,
+# Las propias del CRA (van en <mes>/CRA/).
+CARPETAS_PROPIAS = (
+    CARPETA_AUXILIARES, CARPETA_ENERGIA, CARPETA_FP, CARPETA_CO,
+    CARPETA_SC_CO,
 )
+# Las que delatan un caso CRA de antes (Auxiliares/ suelta puede ser
+# del BESS).
+CARPETAS_DISTINTIVAS = (
+    CARPETA_ENERGIA, CARPETA_FP, CARPETA_CO, CARPETA_SC_CO,
+)
+
+# Las de un caso NUEVO, relativas a la carpeta del mes.
+SUBCARPETAS_CASO = tuple(
+    f"{CARPETA_CRA}/{nombre}" for nombre in CARPETAS_PROPIAS
+) + (CARPETA_CMG, CARPETA_FD, CARPETA_PRORRATA)
 
 # Los maestros del CRA, en un libro con tres hojas (ver maestros.py):
 # "centrales_cra" (filtra cvar_cra), "empresas" y "diccionario" (que

@@ -100,7 +100,7 @@ def generar_balance_cra(
     """
 
     validar_aamm(aamm)
-    rutas = resolver_rutas(carpeta_base)
+    rutas = resolver_rutas(carpeta_base, aamm)
     secciones = list(SECCIONES) if secciones is None else list(secciones)
 
     hojas = {}
@@ -113,7 +113,7 @@ def generar_balance_cra(
         progreso(int(90 * (i + 1) / len(secciones)))
 
     registrar(f"Escribiendo {rutas['salida'].name}...")
-    escribir_hojas(rutas["salida"], hojas)
+    escribir_hojas(rutas["salida"], hojas, registrar)
     progreso(100)
     registrar("Listo.")
 

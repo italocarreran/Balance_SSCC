@@ -9,6 +9,7 @@ su id (la ventana decide con el que boton le cuelga), su estado ("ok" /
 
 from openpyxl import load_workbook
 
+from ..nucleo.carpetas import relativa
 from ..nucleo.utiles import ErrorEntrada
 from . import parametros as p
 from .proceso import SECCIONES
@@ -42,8 +43,12 @@ def _fila(nivel, id_, texto, estado, detalle="", ruta=None, es_carpeta=False):
 def revisar_estructura(carpeta_base, aamm):
     """Lista plana de filas, en el orden en que se dibujan."""
 
-    rutas = resolver_rutas(carpeta_base)
-    filas = []
+    rutas = resolver_rutas(carpeta_base, aamm)
+    # Primera fila, como en el arbol del BESS: la carpeta del mes.
+    filas = [_fila(
+        0, "base", "Carpeta del mes", "ok" if rutas["base"].is_dir() else "falta",
+        ruta=rutas["base"], es_carpeta=True,
+    )]
 
     carpetas = {}
     for id_, carpeta, patron, _ in ENTRADAS:
@@ -52,8 +57,10 @@ def revisar_estructura(carpeta_base, aamm):
     for carpeta, entradas in carpetas.items():
         ruta_carpeta = rutas[carpeta]
         existe = ruta_carpeta.is_dir()
+        # Relativa a la carpeta del mes: "CRA/FP/" (propia) o "FD y FMA/"
+        # (comun con el BESS).
         filas.append(_fila(
-            0, f"carpeta_{carpeta}", f"{ruta_carpeta.name}/",
+            0, f"carpeta_{carpeta}", f"{relativa(ruta_carpeta, rutas['base'])}/",
             "ok" if existe else "falta", ruta=ruta_carpeta, es_carpeta=True,
         ))
 
@@ -69,25 +76,24 @@ def revisar_estructura(carpeta_base, aamm):
                 continue
 
             if ruta is None:
-                filas.append(_fila(
-                    1, id_, patron, "falta", "no esta", ruta=ruta_carpeta,
-                ))
+                # Sin detalle: "FALTA" ya lo dice (como en el BESS).
+                filas.append(_fila(1, id_, patron, "falta", ruta=ruta_carpeta))
             else:
                 filas.append(_fila(1, id_, ruta.name, "ok", ruta=ruta))
 
     salida = rutas["salida"]
     hojas_escritas = _hojas_de(salida)
     filas.append(_fila(
-        0, "salida", salida.name,
+        0, "salida", relativa(salida, rutas["base"]),
         "ok" if salida.exists() else "pendiente",
-        "" if salida.exists() else "todavia no se genero",
+        "",
         ruta=salida,
     ))
 
     por_hoja = {hoja: seccion for seccion, (hoja, _) in SECCIONES.items()}
     for hoja in p.ORDEN_HOJAS_SALIDA:
         escrita = hoja in hojas_escritas
-        detalle = "" if escrita else "sin generar"
+        detalle = ""
         if hoja == p.HOJA_PRORRATA:
             detalle = "solo el bloque 1 (matriz de prorratas)"
         filas.append(_fila(

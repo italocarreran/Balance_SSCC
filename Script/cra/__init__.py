@@ -9,12 +9,12 @@ nunca importa nada de aca. La ventana es Balance_CRA.py.
 
     parametros.py     Carpetas, patrones de nombre, hojas y mapeos de columnas.
     lectura.py        Busqueda de archivos y lectura por letra/fila de Excel.
-    rutas.py          Rutas del caso y validacion del AAMM.
+    rutas.py          Rutas del caso (<mes>/CRA/ + las comunes con el BESS) y AAMM.
     hojas_entrada.py  ENERGIA, FP, CO y SC y CO.
     fuentes_bess.py   FD_CPF/CSF/CTF y la matriz de PRORRATA_RETIROS (fuentes del BESS).
     politicas.py      Botones Generar de fp_ y cvar_cra_ (Script/Politicas).
     maestros.py       Auxiliares/centrales_cra.xlsx (configuraciones, empresas, diccionario FD).
-    escritura.py      Balance_CRA.xlsx conservando las hojas que no se tocan.
+    escritura.py      5_REMUNERACION_CRA_AAMM.xlsx (cuadros y escritura rapida del BESS).
     proceso.py        Las secciones y generar_balance_cra().
     estructura.py     El arbol que dibuja la ventana.
 
@@ -44,7 +44,10 @@ from .proceso import SECCIONES, generar_balance_cra, traer_fd
 from .rutas import (
     buscar_entrada,
     crear_carpetas_caso,
+    nombre_salida,
+    raiz_cra,
     resolver_rutas,
+    subcarpetas_del_caso,
     validar_aamm,
 )
 
@@ -57,4 +60,5 @@ __all__ = [
     "generar_politicas", "leer_configuraciones", "leer_empresas",
     "leer_unidades_fd",
     "buscar_entrada", "crear_carpetas_caso", "resolver_rutas", "validar_aamm",
+    "nombre_salida", "raiz_cra", "subcarpetas_del_caso",
 ]

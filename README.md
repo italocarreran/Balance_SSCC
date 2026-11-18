@@ -32,6 +32,17 @@ más rápido. Si no está instalado el programa funciona igual, más lento:
 pip install python-calamine
 ```
 
+## Actualizar el código desde GitHub (sin Git)
+
+```bash
+python Herramientas/Actualizar_desde_GitHub.py
+```
+
+Se elige la rama (`main` por defecto), *Revisar cambios* baja el zip y
+muestra qué archivos cambiaron, y *Actualizar* copia solo esos. Lo que se
+reemplaza queda respaldado en `__config__/respaldos_actualizacion/<fecha>/`.
+No borra nada ni toca `__config__`, tokens ni salidas.
+
 ## Uso
 
 ```bash
@@ -106,6 +117,18 @@ python Herramientas/Buscar_Rutas_PI.py
 
 ```bash
 python Herramientas/Comparar_Meses.py
+```
+
+- `Reorganizar_Carpetas.py` — pasa la carpeta de un mes armada antes de la
+  división BESS/CRA (todo suelto) a la estructura nueva: lo del BESS a
+  `BESS/`, lo del CRA a `CRA/`, `SSCC_Desempeño/` (o la `FD/` del CRA) a
+  `FD y FMA/`; `Cmg/` y `Prorrata retiros/` quedan. Primero muestra el plan
+  y pide confirmar; nunca pisa nada (si un destino ya existe, no mueve
+  nada); si algo está abierto en Excel se para y se vuelve a correr. Los
+  sellos de `__config__` se conservan. Usa el programa (`Script/`).
+
+```bash
+python Herramientas/Reorganizar_Carpetas.py
 ```
 
 0. **La configuración vive en `__config__/`**, la carpeta hermana de la de
@@ -183,8 +206,9 @@ python Herramientas/Comparar_Meses.py
      abierta con el AAMM cambiado (`Balance BESS 2607` → `Balance BESS
      2608`) y dónde crearla, y las dos cosas se pueden editar antes de
      confirmar. Se crean la carpeta y sus subcarpetas vacías
-     (`Medidas/`, `Auxiliares/`, `Ofertas/`, `Cmg/`, `FD y FMA/`,
-     `Subastas/DB subastas/`, `Prorrata retiros/`) y el caso queda abierto
+     (`BESS/Medidas/`, `BESS/Auxiliares/`, `BESS/Ofertas/`,
+     `BESS/Subastas/DB subastas/` y las comunes con el CRA `Cmg/`, `FD y
+     FMA/` y `Prorrata retiros/`) y el caso queda abierto
      en ese período. También está el botón **Crear carpeta del caso**,
      abajo de todo.
    - A un caso al que le falte alguna subcarpeta se la completa desde ahí
@@ -339,8 +363,27 @@ Ver `desarrollo/MAPA.md` para qué hace cada módulo.
 
 ## Estructura de carpeta de un caso
 
+La carpeta que se elige en las dos ventanas es la **del mes**, y es la
+misma para `Balance_BESS.py` y `Balance_CRA.py`: lo propio de cada uno va
+en `BESS/` y `CRA/`, y lo que usan los dos (`Cmg/`, `FD y FMA/`,
+`Prorrata retiros/`) queda en la raíz. Un caso armado antes de esta división (todo
+suelto en la carpeta) se sigue usando tal cual, sin mover nada.
+
 ```text
-<CARPETA_BASE>/
+<CARPETA DEL MES>/
+├── BESS/                    <- todo lo de abajo hasta Log/ (ver detalle)
+├── CRA/                     <- Auxiliares/ (centrales_cra.xlsx), Energia/,
+│                               FP/, CO/, SC y CO/, Log/ y
+│                               5_REMUNERACION_CRA_AAMM.xlsx
+├── Cmg/                     <- comun: cmg<AAMM>_def_15minutal.csv y cmg.xlsx
+├── FD y FMA/                <- comun: SSCC_Desempeño_* (y los fma_* del BESS)
+└── Prorrata retiros/        <- comun: Prorrata_Retiros_<AAMM>_pre/_def.xlsx
+```
+
+Detalle de `BESS/` (las dos comunes se repiten para ver qué lee de ahí):
+
+```text
+<CARPETA DEL MES>/BESS/
 ├── Medidas/
 │   ├── Medidas_SAE.xlsx     (botón "Actualizar")
 │   ├── _trabajo/            (lotes descargados; no se muestra en la ventana)
@@ -358,17 +401,17 @@ Ver `desarrollo/MAPA.md` para qué hace cada módulo.
 │                            (hojas "homol" y "Gen real")
 ├── Ofertas/
 │   └── <algún archivo Excel cuyo nombre contenga "OfertasSSCC">
-├── Cmg/
+├── ../Cmg/                        <- en la raíz del mes (común)
 │   ├── cmg<AAMM>_def_15minutal.csv   (botón "Traer")
 │   └── cmg.xlsx                      (botón "Generar")
-├── SSCC_Desempeño/
+├── ../FD y FMA/                   <- en la raíz del mes (común)
 │   └── <algún archivo Excel cuyo nombre empiece con "SSCC_Desempeño_">
 ├── Subastas/
 │   ├── DB subastas/                  (botón "Traer")
 │   │   └── OfertasSSCCAdj*.accdb     <- el origen real de las subastas
 │   └── subastas_AAMM.xlsx            (botón "Consolidar": junta los Access;
 │                                      la hoja 'Subastas' se lleva de aquí)
-├── Prorrata retiros/
+├── ../Prorrata retiros/           <- en la raíz del mes (común)
 │   └── Prorrata_Retiros_<AAMM>_pre.xlsx o _def.xlsx
 │       (hoja "Prorrata 15min")
 ├── 11_PAGOS_BESS_AAMM.xlsx      <- LA salida: entradas y cálculo en un
