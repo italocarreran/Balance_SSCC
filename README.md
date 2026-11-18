@@ -211,6 +211,13 @@ python Herramientas/Reorganizar_Carpetas.py
      `BESS/Auxiliares/`, `BESS/Ofertas/`, `BESS/Subastas/DB subastas/` y las
      comunes con el CRA `Cmg/`, `FD y FMA/` y `Prorrata retiros/`) y no se
      toca nada de lo que ya hay.
+   - **Bloquear caso** (al lado de Examinar): bloquea el caso abierto para
+     no correrlo por error. Con el caso bloqueado se apagan todos los
+     botones que corren procesos (los del diagrama, Ejecutar todo y
+     Generar antecedentes SAE) y el botón pasa a **Desbloquear caso**, en
+     rojo (pregunta antes). El bloqueo es el archivo `CASO_BLOQUEADO.txt`
+     en `<mes>/BESS/` (dice quién y cuándo): viaja con la carpeta, así que
+     lo ve cualquiera que la abra, en cualquier PC.
    - Debajo del diagrama, justo arriba del registro, están **Ejecutar todo**
      y **Generar antecedentes SAE**; abajo de todo, **Actualizar estado**
      (vuelve a mirar las carpetas) y **Salir**.

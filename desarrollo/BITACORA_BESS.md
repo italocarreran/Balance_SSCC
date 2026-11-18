@@ -6799,3 +6799,24 @@ pruebas: funciones, botones, Examinar, el "+", lo que se quitó, CRA);
 python 3.12 + tkinter + xvfb: 531 OK, ninguna salteada; sin tkinter, las de ventana se
 saltean.
 
+## 2026-11-18 (3) — Botón Bloquear/Desbloquear caso
+
+- Pedido del usuario: "un botón de Bloquear/Desbloquear caso, para no correr
+  un caso anterior por error"; "que esté arriba y bloquee todos los botones
+  del caso"; "sin comentario, el botón solamente".
+- `Script/nucleo/bloqueo.py`: el bloqueo es `CASO_BLOQUEADO.txt` en la raíz
+  del BESS del caso (`<mes>/BESS/`, o la carpeta en un caso de antes), con
+  quién y cuándo. Viaja con la carpeta (cualquier PC lo ve); no usa
+  config.json.
+- Ventana: botón al lado de Examinar. Bloqueado: pasa a "Desbloquear caso"
+  en rojo y se apagan todos los botones que corren procesos (árbol, Ejecutar
+  todo, Generar antecedentes SAE); también tras repintar el árbol. Además
+  `caso_listo()` y `lanzar()` se niegan con un aviso (por si alguien lo
+  bloqueó desde otro PC). Bloquear y desbloquear preguntan antes. Ir a este
+  balance, Examinar, Actualizar estado y los links siguen andando.
+- El CRA no mira el bloqueo (no se pidió).
+
+**Verificación:** `desarrollo/tests/test_bloqueo_caso.py` (5 pruebas: el
+archivo; la ventana apaga y vuelve a prender todo; cancelar no bloquea; un
+bloqueo hecho afuera no deja correr). Captura revisada.
+

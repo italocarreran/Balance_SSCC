@@ -30,6 +30,7 @@ Script/
         manifiesto.py          <- que archivo exacto alimento la corrida
         carpetas.py            <- la carpeta del MES compartida: BESS/, CRA/ y las comunes (Cmg, FD y FMA, Prorrata retiros); reconoce los casos de antes
         rutas.py               <- rutas del caso y busqueda de entradas
+        bloqueo.py             <- caso bloqueado: CASO_BLOQUEADO.txt en <mes>/BESS/ (boton Bloquear/Desbloquear caso)
         estructura.py          <- el arbol que dibuja la ventana
         origenes.py            <- de donde viene lo que se trae (links)
         lectura.py             <- Medidas_SAE.xlsx, Centrales.xlsx y la hoja "Centrales"
@@ -152,7 +153,11 @@ importable como cualquier módulo.
   (`examinar_balance`, naranja cuando no hay carpeta), más la línea de
   cambio de hora. Las casillas no cambian el caso abierto: `var_aamm` /
   `var_proceso` / `var_base` son los del caso ABIERTO y solo los cambia
-  `usar_carpeta()`. Debajo dibuja un **diagrama de la estructura del caso** (árbol de
+  `usar_carpeta()`. **Bloquear caso** (`alternar_bloqueo`, al lado de
+  Examinar) deja/borra `nucleo.bloqueo.ARCHIVO_BLOQUEO`; con el caso
+  bloqueado `habilitar_botones()` apaga los del árbol y `botones_caso`
+  (Ejecutar todo, antecedentes), y `caso_listo()` / `lanzar()` se niegan
+  (`avisar_si_bloqueado`). Debajo dibuja un **diagrama de la estructura del caso** (árbol de
   texto tipo consola, prefijos `├──`/`└──`/`│`, patrón tomado del
   `Revisor_Reliquidacion.py` que el usuario dio como referencia) con el
   estado de cada entrada (OK/FALTA/PENDIENTE).

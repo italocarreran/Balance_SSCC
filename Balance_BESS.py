@@ -804,6 +804,16 @@ def main():
     )
     btn_examinar_balance.pack(side="left", padx=8)
 
+    # Bloquear/Desbloquear el caso ABIERTO (pedido del usuario: "para no
+    # correr un caso anterior por error"). Ver nucleo/bloqueo.py.
+    btn_bloqueo = tk.Button(
+        fila_botones_balance, text="Bloquear caso", width=16,
+    )
+    btn_bloqueo.pack(side="left", padx=(16, 0))
+    # Lo que dice el archivo de bloqueo del caso abierto (None: no esta
+    # bloqueado). Lo refresca actualizar_bloqueo().
+    bloqueo = {"info": None}
+
     # Cambio de hora del mes elegido: se detecta solo con el AAMM (ver
     # nucleo.cambio_hora) y queda a la vista mientras se trabaja.
     var_cambio_hora = tk.StringVar(value="")
@@ -1404,11 +1414,18 @@ def main():
                 aviso=fila.get("aviso"),
             )
 
-        if corriendo["activo"]:
-            habilitar_botones(False)
+        # Los botones nuevos nacen activos: se apagan si corre algo o si el
+        # caso esta bloqueado.
+        habilitar_botones(not corriendo["activo"])
+
+    # Los botones de fuera del arbol que corren procesos (Ejecutar todo,
+    # antecedentes SAE): se apagan igual que los del arbol.
+    botones_caso = []
 
     def habilitar_botones(activos):
-        for widget in botones_arbol.values():
+        # Con el caso bloqueado no se corre nada (nucleo/bloqueo.py).
+        activos = activos and bloqueo["info"] is None
+        for widget in [*botones_arbol.values(), *botones_caso]:
             try:
                 widget.config(state="normal" if activos else "disabled")
             except tk.TclError:
@@ -1584,9 +1601,29 @@ def main():
     # REVISION DE LA CARPETA
     # --------------------------------------------------------
 
+    def actualizar_bloqueo():
+        """Lee el archivo de bloqueo del caso abierto y pinta el boton."""
+
+        base = var_base.get()
+        hay_caso = bool(base) and Path(base).is_dir()
+        bloqueo["info"] = nucleo.info_bloqueo(base) if hay_caso else None
+        info = bloqueo["info"]
+        if info is not None:
+            # Solo el boton, sin texto al lado (pedido del usuario).
+            btn_bloqueo.config(text="Desbloquear caso", bg="#b00020", fg="white",
+                               font=("Segoe UI", 9, "bold"))
+        else:
+            btn_bloqueo.config(text="Bloquear caso", bg=COLOR_FONDO_BOTON, fg="black",
+                               font=("Segoe UI", 9))
+        btn_bloqueo.config(
+            state="normal" if hay_caso and not corriendo["activo"] else "disabled"
+        )
+        habilitar_botones(not corriendo["activo"])
+
     def revisar(*_):
 
         ruta = var_base.get()
+        actualizar_bloqueo()
 
         if not ruta or not Path(ruta).is_dir():
             pintar_arbol([])
@@ -1794,7 +1831,24 @@ def main():
             )
             return None
 
+        if avisar_si_bloqueado():
+            return None
+
         return ruta
+
+    def avisar_si_bloqueado():
+        """True (y lo avisa) si el caso abierto esta bloqueado."""
+
+        actualizar_bloqueo()
+        if bloqueo["info"] is None:
+            return False
+        messagebox.showwarning(
+            "Caso bloqueado",
+            "Este caso esta bloqueado: no se corre ningun proceso.\n\n"
+            "Si de verdad hay que correrlo, usa 'Desbloquear caso' (arriba, "
+            "junto a Examinar).",
+        )
+        return True
 
     TITULO_DE_FUNCION = {
         "traer_csv_cmg": "Traer cmg_15min",
@@ -1835,8 +1889,12 @@ def main():
         if corriendo["activo"]:
             return
 
+        if avisar_si_bloqueado():
+            return
+
         corriendo["activo"] = True
         habilitar_botones(False)
+        btn_bloqueo.config(state="disabled")
         txt_log.delete("1.0", "end")
 
         titulo = titulo_de(funcion, kwargs)
@@ -2783,19 +2841,59 @@ def main():
     # solo Actualizar estado y Salir.
     # --------------------------------------------------------
 
-    tk.Button(
+    botones_caso.append(tk.Button(
         frame_acciones,
         text="Ejecutar todo",
         font=("Segoe UI", 9, "bold"),
         bg="#fdf0d5",
         command=ventana_ejecutar_todo,
-    ).pack(side="left", padx=(0, 10))
+    ))
+    botones_caso[-1].pack(side="left", padx=(0, 10))
 
-    tk.Button(
+    botones_caso.append(tk.Button(
         frame_acciones,
         text="Generar antecedentes SAE",
         command=ventana_antecedentes,
-    ).pack(side="left", padx=10)
+    ))
+    botones_caso[-1].pack(side="left", padx=10)
+
+    def alternar_bloqueo():
+        """Bloquea o desbloquea el caso abierto (pregunta antes)."""
+
+        base = var_base.get()
+        if corriendo["activo"] or not base or not Path(base).is_dir():
+            return
+        ano, mes = ano_mes_de(var_aamm.get())
+        nombre = nombre_balance(ano, mes, var_proceso.get()) or Path(base).name
+        actualizar_bloqueo()
+        try:
+            if bloqueo["info"] is None:
+                if not messagebox.askyesno(
+                    "Bloquear caso",
+                    f"¿Bloquear {nombre}?\n\n{base}\n\nMientras este "
+                    f"bloqueado no se corre ningun proceso (botones del "
+                    f"diagrama, Ejecutar todo, antecedentes SAE). Queda un "
+                    f"archivo {nucleo.ARCHIVO_BLOQUEO} en la carpeta: lo ve "
+                    f"cualquiera que la abra.",
+                ):
+                    return
+                nucleo.bloquear(base, quien=get_usuario())
+                log(f"Caso bloqueado: {nombre}")
+            else:
+                if not messagebox.askyesno(
+                    "Desbloquear caso",
+                    f"¿Desbloquear {nombre}?\n\n{base}\n\nSe van a poder "
+                    f"volver a correr sus procesos y cambiar sus resultados.",
+                    icon="warning",
+                ):
+                    return
+                nucleo.desbloquear(base)
+                log(f"Caso desbloqueado: {nombre}")
+        except OSError as error:
+            mostrar_error("No se pudo cambiar el bloqueo", str(error))
+        actualizar_bloqueo()
+
+    btn_bloqueo.config(command=alternar_bloqueo)
 
     tk.Button(
         frame_botones, text="Actualizar estado", command=actualizar_vista,

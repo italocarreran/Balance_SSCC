@@ -17,6 +17,7 @@ ahora en el modulo de su etapa:
     verificaciones.py        Medidores coherente: SoC vs carga/descarga, barras sin CMg.
     manifiesto.py            Que archivo exacto alimento esta corrida.
     rutas.py                 Rutas del caso y busqueda de los archivos de entrada.
+    bloqueo.py               Caso bloqueado: un archivo en la carpeta del caso.
     estructura.py            El arbol de carpetas y archivos que dibuja la ventana.
     lectura.py               Medidas_SAE.xlsx y el maestro Centrales.xlsx.
     soc.py                   El SoC del periodo: se trae de PI AF y se lee.
@@ -119,6 +120,9 @@ from .rutas import (
     carpeta_corresponde_al_periodo, nombre_caso_sugerido,
     periodo_desde_aamm, periodos_en_el_nombre,
     resolver_rutas, validar_aamm, nombre_salida, nombre_csv_sae,
+)
+from .bloqueo import (
+    ARCHIVO_BLOQUEO, bloquear, desbloquear, esta_bloqueado, info_bloqueo,
 )
 from .csv_sae import construir_csv_sae, generar_csv_sae
 from .reporte import (
@@ -333,6 +337,8 @@ __all__ = [
     "buscar_soc", "periodo_desde_aamm", "resolver_rutas",
     "SUBCARPETAS_CASO", "crear_estructura_caso", "nombre_caso_sugerido",
     "CARPETAS_PROPIAS", "faltan_subcarpetas", "raiz_bess",
+    "ARCHIVO_BLOQUEO", "bloquear", "desbloquear", "esta_bloqueado",
+    "info_bloqueo",
     "subcarpetas_del_caso", "CARPETA_BESS",
     "CARPETA_DEL_PERIODO", "CARPETA_DE_OTRO_PERIODO", "CARPETA_SIN_PERIODO",
     "carpeta_corresponde_al_periodo", "periodos_en_el_nombre",
