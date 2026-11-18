@@ -187,36 +187,35 @@ python Herramientas/Reorganizar_Carpetas.py
    `Origen: progdiar_adjudicaSEN` en `DB subastas/`, y `Origen inputs: ...`
    en `cmg.xlsx` y en las tres de FMA, que no se traen hechas pero se arman
    con insumos que sí vienen de afuera.
-   - **Cada período trabaja en su propia carpeta: dos meses nunca
-     comparten una.** Al cambiar el AAMM:
-     - Si ese período ya tuvo carpeta, la ventana **vuelve sola a ella**
-       (se acuerda de qué carpeta usó cada mes, por PC/usuario, en
-       `__config__/config.json`).
-     - Si no, y la carpeta abierta es la de otro mes (lo dice su nombre, o
-       que ya quedó anotada como la de ese otro mes), **pregunta**:
-       **Examinar…** para elegir la carpeta de este período, **Crear la
-       carpeta** para armarla nueva, o **Cancelar**, que vuelve al período
-       anterior — el mes nuevo nunca se queda apuntando a la carpeta del
-       mes viejo.
-     - Si el nombre de la carpeta abierta no trae ningún AAMM y nunca se
-       anotó, no hay con qué saberlo: pregunta lo mismo, más un tercer
-       botón **"Esta es la de AAMM"** para decir que sí lo es (queda
-       anotada y no vuelve a preguntar por ese mes).
-   - **Crear la carpeta** propone el nombre de la carpeta que tenías
-     abierta con el AAMM cambiado (`Balance BESS 2607` → `Balance BESS
-     2608`) y dónde crearla, y las dos cosas se pueden editar antes de
-     confirmar. Se crean la carpeta y sus subcarpetas vacías
-     (`BESS/Medidas/`, `BESS/Auxiliares/`, `BESS/Ofertas/`,
-     `BESS/Subastas/DB subastas/` y las comunes con el CRA `Cmg/`, `FD y
-     FMA/` y `Prorrata retiros/`) y el caso queda abierto
-     en ese período. También está el botón **Crear carpeta del caso**,
-     abajo de todo.
-   - A un caso al que le falte alguna subcarpeta se la completa desde ahí
-     mismo (al elegir la carpeta con **Examinar**, o al cambiar el
-     período): se crean sólo las que faltan y no se toca nada de lo que ya
-     hay.
+   - **Arriba, el balance del caso: `año _ mes _ proceso`** (por ejemplo
+     `2026_Marzo_Definitivo`), tres listas desplegables. Año: de 2025 a hoy;
+     mes: escrito; proceso: **Preliminar** y **Definitivo** de fábrica, y
+     con **+ Agregar otro...** se suman los que haga falta (`R01P`,
+     `R01D`, ...), que quedan guardados para la próxima vez. Por dentro el
+     cálculo sigue usando el AAMM (`2603`), que sale del año y el mes.
+   - Al lado se ve `2026_Marzo_Definitivo - RUTA` y debajo dos botones:
+     **Ir a este balance** (azul si ese balance ya tiene carpeta; bloqueado
+     si no) y **Examinar** (se destaca en naranja cuando el balance no
+     tiene carpeta; desde su diálogo también se puede crear una nueva).
+     Elegir en las listas no cambia el caso abierto: lo cambian esos dos
+     botones. Debajo, el aviso de cambio de hora del mes.
+   - **Cada balance (mes + proceso) tiene su propia carpeta**: el
+     Preliminar y el Definitivo del mismo mes son dos casos. La ventana se
+     acuerda de qué carpeta usó cada balance (por PC/usuario, en
+     `__config__/config.json`); si con Examinar se elige la carpeta de
+     otro balance, pregunta antes de pasarla. Una carpeta anotada antes de
+     que hubiera proceso (solo con el AAMM) sigue sirviendo si su nombre
+     dice el proceso (`... 2610 Preliminar`).
+   - A una carpeta a la que le falte alguna subcarpeta se la completa al
+     elegirla con **Examinar**: se crean sólo las que faltan (`BESS/Medidas/`,
+     `BESS/Auxiliares/`, `BESS/Ofertas/`, `BESS/Subastas/DB subastas/` y las
+     comunes con el CRA `Cmg/`, `FD y FMA/` y `Prorrata retiros/`) y no se
+     toca nada de lo que ya hay.
+   - Debajo del diagrama, justo arriba del registro, están **Ejecutar todo**
+     y **Generar antecedentes SAE**; abajo de todo, **Actualizar estado**
+     (vuelve a mirar las carpetas) y **Salir**.
 4. **Cada acción es un botón en la fila que le corresponde** (y además está
-   el botón **Ejecutar todo**, abajo de todo — ver más abajo):
+   el botón **Ejecutar todo**, arriba del registro — ver más abajo):
    - `Medidas/Medidas_SAE.xlsx` → **Actualizar** (baja el mes completo de las
      dos APIs del Coordinador y arma el archivo).
    - `Cmg/cmg<AAMM>_def_15minutal.csv` → **Traer** (lo baja de la

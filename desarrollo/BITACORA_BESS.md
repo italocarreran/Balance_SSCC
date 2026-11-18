@@ -6765,3 +6765,37 @@ cambia nada. 513 pruebas en verde.
 
 **Verificación:** `py_compile` OK; suite completa 507 pruebas OK (36 salteadas), igual que antes del cambio. Prueba nueva: CSF "No participó" conserva el FD del archivo en RE545.
 
+## 2026-11-18 (2) — Ventana: el balance del caso es año _ mes _ proceso
+
+- Pedido del usuario: en vez del AAMM, tres casillas desplegables
+  `año _ mes _ proceso` (`2026_Marzo_Definitivo`): años 2025..hoy, meses
+  escritos, procesos Preliminar y Definitivo de fábrica y un "+ Agregar
+  otro..." para sumar R01P, R01D, etc. (quedan en `"procesos"` del config).
+  Debajo `NOMBRE - RUTA` y dos botones: **Ir a este balance** (azul si el
+  balance tiene carpeta, bloqueado si no) y **Examinar** (naranja cuando no
+  la tiene), y la línea de cambio de hora. El marco pasa a llamarse
+  "Balance del caso". Se quitó el comentario de los 4 dígitos.
+- Se quitaron el marco "Carpeta base del caso" (con sus Examinar y
+  Actualizar), "Crear carpeta del caso" y "Abrir carpeta del caso" (con
+  `ventana_nuevo_caso`, `ventana_carpeta_del_periodo` y `aamm_cambiado`).
+  **Ejecutar todo** y **Generar antecedentes SAE** van debajo del árbol,
+  justo arriba del registro; abajo quedan **Actualizar estado** y **Salir**.
+- Las casillas no cambian el caso abierto: lo cambian los dos botones
+  (`usar_carpeta`). El AAMM del cálculo sale de año + mes; nada del núcleo
+  cambió.
+- Una carpeta por balance: `carpetas_por_periodo` se anota con
+  `"AAMM_Proceso"`. Compatibilidad: una carpeta anotada solo con el AAMM
+  vale para el proceso que diga su nombre, y sin `"proceso"` en el config
+  se toma del nombre de la carpeta. Examinar avisa si la carpeta ya era de
+  otro balance. `Balance_CRA.carpetas_del_bess` vuelve las claves nuevas al
+  AAMM (el CRA no tiene proceso).
+- Para ver la ventana acá: `apt-get install python3-tk` (queda para
+  `/usr/bin/python3.12`) y `xvfb-run`; capturas revisadas (balance abierto,
+  mes sin carpeta, lista de procesos con el "+", abajo).
+
+**Verificación:** `desarrollo/tests/test_ventana_balance.py` nueva (11
+pruebas: funciones, botones, Examinar, el "+", lo que se quitó, CRA);
+`test_ventana_actualizar` usa "Actualizar estado". Suite completa con
+python 3.12 + tkinter + xvfb: 531 OK, ninguna salteada; sin tkinter, las de ventana se
+saltean.
+
