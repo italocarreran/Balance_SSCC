@@ -85,7 +85,7 @@ def calcular_ecostos(horas_subasta=(1, 2, 3)):
     ec = construir_calculo_e_costos(
         base.assign(Ventana_No_Completa=1), {k: BARRA}, dic_cmg, registrar=silencio)
     return completar_calculo_e_costos_grupos(
-        ec, _subastas(horas_subasta), {k: PMAX}, UMBRAL_SOC, None,
+        ec, _subastas(horas_subasta), {k: PMAX}, None,
         _fd("CSF"), _fd("CPF"), registrar=silencio)
 
 
@@ -95,7 +95,7 @@ def calcular_re545():
     re = construir_calculo_re545(
         base.assign(Ventana_No_Completa=0), {k: BARRA}, dic_cmg, registrar=silencio)
     re = completar_calculo_re545(
-        re, _subastas((1, 2, 3)), UMBRAL_SOC, {k: CAPACIDAD}, {k: EFICIENCIA},
+        re, _subastas((1, 2, 3)), {k: CAPACIDAD}, {k: EFICIENCIA},
         registrar=silencio)
     oferta = pd.DataFrame([{"Central": CENTRAL, "Ventana T": 1, "Oferta": 96, "Completa": 1}])
     res = construir_resumen_ventanas_re545(re, oferta, {k: CAPACIDAD}, registrar=silencio)
