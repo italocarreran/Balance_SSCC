@@ -117,7 +117,7 @@ class TestPorQueNoRecibe(unittest.TestCase):
         self.assertEqual(
             r.explicar_central(ninguna),
             "Según FD no tuvo participación en CPF ('No participó' en todas sus 29 "
-            "horas adjudicadas: no se pagan).",
+            "horas adjudicadas; el FD se toma como viene del archivo).",
         )
         self.assertEqual(r.explicar_central(dict(casi, **{r.C_TOTAL: 0.0})).find("casi"), -1)
 
@@ -484,9 +484,9 @@ class TestNoParticipo(unittest.TestCase):
         with tempfile.TemporaryDirectory() as carpeta:
             resumen = self._planilla_fd(carpeta, ["No Participó", "No participo"])
         uno = resumen.set_index(r.C_CENTRAL).loc["SAE-UNO"]
-        # El archivo trae FD = 1, pero con la regla por direccion esas horas
-        # (adjudicadas en CSF, "No participó") no se pagan: FD = 0.
-        self.assertEqual(uno[r.C_FD_CSF], 0.0)
+        # El archivo trae FD = 1 y se toma tal cual (la regla que lo dejaba
+        # en 0 se devolvio el 2026-11-18); las horas igual se cuentan.
+        self.assertEqual(uno[r.C_FD_CSF], 1.0)
         # Subastas: CSF(+) en la hora 1 y CSF(-) en la 2 -> 2 horas-direccion.
         self.assertEqual(uno[r.C_NPA_CSF], 2.0)
         self.assertEqual(uno[r.C_HA_CSF], 2.0)
@@ -498,7 +498,7 @@ class TestNoParticipo(unittest.TestCase):
             r.explicar_central(fila_cero),
             # Las 2 horas del FD estan adjudicadas en CSF (Subastas, Hora_mes 1 y 2).
             "Según FD no tuvo participación en CSF ('No participó' en todas "
-            "sus 2 horas adjudicadas: no se pagan).",
+            "sus 2 horas adjudicadas; el FD se toma como viene del archivo).",
         )
 
     def test_participo_no_cuenta(self):

@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Las horas "No participó" no se pagan, POR DIRECCION (no_participo.py).
+Las horas "No participó": el FD se toma TAL CUAL del archivo de desempeno.
 
-Decision del usuario (2026-11-11): "si tu estas adjudicado por control de
-bajada y no prestaste control de subida o no participaste en control de
-subida, el control de bajada te lo tienen que pagar". En octubre real la
-regla resta $11 MM (experimento de la rama claude/experimento-no-participo).
+El 2026-11-11 se puso en 0 el FD de la direccion "No participó"; el
+2026-11-18 el usuario lo devolvio (ver no_participo.py). Estas pruebas
+fijan que E Costos y RE545 ya no lo tocan, que el Reporte las sigue
+contando por direccion y que la comparacion avisa si una planilla se
+calculo con la regla devuelta.
 """
 
 import tempfile
@@ -49,29 +50,23 @@ def bloque_csf(resp, fd=1.0):
     return df
 
 
-class TestFdPorDireccion(unittest.TestCase):
+class TestMascarasPorDireccion(unittest.TestCase):
 
-    def test_cpf_subida_no_participo_la_bajada_se_paga(self):
-        copia, cambiadas = npar.fd_por_direccion(
-            bloque_cpf(["No Participó", 0.9], [0.8, 0.8]), "CPF"
+    def test_cpf_cada_direccion_con_su_respuesta(self):
+        m = npar.mascaras_no_participo(
+            bloque_cpf(["No Participó", 0.9], [0.8, "No participo"]), "CPF"
         )
-        self.assertEqual(copia["CPF(+)"].tolist(), [0.0, 1.0])
-        self.assertEqual(copia["CPF(-)"].tolist(), [1.0, 1.0])   # bajada intacta
-        self.assertEqual(cambiadas, 1)
+        self.assertEqual(m["+"].tolist(), [True, False])
+        self.assertEqual(m["-"].tolist(), [False, True])
 
     def test_csf_una_respuesta_para_las_dos(self):
-        copia, _ = npar.fd_por_direccion(bloque_csf(["No participo", 0.95]), "CSF")
-        self.assertEqual(copia["CSF(+)"].tolist(), [0.0, 1.0])
-        self.assertEqual(copia["CSF(-)"].tolist(), [0.0, 1.0])
-
-    def test_la_hoja_original_no_se_toca(self):
-        original = bloque_cpf(["No Participó", 1], [1, 1])
-        npar.fd_por_direccion(original, "CPF")
-        self.assertEqual(original["CPF(+)"].tolist(), [1.0, 1.0])
+        m = npar.mascaras_no_participo(bloque_csf(["No participo", 0.95]), "CSF")
+        self.assertEqual(m["+"].tolist(), [True, False])
+        self.assertEqual(m["-"].tolist(), [True, False])
 
 
 class TestRE545PorFilaDeSubastas(unittest.TestCase):
-    """Cada fila de Subastas mira la Respuesta de SU direccion."""
+    """El FD de cada fila de Subastas es el del archivo, aunque diga "No participó"."""
 
     def test_fd_de_cada_fila(self):
         tablas = tablas_fd_desde_hoja(
@@ -87,8 +82,23 @@ class TestRE545PorFilaDeSubastas(unittest.TestCase):
         fd = calcular_fd_subastas(
             subastas, tablas, dic_unidad_fd={"sae-uno": "U"}, registrar=lambda *a: None
         )
-        # Hora 1: subida "No participó" -> 0; bajada se paga. Hora 2 al reves.
-        self.assertEqual([float(v) for v in fd], [0.0, 1.0, 1.0, 0.0])
+        self.assertEqual([float(v) for v in fd], [1.0, 1.0, 1.0, 1.0])
+
+    def test_csf_no_participo_conserva_el_fd_del_archivo(self):
+        # EMOAC (O2026-0052605/0052606): FD CSF 1 en el archivo, 0 en la hoja.
+        tablas = tablas_fd_desde_hoja(
+            bloque_csf(["No Participó", 0.95]), None, registrar=lambda *a: None,
+        )
+        subastas = pd.DataFrame({
+            "Concepto": ["CSF(+)", "CSF(-)"],
+            "Control": ["CSF"] * 2,
+            "Hora_mes": [1, 1],
+            "Configuración": ["SAE-UNO"] * 2,
+        })
+        fd = calcular_fd_subastas(
+            subastas, tablas, dic_unidad_fd={"sae-uno": "U"}, registrar=lambda *a: None
+        )
+        self.assertEqual([float(v) for v in fd], [1.0, 1.0])
 
 
 class TestReportePorDireccion(unittest.TestCase):
@@ -125,7 +135,7 @@ class TestReportePorDireccion(unittest.TestCase):
 
 class TestAvisoPlanillaDeAntes(unittest.TestCase):
     """
-    Comparar una planilla calculada antes de la regla con una de despues
+    Comparar una planilla calculada con la regla devuelta con una de ahora
     mostraria la regla como un cambio de FD: la comparacion lo avisa.
     """
 
@@ -138,7 +148,7 @@ class TestAvisoPlanillaDeAntes(unittest.TestCase):
             df = pd.DataFrame([{r.C_CENTRAL: "SAE-UNO", r.C_TOTAL: 1.0e6,
                                 r.C_ECOSTOS: 1.0e6, r.C_RE545: 0.0}],
                               columns=[*r.COLUMNAS_RESUMEN])
-            df.attrs["no_participo_pagadas"] = 340 if "2609" in str(ruta) else 0
+            df.attrs["no_participo_en_cero"] = 340 if "2609" in str(ruta) else 0
             return df
 
         with tempfile.TemporaryDirectory() as carpeta, \
@@ -147,9 +157,9 @@ class TestAvisoPlanillaDeAntes(unittest.TestCase):
                 Path(carpeta) / "11_PAGOS_BESS_2610.xlsx",
                 Path(carpeta) / "11_PAGOS_BESS_2609.xlsx", registrar=lambda *a: None,
             )
-        self.assertTrue(lineas[0].startswith("ATENCIÓN: 11_PAGOS_BESS_2609.xlsx se calculó antes"))
+        self.assertTrue(lineas[0].startswith("ATENCIÓN: 11_PAGOS_BESS_2609.xlsx se calculó con la regla"))
         self.assertIn("340 filas", lineas[0])
-        self.assertFalse(any("2610.xlsx se calculó antes" in l for l in lineas))
+        self.assertFalse(any("2610.xlsx se calculó con" in l for l in lineas))
 
 
 if __name__ == "__main__":
