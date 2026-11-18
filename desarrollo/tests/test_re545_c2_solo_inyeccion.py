@@ -40,7 +40,8 @@ def _pago(inyeccion, solo_inyeccion):
 
 class TestComponente2(unittest.TestCase):
 
-    def test_por_defecto_sigue_la_regla_de_hoy(self):
+    def test_por_defecto_sigue_la_regla_de_siempre(self):
+        # Obs. O2026-0052689 pendiente (2026-11-18).
         self.assertFalse(rc.C2_SOLO_INYECCION)
 
     def test_sin_inyeccion_no_cambia(self):

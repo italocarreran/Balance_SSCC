@@ -7,25 +7,32 @@ copiar a mano desde el zip.
 
     python Herramientas/Actualizar_desde_GitHub.py
 
-Actualiza la carpeta del proyecto (la de arriba de Herramientas/).
+Actualiza la carpeta del proyecto (la de arriba de Herramientas/), y solo
+lo que hace falta para correr (pedido del usuario, 2026-11-18): los .py
+de las ventanas (Balance_BESS.py, Balance_CRA.py), requirements.txt, la
+carpeta Herramientas/ y la carpeta Script/.
 
-1. Se elige la rama (por defecto "main", que es donde quedan los cambios
-   una vez aceptado el pull request; las "claude/..." son las de trabajo).
-2. "Revisar cambios" baja el zip de esa rama y lo compara con esta
-   carpeta: lista los archivos nuevos y los modificados.
-3. "Actualizar" copia solo esos. Antes guarda la version anterior de cada
-   archivo que reemplaza en __config__/respaldos_actualizacion/<fecha>/.
+1. Se elige la rama en la lista desplegable (se carga sola al abrir; por
+   defecto "main", donde quedan los cambios una vez aceptado el pull
+   request; las "claude/..." son las de trabajo). Al elegir la rama se
+   revisa sola; al abrir no se revisa nada hasta elegirla o apretar
+   "Revisar".
+2. La lista muestra SOLO lo que cambio, como un arbol de carpetas con
+   casillas: las carpetas vienen cerradas (la flecha las abre) y todo
+   viene marcado. Marcar o desmarcar una carpeta marca o desmarca lo que
+   cambio adentro.
+3. "Actualizar" copia lo marcado encima de lo que hay (sin respaldo,
+   pedido del usuario 2026-11-18: lo anterior queda en GitHub).
 
-Nunca borra nada: los archivos que ya no estan en GitHub solo se avisan.
-Nunca toca __config__, tks.json, config.json ni las salidas (no vienen en
-el zip). Solo usa la biblioteca estandar de Python (urllib usa los
-certificados de Windows, que suele ser lo que pide el proxy de la pega).
+Nunca borra nada. Nunca toca __config__, tks.json, config.json ni las
+salidas (no vienen en el zip). Solo usa la biblioteca estandar de Python
+(urllib usa los certificados de Windows, que suele ser lo que pide el
+proxy de la pega).
 """
 
 import io
 import json
 import queue
-import shutil
 import ssl
 import threading
 import time
@@ -33,7 +40,6 @@ import tkinter as tk
 import urllib.error
 import urllib.request
 import zipfile
-from datetime import datetime
 from pathlib import Path
 from tkinter import messagebox, ttk
 
@@ -45,12 +51,15 @@ RAMA_POR_DEFECTO = "main"
 _ESTA = Path(__file__).resolve().parent
 AQUI = _ESTA.parent if _ESTA.name.lower() == "herramientas" else _ESTA
 
+# Lo que se actualiza: lo necesario para correr los programas.
+CARPETAS_ALCANCE = ("Script", "Herramientas")
+EXTENSIONES_RAIZ = (".py", ".txt")
+
 # Lo que nunca se escribe aunque viniera en el zip.
 PROTEGIDOS = {"config.json", "tks.json"}
 CARPETAS_PROTEGIDAS = {"__config__", "__pycache__", ".git", ".venv", "venv"}
 
-# Para el aviso de "ya no esta en GitHub": solo archivos de codigo y texto.
-EXTENSIONES_AVISO = {".py", ".md", ".txt"}
+MARCADO, VACIO, PARCIAL = "☑", "☐", "▣"
 
 
 # ------------------------------------------------------------
@@ -99,7 +108,7 @@ def _abrir(url, timeout=60):
 
 
 def listar_ramas():
-    """Las ramas del repo, con main primero y las mas nuevas despues."""
+    """Las ramas del repo, con main primero."""
 
     ramas = []
     pagina = 1
@@ -121,20 +130,10 @@ def listar_ramas():
     return ramas
 
 
-def bajar_zip(rama, avance=None):
+def bajar_zip(rama):
     url = f"https://codeload.github.com/{DUENO}/{REPO}/zip/refs/heads/{rama}"
     with _abrir(url, timeout=120) as r:
-        partes = []
-        total = 0
-        while True:
-            trozo = r.read(256 * 1024)
-            if not trozo:
-                break
-            partes.append(trozo)
-            total += len(trozo)
-            if avance:
-                avance(total)
-    return b"".join(partes)
+        return r.read()
 
 
 def archivos_del_zip(contenido):
@@ -156,9 +155,15 @@ def archivos_del_zip(contenido):
 # Comparacion
 # ------------------------------------------------------------
 
-def _protegido(relativa):
+def en_alcance(relativa):
+    """Lo necesario para correr: .py/.txt de la raiz, Script/ y Herramientas/."""
+
     partes = relativa.split("/")
-    return partes[-1] in PROTEGIDOS or any(p in CARPETAS_PROTEGIDAS for p in partes)
+    if partes[-1] in PROTEGIDOS or any(p in CARPETAS_PROTEGIDAS for p in partes):
+        return False
+    if len(partes) == 1:
+        return Path(relativa).suffix.lower() in EXTENSIONES_RAIZ
+    return partes[0] in CARPETAS_ALCANCE
 
 
 def _iguales(a, b):
@@ -166,55 +171,36 @@ def _iguales(a, b):
     return a == b or a.replace(b"\r\n", b"\n") == b.replace(b"\r\n", b"\n")
 
 
-def comparar(remotos):
-    nuevos, modificados = [], []
+def comparar(remotos, aqui=None):
+    """{ruta: "Nuevo" | "Modificado"} de lo que cambio, dentro del alcance."""
+
+    aqui = Path(aqui or AQUI)
+    cambios = {}
     for relativa, datos in sorted(remotos.items()):
-        if _protegido(relativa):
+        if not en_alcance(relativa):
             continue
-        local = AQUI / relativa
+        local = aqui / relativa
         if not local.exists():
-            nuevos.append(relativa)
-        else:
-            try:
-                if not _iguales(local.read_bytes(), datos):
-                    modificados.append(relativa)
-            except OSError:
-                modificados.append(relativa)
-
-    # Archivos locales de codigo que ya no estan en GitHub (solo aviso).
-    sobrantes = []
-    carpetas_repo = {r.split("/")[0] for r in remotos if "/" in r}
-    for local in AQUI.rglob("*"):
-        if not local.is_file() or local.suffix.lower() not in EXTENSIONES_AVISO:
+            cambios[relativa] = "Nuevo"
             continue
-        relativa = local.relative_to(AQUI).as_posix()
-        if _protegido(relativa) or relativa in remotos:
-            continue
-        primera = relativa.split("/")[0]
-        if "/" in relativa and primera not in carpetas_repo:
-            continue  # carpetas que no son del repo (salidas, etc.)
-        sobrantes.append(relativa)
-    return nuevos, modificados, sorted(sobrantes)
+        try:
+            if not _iguales(local.read_bytes(), datos):
+                cambios[relativa] = "Modificado"
+        except OSError:
+            cambios[relativa] = "Modificado"
+    return cambios
 
 
-def aplicar(remotos, rutas):
-    """Escribe las rutas; respalda antes lo que reemplaza. Devuelve la carpeta de respaldo."""
+def aplicar(remotos, rutas, aqui=None):
+    """Escribe las rutas encima de lo que hay (sin respaldo)."""
 
-    respaldo = (carpeta_config() / "respaldos_actualizacion"
-                / datetime.now().strftime("%Y-%m-%d_%H%M%S"))
-    hubo_respaldo = False
+    aqui = Path(aqui or AQUI)
     for relativa in rutas:
-        destino = AQUI / relativa
-        if destino.exists():
-            copia = respaldo / relativa
-            copia.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(destino, copia)
-            hubo_respaldo = True
+        destino = aqui / relativa
         destino.parent.mkdir(parents=True, exist_ok=True)
         tmp = destino.with_name(destino.name + ".tmp_actualizar")
         tmp.write_bytes(remotos[relativa])
         tmp.replace(destino)
-    return respaldo if hubo_respaldo else None
 
 
 # ------------------------------------------------------------
@@ -226,13 +212,16 @@ class Ventana:
         self.raiz = raiz
         self.cola = queue.Queue()
         self.remotos = {}
-        self.pendientes = []
+        self.cambios = {}          # ruta -> "Nuevo" | "Modificado"
+        self.marcados = set()      # rutas marcadas
+        self.item_de = {}          # ruta (archivo o carpeta) -> item del arbol
+        self.ruta_de = {}          # item -> ruta
         self.ocupado = False
         self.inicio = None
 
         raiz.title("Actualizar desde GitHub")
-        raiz.geometry("760x560")
-        raiz.minsize(600, 420)
+        raiz.geometry("720x560")
+        raiz.minsize(560, 420)
 
         marco = ttk.Frame(raiz, padding=10)
         marco.pack(fill="both", expand=True)
@@ -247,45 +236,46 @@ class Ventana:
         fila = ttk.Frame(marco)
         fila.pack(fill="x", pady=(8, 0))
         ttk.Label(fila, text="Rama:").pack(side="left")
-        ajustes = leer_ajustes()
-        self.rama = tk.StringVar(value=ajustes.get("rama") or RAMA_POR_DEFECTO)
-        self.combo = ttk.Combobox(fila, textvariable=self.rama, width=48,
-                                  values=[RAMA_POR_DEFECTO])
+        self.rama = tk.StringVar(value=leer_ajustes().get("rama") or RAMA_POR_DEFECTO)
+        self.combo = ttk.Combobox(fila, textvariable=self.rama, width=44,
+                                  values=[self.rama.get()], state="readonly")
         self.combo.pack(side="left", padx=6)
-        self.btn_ramas = ttk.Button(fila, text="Cargar ramas", command=self.cargar_ramas)
-        self.btn_ramas.pack(side="left")
-
-        fila = ttk.Frame(marco)
-        fila.pack(fill="x", pady=8)
-        self.btn_revisar = ttk.Button(fila, text="Revisar cambios", command=self.revisar)
+        self.combo.bind("<<ComboboxSelected>>", lambda e: self.revisar())
+        self.btn_revisar = ttk.Button(fila, text="Revisar", command=self.revisar)
         self.btn_revisar.pack(side="left")
-        self.btn_aplicar = ttk.Button(fila, text="Actualizar", command=self.actualizar,
-                                      state="disabled")
-        self.btn_aplicar.pack(side="left", padx=6)
-        self.estado = ttk.Label(fila, text="")
-        self.estado.pack(side="left", padx=10)
 
-        self.barra = ttk.Progressbar(marco, mode="indeterminate")
-        self.barra.pack(fill="x")
+        self.estado = ttk.Label(marco, text="")
+        self.estado.pack(fill="x", pady=(8, 4))
 
         lista = ttk.Frame(marco)
-        lista.pack(fill="both", expand=True, pady=(8, 0))
-        self.arbol = ttk.Treeview(lista, columns=("estado",), show="tree headings", height=10)
-        self.arbol.heading("#0", text="Archivo")
+        lista.pack(fill="both", expand=True)
+        self.arbol = ttk.Treeview(lista, columns=("estado",), show="tree headings",
+                                  selectmode="none")
+        self.arbol.heading("#0", text="Lo que cambió")
         self.arbol.heading("estado", text="Estado")
-        self.arbol.column("estado", width=150, anchor="w", stretch=False)
+        self.arbol.column("estado", width=170, anchor="w", stretch=False)
         barra_v = ttk.Scrollbar(lista, orient="vertical", command=self.arbol.yview)
         self.arbol.configure(yscrollcommand=barra_v.set)
         self.arbol.pack(side="left", fill="both", expand=True)
         barra_v.pack(side="right", fill="y")
+        self.arbol.bind("<Button-1>", self._clic)
 
-        self.log = tk.Text(marco, height=7, wrap="word", state="disabled")
+        fila = ttk.Frame(marco)
+        fila.pack(fill="x", pady=(8, 0))
+        self.btn_aplicar = ttk.Button(fila, text="Actualizar lo marcado",
+                                      command=self.actualizar, state="disabled")
+        self.btn_aplicar.pack(side="left")
+        ttk.Button(fila, text="Salir", command=raiz.destroy).pack(side="right")
+
+        self.log = tk.Text(marco, height=5, wrap="word", state="disabled")
         self.log.pack(fill="x", pady=(8, 0))
 
-        self._escribir(f"Repositorio: github.com/{DUENO}/{REPO}")
-        self._escribir("Elegir la rama y presionar 'Revisar cambios'.")
         raiz.after(100, self._procesar_cola)
         raiz.after(500, self._reloj)
+        # Al abrir solo se carga la lista de ramas: la revision parte al
+        # elegir una rama (o con "Revisar"), pedido del usuario.
+        raiz.after(200, self.cargar_ramas)
+        self.estado.configure(text="Elige la rama en la lista (o aprieta Revisar).")
 
     # --- utilidades ---
 
@@ -311,18 +301,11 @@ class Ventana:
 
     def _ocupar(self, si, texto=""):
         self.ocupado = si
-        estado = "disabled" if si else "normal"
-        self.btn_revisar.configure(state=estado)
-        self.btn_ramas.configure(state=estado)
-        self.combo.configure(state=estado)
-        if si:
-            self.btn_aplicar.configure(state="disabled")
-            self.inicio = time.time()
-            self.barra.start(12)
-        else:
-            self.inicio = None
-            self.barra.stop()
+        self.btn_revisar.configure(state="disabled" if si else "normal")
+        self.combo.configure(state="disabled" if si else "readonly")
+        self.inicio = time.time() if si else None
         self.estado.configure(text=texto)
+        self._pintar_boton()
 
     def _reloj(self):
         if self.inicio is not None:
@@ -355,84 +338,148 @@ class Ventana:
             pass
         self.raiz.after(100, self._procesar_cola)
 
-    # --- acciones ---
+    # --- ramas ---
 
     def cargar_ramas(self):
-        self._ocupar(True, "Cargando ramas...")
-        self._en_hilo(lambda: self.cola.put(("ramas", listar_ramas())))
+        """La lista desplegable de ramas, cargada en segundo plano al abrir."""
+
+        def trabajo():
+            try:
+                self.cola.put(("ramas", listar_ramas()))
+            except Exception as e:  # noqa: BLE001 - se avisa en el registro
+                self.cola.put(("aviso", f"No se pudo cargar la lista de ramas: {e}"))
+        threading.Thread(target=trabajo, daemon=True).start()
 
     def _al_ramas(self, ramas):
-        self._ocupar(False, f"{len(ramas)} ramas")
+        actual = self.rama.get()
+        if actual and actual not in ramas:
+            ramas = [actual, *ramas]
         self.combo.configure(values=ramas)
-        self._escribir(f"Ramas disponibles: {len(ramas)}.")
+        self._escribir(f"{len(ramas)} rama(s) en GitHub: elegir en la lista 'Rama'.")
+
+    def _al_aviso(self, texto):
+        self._escribir(texto)
+
+    # --- revisar ---
 
     def revisar(self):
         rama = self.rama.get().strip()
-        if not rama:
+        if not rama or self.ocupado:
             return
-        self._ocupar(True, f"Bajando '{rama}'...")
+        self._ocupar(True, f"Revisando la rama '{rama}'...")
         self.arbol.delete(*self.arbol.get_children())
-        self._escribir(f"Bajando la rama '{rama}'...")
 
         def trabajo():
-            contenido = bajar_zip(rama, lambda n: None)
-            remotos = archivos_del_zip(contenido)
-            nuevos, modificados, sobrantes = comparar(remotos)
-            self.cola.put(("revision", (rama, remotos, nuevos, modificados, sobrantes,
-                                        len(contenido))))
+            remotos = archivos_del_zip(bajar_zip(rama))
+            self.cola.put(("revision", (rama, remotos, comparar(remotos))))
         self._en_hilo(trabajo)
 
     def _al_revision(self, datos):
-        rama, remotos, nuevos, modificados, sobrantes, peso = datos
+        rama, remotos, cambios = datos
         self.remotos = remotos
-        self.pendientes = modificados + nuevos
+        self.cambios = cambios
+        self.marcados = set(cambios)      # todo lo que cambio, marcado
         guardar_ajustes({**leer_ajustes(), "rama": rama})
-
-        for r in modificados:
-            self.arbol.insert("", "end", text=r, values=("Modificado",))
-        for r in nuevos:
-            self.arbol.insert("", "end", text=r, values=("Nuevo",))
-        for r in sobrantes:
-            self.arbol.insert("", "end", text=r, values=("Ya no esta en GitHub",))
-
-        self._ocupar(False, f"{len(self.pendientes)} archivo(s) por actualizar")
-        self._escribir(f"Zip de '{rama}': {peso / 1024:.0f} KB, {len(remotos)} archivos. "
-                       f"Modificados: {len(modificados)}, nuevos: {len(nuevos)}.")
-        if sobrantes:
-            self._escribir(f"{len(sobrantes)} archivo(s) local(es) ya no estan en GitHub "
-                           "(no se borran; revisar si sobran).")
-        if self.pendientes:
-            self.btn_aplicar.configure(state="normal")
+        self._armar_arbol()
+        nuevos = sum(1 for e in cambios.values() if e == "Nuevo")
+        if cambios:
+            texto = (f"Rama '{rama}': {len(cambios) - nuevos} modificado(s), "
+                     f"{nuevos} nuevo(s).")
         else:
-            self._escribir("La carpeta ya esta al dia.")
+            texto = f"Rama '{rama}': ya está todo al día."
+        self._ocupar(False, texto)
+
+    def _armar_arbol(self):
+        self.arbol.delete(*self.arbol.get_children())
+        self.item_de, self.ruta_de = {}, {}
+        for relativa in sorted(self.cambios, key=lambda r: (r.count("/") == 0, r.lower())):
+            partes = relativa.split("/")
+            padre = ""
+            for i in range(1, len(partes)):
+                carpeta = "/".join(partes[:i])
+                if carpeta not in self.item_de:
+                    item = self.arbol.insert(padre, "end", open=False, text="")
+                    self.item_de[carpeta], self.ruta_de[item] = item, carpeta + "/"
+                padre = self.item_de[carpeta]
+            item = self.arbol.insert(padre, "end", text="",
+                                     values=(self.cambios[relativa],))
+            self.item_de[relativa], self.ruta_de[item] = item, relativa
+        self._pintar()
+
+    # --- casillas ---
+
+    def _archivos_bajo(self, ruta):
+        if not ruta.endswith("/"):
+            return [ruta]
+        return [r for r in self.cambios if r.startswith(ruta)]
+
+    def _pintar(self):
+        for item, ruta in self.ruta_de.items():
+            archivos = self._archivos_bajo(ruta)
+            marcados = sum(1 for r in archivos if r in self.marcados)
+            casilla = (MARCADO if marcados == len(archivos)
+                       else VACIO if marcados == 0 else PARCIAL)
+            nombre = ruta.rstrip("/").split("/")[-1]
+            if ruta.endswith("/"):
+                self.arbol.item(item, text=f"{casilla}  {nombre}/",
+                                values=(f"{len(archivos)} con cambios",))
+            else:
+                self.arbol.item(item, text=f"{casilla}  {nombre}")
+        self._pintar_boton()
+
+    def _pintar_boton(self):
+        listo = bool(self.marcados) and not self.ocupado
+        self.btn_aplicar.configure(
+            state="normal" if listo else "disabled",
+            text=f"Actualizar lo marcado ({len(self.marcados)})" if self.marcados
+            else "Actualizar lo marcado",
+        )
+
+    def alternar(self, ruta):
+        archivos = self._archivos_bajo(ruta)
+        if all(r in self.marcados for r in archivos):
+            self.marcados.difference_update(archivos)
+        else:
+            self.marcados.update(archivos)
+        self._pintar()
+
+    def _clic(self, evento):
+        item = self.arbol.identify_row(evento.y)
+        if not item or self.ocupado:
+            return None
+        # La flecha abre y cierra la carpeta (lo hace el arbol solo).
+        if "indicator" in self.arbol.identify_element(evento.x, evento.y):
+            return None
+        self.alternar(self.ruta_de[item])
+        return "break"
+
+    # --- actualizar ---
 
     def actualizar(self):
-        if not self.pendientes:
+        rutas = sorted(self.marcados)
+        if not rutas:
             return
         if not messagebox.askyesno(
                 "Actualizar",
-                f"Se van a escribir {len(self.pendientes)} archivo(s) en\n{AQUI}\n\n"
-                "Los que se reemplazan quedan respaldados en __config__/"
-                "respaldos_actualizacion.\n\nCerrar antes el programa si esta abierto. "
-                "¿Seguir?"):
+                f"Se van a escribir {len(rutas)} archivo(s) en\n{AQUI}\n\n"
+                "Cerrar antes el programa si esta abierto. ¿Seguir?"):
             return
         self._ocupar(True, "Escribiendo...")
-        pendientes, remotos = list(self.pendientes), self.remotos
-        self._en_hilo(lambda: self.cola.put(
-            ("aplicado", (pendientes, aplicar(remotos, pendientes)))))
+        remotos = self.remotos
+        def trabajo():
+            aplicar(remotos, rutas)
+            self.cola.put(("aplicado", rutas))
+        self._en_hilo(trabajo)
 
-    def _al_aplicado(self, datos):
-        rutas, respaldo = datos
-        self._ocupar(False, "Listo")
+    def _al_aplicado(self, rutas):
         for r in rutas:
-            self._escribir(f"  actualizado: {r}")
-        self._escribir(f"Listo: {len(rutas)} archivo(s) actualizado(s).")
-        if respaldo:
-            self._escribir(f"Respaldo de lo anterior: {respaldo}")
-        self.pendientes = []
-        for item in self.arbol.get_children():
-            if self.arbol.set(item, "estado") in ("Modificado", "Nuevo"):
-                self.arbol.set(item, "estado", "Actualizado")
+            self.cambios.pop(r, None)
+        self.marcados.clear()
+        self._armar_arbol()
+        quedan = len(self.cambios)
+        self._ocupar(False, f"Listo: {len(rutas)} archivo(s) actualizado(s)."
+                     + (f" Quedan {quedan} sin actualizar." if quedan else ""))
+        self._escribir(f"Actualizados: {len(rutas)} archivo(s).")
 
     def _al_error(self, texto):
         self._ocupar(False, "Error")

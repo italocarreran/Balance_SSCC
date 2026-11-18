@@ -664,10 +664,30 @@ def _texto_movimiento(responsable, lado, actual, anterior):
             return "adjudicado que cae en RE545 " + flecha(b[1], a[1], pct=True)
         if responsable == FD_FMA:
             return "factor FD × FMA " + flecha(b[2], a[2], 2)
+        # Cada responsable mueve un factor de C1 y otro de C2: se muestran
+        # los que cambiaron (antes solo el de C1, y una diferencia que
+        # venia toda de C2 se leia "0,58 -> 0,58").
+        def los_dos(textos):
+            cambiaron = [
+                f"{nombre} {flecha(b[i], a[i], decimales, unidad)}"
+                for nombre, i, decimales, unidad in textos
+                if _hay(b[i]) and _hay(a[i]) and round(b[i], 4) != round(a[i], 4)
+            ]
+            if cambiaron:
+                return "; ".join(cambiaron)
+            nombre, i, decimales, unidad = textos[0]
+            return f"{nombre} {flecha(b[i], a[i], decimales, unidad)}"
+
         if responsable == USO:
-            return "energía asignada / reserva con FD y FMA " + flecha(b[3], a[3], 2)
+            return los_dos((
+                ("energía asignada C1 / reserva con FD y FMA", 3, 2, ""),
+                ("energía contada en C2 / reserva con FD y FMA", 4, 2, ""),
+            ))
         if responsable == CMG:
-            return "precio de la curva " + flecha(b[5], a[5], 1, "CLP/kWh")
+            return los_dos((
+                ("precio de la curva C1", 5, 1, "CLP/kWh"),
+                ("precio de lo contado en C2", 6, 1, "CLP/kWh"),
+            ))
     if responsable == REPARTO:
         con, total = (
             (r.C_EC_CICLOS, r.C_EC_CICLOS_MES) if lado == "E Costos"

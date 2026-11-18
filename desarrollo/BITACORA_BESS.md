@@ -18,11 +18,9 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
   definir de dónde se traen (¿el 11_ del mes anterior, Definitivo o última
   reliquidación?) y programarlo. Octubre 2026 ya deja su última ventana
   pendiente.
-- **Obs. O2026-0052689, AES (2026-11-18 (4)):** C2 contando solo la
-  inyección. `re545_componentes.C2_SOLO_INYECCION` (False) y
-  `desarrollo/experimentos/c2_solo_inyeccion.py`: falta correrlo con el
-  11_PAGOS_BESS_2610 real para la diferencia en plata y que el usuario
-  decida.
+- **Obs. O2026-0052689, AES (2026-11-18 (8)):** pendiente, probablemente
+  no se acoge. `C2_SOLO_INYECCION` queda en False (cálculo de siempre); en
+  octubre la regla daba +$77 MM en RE545. Notas en `docs/Obs_O2026-0052689_*`.
 
 - **FD "No participó" devuelto (2026-11-18):** recalcular 2610 (E Costos
   y RE545) y confirmar en el `SSCC_Desempeño_2610` las horas de EMOAC (31-32
@@ -6865,3 +6863,72 @@ bloqueo hecho afuera no deja correr). Captura revisada.
 `test_re545_ultima_ventana.py` (3, rehecha); `test_ecostos_fd_nuevo` prueba
 la fórmula del monto sin la regla. Suite completa con Python 3.12 + tkinter
 + xvfb: 542 OK.
+
+## 2026-11-18 (5) — C2 contando solo la inyección, encendida en la rama
+
+- Pedido del usuario: "mergea al main lo que hay ahora y haz el cambio en la
+  rama y lo corro con el cambio que propones". Se mergeó la PR #44 (con la
+  regla apagada) y en `claude/trusting-lamport-ysd1r4` queda
+  `re545_componentes.C2_SOLO_INYECCION = True`: la "Asignacion
+  Edisponible" cuenta solo la inyección real del bloque, con el mismo orden
+  y tope (obs. O2026-0052689, AES). Nota de la columna actualizada.
+- El usuario corre el programa en la rama y compara contra main. La macro
+  no se tocó.
+
+**Verificación:** `test_re545_c2_solo_inyeccion` ahora espera la regla
+encendida; suite completa 542 OK (52 salteadas sin tkinter).
+
+## 2026-11-18 (6) — Herramienta de actualizar desde GitHub, más simple
+
+- Pedido del usuario: "más simple, con jerarquía, y lo que ocupo para
+  correr, los py de las ventanas, Herramientas y Script, con sus casillas;
+  que si aprieto las carpetas se desplieguen los archivos, pero si no no;
+  al seleccionar la carpeta se actualiza solo lo que cambia y lo nuevo; que
+  venga seleccionado por defecto lo que cambié", y "una lista desplegable
+  con las ramas, desde la ventana".
+- `Herramientas/Actualizar_desde_GitHub.py` rehecha: alcance `en_alcance()`
+  (.py/.txt de la raíz, `Script/`, `Herramientas/`); árbol solo con lo que
+  cambió, carpetas cerradas, casillas ☑/☐/▣ (parcial); todo marcado; la
+  lista de ramas se carga sola al abrir y elegir una revisa sola; "Volver a
+  revisar"; "Actualizar lo marcado (N)". Se quitó el aviso de "ya no está
+  en GitHub" (fuera del alcance era ruido).
+
+**Verificación:** `desarrollo/tests/test_actualizar_github.py` (4: alcance,
+comparar/aplicar con respaldo, ventana marcada y cerrada, la carpeta marca
+lo de adentro). Capturas revisadas.
+
+## 2026-11-18 (7) — Comparación: el texto de los responsables de RE545 muestra C2
+
+- El usuario comparó octubre main vs. rama (C2 solo inyección): total
+  +$77 MM, todo en RE545; C1 igual en todas las centrales, solo cambia C2.
+  El reporte repartía el cambio entre "Tope de energía disponible (Edisp)"
+  y "CMg" (C2 = energía contada × precio promedio, Shapley), pero el texto
+  "Qué se movió" mostraba los factores de C1 ("0,58 → 0,58", "22,7 → 22,7"),
+  y parecía que los CMg habían cambiado.
+- `responsables._texto_movimiento` (RE545): muestra el factor de C1 y el de
+  C2 que cambiaron ("energía contada en C2 / reserva", "precio de lo contado
+  en C2"); si ninguno cambió, el de C1 como antes.
+- Lectura del resultado: "CMg" ahí no es un cambio de los CMg, es que la C2
+  ahora cuenta otros bloques (de otro precio). Que ESTEPA y DEL-DESIERTO
+  bajen es esperable: contando solo lo inyectado, el tope de Energía
+  Disponible se alcanza más arriba en la curva y entran inyecciones de
+  bloques más caros que antes quedaban fuera.
+
+**Verificación:** prueba nueva en `test_responsables.py`.
+
+## 2026-11-18 (8) — Al main: actualizador sin respaldo; C2 de AES apagada
+
+- Decisión del usuario sobre la obs. O2026-0052689: "parece que no la vamos
+  a acoger o la dejaremos pendiente". `C2_SOLO_INYECCION` vuelve a False y
+  la nota de la columna "Asignacion Edisponible" vuelve a la de siempre. El
+  interruptor, el experimento y las notas en `docs/` quedan.
+- `Herramientas/Actualizar_desde_GitHub.py`: "que no se respalde". `aplicar`
+  escribe encima, sin copia en `__config__/respaldos_actualizacion`.
+- Además: "al principio cuando abro la ventana se pone a cargar, tiene que
+  cargar después de que selecciono la rama". Al abrir solo se carga la lista
+  de ramas; la revisión parte al elegir una (o con "Revisar").
+- Pasa a main con lo demás de la rama: el texto de responsables de RE545
+  (2026-11-18 (7)) y las notas de la observación.
+
+**Verificación:** suite completa con Python 3.12 + tkinter + xvfb: 547 OK.
+

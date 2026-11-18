@@ -168,3 +168,27 @@ class TestConPlanillas(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTextoSoloCambiaC2(unittest.TestCase):
+    """
+    Obs. O2026-0052689 (2026-11-18): con el cambio de la C2, la comparacion
+    decia "energía asignada / reserva 0,58 → 0,58" y "precio de la curva
+    22,7 → 22,7" (los factores de C1, que no se movieron). Ahora muestra
+    los de C2.
+    """
+
+    def test_muestra_el_factor_de_c2(self):
+        from unittest import mock
+
+        from Script.nucleo import responsables as resp
+
+        thetas = {
+            "antes": [1.0, 1.0, 1.0, 0.58, 0.30, 26.2, 18.0],
+            "ahora": [1.0, 1.0, 1.0, 0.58, 0.15, 26.2, 21.5],
+        }
+        with mock.patch.object(resp, "_theta_re", lambda fila: thetas[fila["cual"]]):
+            uso = resp._texto_movimiento(resp.USO, "RE545", {"cual": "ahora"}, {"cual": "antes"})
+            cmg = resp._texto_movimiento(resp.CMG, "RE545", {"cual": "ahora"}, {"cual": "antes"})
+        self.assertEqual(uso, "energía contada en C2 / reserva con FD y FMA 0,30 → 0,15")
+        self.assertEqual(cmg, "precio de lo contado en C2 18,0 → 21,5 CLP/kWh")
