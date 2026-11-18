@@ -38,8 +38,12 @@ pip install python-calamine
 python Herramientas/Actualizar_desde_GitHub.py
 ```
 
-Se elige la rama (`main` por defecto), *Revisar cambios* baja el zip y
-muestra qué archivos cambiaron, y *Actualizar* copia solo esos. Lo que se
+Solo mira lo que hace falta para correr: los `.py` de las ventanas,
+`requirements.txt`, `Herramientas/` y `Script/`. La rama se elige en la lista
+desplegable (`main` por defecto) y al abrir o cambiar de rama se revisa sola.
+Lo que cambió aparece como un árbol de carpetas con casillas, todo marcado:
+las carpetas vienen cerradas (la flecha las abre) y marcar una carpeta marca
+lo que cambió adentro. *Actualizar lo marcado* copia solo eso. Lo que se
 reemplaza queda respaldado en `__config__/respaldos_actualizacion/<fecha>/`.
 No borra nada ni toca `__config__`, tokens ni salidas.
 

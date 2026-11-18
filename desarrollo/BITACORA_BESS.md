@@ -6880,3 +6880,22 @@ la fórmula del monto sin la regla. Suite completa con Python 3.12 + tkinter
 **Verificación:** `test_re545_c2_solo_inyeccion` ahora espera la regla
 encendida; suite completa 542 OK (52 salteadas sin tkinter).
 
+## 2026-11-18 (6) — Herramienta de actualizar desde GitHub, más simple
+
+- Pedido del usuario: "más simple, con jerarquía, y lo que ocupo para
+  correr, los py de las ventanas, Herramientas y Script, con sus casillas;
+  que si aprieto las carpetas se desplieguen los archivos, pero si no no;
+  al seleccionar la carpeta se actualiza solo lo que cambia y lo nuevo; que
+  venga seleccionado por defecto lo que cambié", y "una lista desplegable
+  con las ramas, desde la ventana".
+- `Herramientas/Actualizar_desde_GitHub.py` rehecha: alcance `en_alcance()`
+  (.py/.txt de la raíz, `Script/`, `Herramientas/`); árbol solo con lo que
+  cambió, carpetas cerradas, casillas ☑/☐/▣ (parcial); todo marcado; la
+  lista de ramas se carga sola al abrir y elegir una revisa sola; "Volver a
+  revisar"; "Actualizar lo marcado (N)". Se quitó el aviso de "ya no está
+  en GitHub" (fuera del alcance era ruido).
+
+**Verificación:** `desarrollo/tests/test_actualizar_github.py` (4: alcance,
+comparar/aplicar con respaldo, ventana marcada y cerrada, la carpeta marca
+lo de adentro). Capturas revisadas.
+
