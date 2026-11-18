@@ -6899,3 +6899,22 @@ encendida; suite completa 542 OK (52 salteadas sin tkinter).
 comparar/aplicar con respaldo, ventana marcada y cerrada, la carpeta marca
 lo de adentro). Capturas revisadas.
 
+## 2026-11-18 (7) — Comparación: el texto de los responsables de RE545 muestra C2
+
+- El usuario comparó octubre main vs. rama (C2 solo inyección): total
+  +$77 MM, todo en RE545; C1 igual en todas las centrales, solo cambia C2.
+  El reporte repartía el cambio entre "Tope de energía disponible (Edisp)"
+  y "CMg" (C2 = energía contada × precio promedio, Shapley), pero el texto
+  "Qué se movió" mostraba los factores de C1 ("0,58 → 0,58", "22,7 → 22,7"),
+  y parecía que los CMg habían cambiado.
+- `responsables._texto_movimiento` (RE545): muestra el factor de C1 y el de
+  C2 que cambiaron ("energía contada en C2 / reserva", "precio de lo contado
+  en C2"); si ninguno cambió, el de C1 como antes.
+- Lectura del resultado: "CMg" ahí no es un cambio de los CMg, es que la C2
+  ahora cuenta otros bloques (de otro precio). Que ESTEPA y DEL-DESIERTO
+  bajen es esperable: contando solo lo inyectado, el tope de Energía
+  Disponible se alcanza más arriba en la curva y entran inyecciones de
+  bloques más caros que antes quedaban fuera.
+
+**Verificación:** prueba nueva en `test_responsables.py`.
+
