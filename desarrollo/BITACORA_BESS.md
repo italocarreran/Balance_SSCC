@@ -12,6 +12,11 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **FD "No participó" devuelto (2026-11-18):** recalcular 2610 (E Costos
+  y RE545) y confirmar en el `SSCC_Desempeño_2610` las horas de EMOAC (31-32
+  y 345) y de Enel (Manzano, Don Humberto, La Cabaña); preguntar al DCO qué
+  significa "No participó" con FD = 1.
+
 - **Carpeta del mes con `BESS/` (2026-11-16 (8)):** abrir en Windows un
   caso de antes (debe seguir igual, sin crear `BESS/`) y crear un mes nuevo
   (debe quedar `BESS/...` + `Cmg/` + `FD y FMA/` + `Prorrata retiros/`).
@@ -6730,4 +6735,33 @@ cambia nada. 513 pruebas en verde.
   diálogo "Ejecutar todo" son `BESS/Medidas/`, `BESS/Subastas/`. Se
   ajustaron las pruebas (el comportamiento es el pedido). 520 pruebas, 0
   salteadas con pantalla.
+
+## 2026-11-18 — Se devuelve la regla "No participó" -> FD = 0
+
+- Decisión del usuario, a raíz de las observaciones al preliminar 2610
+  (EMOAC O2026-0052605 y O2026-0052606: FD CSF 0 en la hoja y 1 en la base;
+  probablemente también Enel O2026-0052716, FD distinto en subida y bajada):
+  "devolvamos el cálculo". Se deshace la parte de pago de la entrada
+  2026-11-11 (46).
+- Por qué: el FD lo calcula el DCO y viene listo (trazabilidad del FD, §25:
+  "No participó" con FD = 1 es normal); en CPF "No participó" es el 85-95 %
+  de las horas adjudicadas y reciben igual (2026-11-10), y en CSF el Vector de
+  Participación ya pasa el FMA a 0 (era un doble descuento).
+- Código: `ecostos.py` arma los diccionarios del FD con la hoja FD tal cual
+  (sin `fd_por_direccion`); `fma.calcular_fd_subastas` ya no pone FD = 0
+  según el Concepto; `factores_subastas.tablas_fd_desde_hoja` ya no junta las
+  claves "No participó". `no_participo.py` queda solo con lo que usa el
+  Reporte (`mascaras_no_participo`, `sentido_de_concepto`).
+- Reporte: el FD en las horas adjudicadas es el del archivo (antes 0 en las
+  "No participó"); los conteos de "No participó" siguen igual; el texto ya no
+  dice "no se pagan". El aviso de la comparación se dio vuelta: ahora avisa si
+  una planilla se calculó CON la regla (filas adjudicadas "No participó" con
+  FD 0 en E Costos y FD > 0 en el archivo), p. ej. el preliminar 2610 si se
+  corrió entre el 11 y el 18 de noviembre.
+- Pendiente: recalcular E Costos y RE545 de 2610 y confirmar con el
+  `SSCC_Desempeño_2610` que las horas 31-32 (E Costos) y 345 (RE545) de
+  EMOAC eran "No participó"; preguntar al DCO qué significa exactamente
+  "No participó" con FD = 1.
+
+**Verificación:** `py_compile` OK; suite completa 507 pruebas OK (36 salteadas), igual que antes del cambio. Prueba nueva: CSF "No participó" conserva el FD del archivo en RE545.
 

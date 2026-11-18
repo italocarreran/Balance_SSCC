@@ -38,7 +38,6 @@ from .fma import (
     calcular_fma_subastas, construir_dic_bloque_diccionario,
 )
 from .ecostos_prorratas import construir_dic_mapeo_diccionario
-from .no_participo import claves_no_participo
 from .lector import leer_excel
 from .parametros import FMA_CON_CTF, HOJA_FMA
 from .lectura import fila_de_titulos, leer_tabla_bajo_titulo
@@ -87,7 +86,7 @@ def tablas_fd_desde_hoja(df_fd_csf, df_fd_cpf, registrar=print):
     """
 
     tablas = {
-        "cpf": {}, "csf": {}, "ctf": {}, "participacion_csf": {}, "no_participo": set(),
+        "cpf": {}, "csf": {}, "ctf": {}, "participacion_csf": {},
     }
 
     for control, df_fd in (("csf", df_fd_csf), ("cpf", df_fd_cpf)):
@@ -118,11 +117,6 @@ def tablas_fd_desde_hoja(df_fd_csf, df_fd_cpf, registrar=print):
             if clave not in dic and pd.notna(fila.FD):
                 dic[clave] = float(fila.FD)
         tablas[control] = dic
-
-        # Las direcciones "No participó" (no se pagan: no_participo.py).
-        tablas.setdefault("no_participo", set()).update(claves_no_participo(
-            df_fd, control.upper(), desempeno_fd._normalizar
-        ))
 
         if control == "csf" and "Respuesta" in tabla.columns:
             participacion = desempeno_fd._participacion_csf(tabla)

@@ -1,28 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-Las horas "No participó" del FD no se pagan, POR DIRECCION.
+Las horas "No participó" del archivo de desempeno, POR DIRECCION: solo
+para informar (Reporte), no cambian el pago.
 
-Decision del usuario (2026-11-11), despues del experimento de la rama
-claude/experimento-no-participo: "pasa al main la correccion [...] la que
-va por direccion, porque ese es el que vale. Si tu estas adjudicado por
-control de bajada y no prestaste control de subida o no participaste en
-control de subida, el control de bajada te lo tienen que pagar".
-
-En el archivo de desempeno una hora "No participó" puede venir con FD = 1
-(docs/Trazabilidad_FD_a_DB_Y_planilla3.md, seccion 25): con esto, el FD de
-ESA direccion pasa a 0. La otra direccion queda como venga.
+Historia: el 2026-11-11 se puso en 0 el FD de la direccion "No participó"
+(commit 1af3556). El 2026-11-18 el usuario lo devolvio: el FD lo calcula
+el DCO y viene listo (docs/Trazabilidad_FD_a_DB_Y_planilla3.md, seccion
+25: "No participó" con FD = 1 es un caso normal); en CPF es lo habitual
+(85-95 % de las horas adjudicadas en oct) y en CSF ya descuenta el Vector
+de Participacion del FMA. Ademas lo observaron los coordinados
+(O2026-0052605/0052606, EMOAC). Hoy E Costos y RE545 usan el FD tal cual.
 
   Respuesta CPF+  -> CPF(+)        Respuesta CPF-  -> CPF(-)
   Respuesta CSF   -> CSF(+) y CSF(-)   (una sola respuesta para las dos)
-
-Donde se aplica:
-  - Calculo E Costos (AM:AR): usa el FD por direccion de la hoja FD
-    (fd_por_direccion, antes de armar los diccionarios del FD);
-  - Calculo RE545 (el FD de cada fila de Subastas): cada fila mira la
-    Respuesta de SU direccion (Concepto CPF(+), CPF(-), ...), ver
-    factores_subastas.calcular_fd_subastas y claves_no_participo.
-
-La hoja FD de la planilla no se toca: muestra el archivo tal cual vino.
 """
 
 import pandas as pd
@@ -67,47 +57,6 @@ def mascaras_no_participo(df_fd, servicio):
         for sentido in ((direccion,) if direccion else ("+", "-")):
             mascaras[sentido] = mascaras[sentido] | filas
     return mascaras
-
-
-def fd_por_direccion(df_fd, servicio):
-    """
-    Copia del bloque con el FD de cada direccion en 0 donde esa direccion
-    "No participó". Devuelve (copia, cuantas direcciones-hora quedaron en 0).
-    """
-
-    if df_fd is None or df_fd.empty:
-        return df_fd, 0
-    copia = df_fd.copy()
-    mascaras = mascaras_no_participo(df_fd, servicio)
-    cambiadas = 0
-    for sentido, filas in mascaras.items():
-        columna = f"{servicio}({sentido})"
-        if columna not in copia or not filas.any():
-            continue
-        valores = pd.to_numeric(copia[columna], errors="coerce")
-        cambiadas += int((filas & valores.fillna(0).ne(0)).sum())
-        copia.loc[filas, columna] = 0.0
-    return copia, cambiadas
-
-
-def claves_no_participo(df_fd, servicio, normalizar_unidad):
-    """
-    {(servicio en minusculas, sentido, unidad normalizada, hora del mes)}
-    de las direcciones "No participó": para el FD de cada fila de Subastas
-    en RE545 (que trae su direccion en Concepto).
-    """
-
-    if df_fd is None or df_fd.empty or "Unidad" not in df_fd:
-        return set()
-    mascaras = mascaras_no_participo(df_fd, servicio)
-    unidades = df_fd["Unidad"].map(lambda u: normalizar_unidad(_texto_seguro(u)))
-    horas = pd.to_numeric(df_fd.iloc[:, 1], errors="coerce")
-    claves = set()
-    for sentido, filas in mascaras.items():
-        for unidad, hora in zip(unidades[filas], horas[filas]):
-            if unidad and pd.notna(hora):
-                claves.add((servicio.lower(), sentido, unidad, int(hora)))
-    return claves
 
 
 def sentido_de_concepto(concepto):

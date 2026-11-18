@@ -385,13 +385,15 @@ def resumen_por_central(ruta_planilla, registrar=print):
                 parte = subastas[servicio.eq(codigo).to_numpy()]
                 datos[columna] = _por_central(parte, "Configuración", "Energía SSCC")
 
-    claves_no_participo = set()   # (central, hora, servicio, sentido)
-    no_participo_pagadas = 0
+    # (central, hora, servicio, sentido) -> FD del archivo, de las horas
+    # "No participó": para avisar si una planilla se calculo con la regla
+    # de 2026-11-11 (FD = 0 en esas horas), ya devuelta.
+    claves_no_participo = {}
+    no_participo_en_cero = 0
     # --- FD: en las horas ADJUDICADAS, por direccion ------------------------
-    # Lo que importa es el FD de la direccion adjudicada en cada hora, ya
-    # con la regla de pago (no_participo.py: "No participó" en esa
-    # direccion -> FD = 0). El promedio de todo el mes engañaba (SAE-LILE
-    # oct: 0,96 en el mes, 0 en sus horas adjudicadas).
+    # Lo que importa es el FD de la direccion adjudicada en cada hora, tal
+    # cual viene del archivo (tambien en las horas "No participó", que
+    # solo se cuentan). El promedio de todo el mes engañaba.
     if fd is not None:
         from .no_participo import mascaras_no_participo
 
@@ -408,9 +410,14 @@ def resumen_por_central(ruta_planilla, registrar=print):
             hora = _num(_col(bloque, "Hora Mes")).reset_index(drop=True)
             mascaras = mascaras_no_participo(bloque, codigo)
             for sentido in ("+", "-"):
-                for c, h in zip(central[mascaras[sentido].to_numpy()], hora[mascaras[sentido].to_numpy()]):
+                columna_fd = f"{codigo}({sentido})"
+                if columna_fd not in bloque:
+                    continue
+                marca = mascaras[sentido].to_numpy()
+                valores_fd = _num(_col(bloque, columna_fd)).reset_index(drop=True)
+                for c, h, v in zip(central[marca], hora[marca], valores_fd[marca]):
                     if c and pd.notna(h):
-                        claves_no_participo.add((c, int(h), codigo, sentido))
+                        claves_no_participo.setdefault((c, int(h), codigo, sentido), v)
             # Todas las horas (por si no hay Subastas con que cruzar).
             factor = next((c for c in bloque.columns if clave in str(c)), None)
             if factor is not None:
@@ -433,7 +440,7 @@ def resumen_por_central(ruta_planilla, registrar=print):
                 np_sentido = mascaras[sentido].reset_index(drop=True)
                 for c, h, v, n in zip(central, hora, valores, np_sentido):
                     if c and pd.notna(h) and (c, int(h), sentido) in adjudicadas:
-                        filas.append((c, 0.0 if n else v, bool(n)))
+                        filas.append((c, v, bool(n)))
             if not filas:
                 continue
             adj = pd.DataFrame(filas, columns=["c", "fd", "np"])
@@ -442,9 +449,10 @@ def resumen_por_central(ruta_planilla, registrar=print):
             datos[sin_a] = adj.groupby("c")["np"].sum().astype(float).to_dict()
             datos[total_a] = adj.groupby("c").size().astype(float).to_dict()
 
-    # Planilla calculada ANTES de la regla "No participó" por direccion:
-    # filas de E Costos con esa direccion adjudicada, "No participó" y FD > 0.
-    pagadas = 0
+    # Planilla calculada CON la regla "No participó" (2026-11-11, devuelta
+    # el 2026-11-18): filas de E Costos con esa direccion adjudicada,
+    # "No participó", FD 0 en la hoja y FD > 0 en el archivo.
+    en_cero = 0
     if ecostos is not None and claves_no_participo and _col(ecostos, "Hora mes") is not None:
         centrales_ec = _col(ecostos, "Configuracion").map(normalizar).reset_index(drop=True)
         horas_ec = _num(_col(ecostos, "Hora mes")).reset_index(drop=True)
@@ -457,9 +465,12 @@ def resumen_por_central(ruta_planilla, registrar=print):
                 prorrata = _num(prorrata).fillna(0).reset_index(drop=True)
                 fd_ec = _num(fd_ec).fillna(0).reset_index(drop=True)
                 for c, h, pr, f in zip(centrales_ec, horas_ec, prorrata, fd_ec):
-                    if pr > 0 and f > 0 and pd.notna(h) and (c, int(h), codigo, sentido) in claves_no_participo:
-                        pagadas += 1
-    no_participo_pagadas = pagadas
+                    if not (pr > 0 and f == 0 and pd.notna(h)):
+                        continue
+                    del_archivo = claves_no_participo.get((c, int(h), codigo, sentido))
+                    if del_archivo is not None and pd.notna(del_archivo) and del_archivo > 0:
+                        en_cero += 1
+    no_participo_en_cero = en_cero
 
     # --- ofertas -------------------------------------------------------------
     if ofertas is not None and _col(ofertas, "Oferta completa") is not None:
@@ -499,8 +510,8 @@ def resumen_por_central(ruta_planilla, registrar=print):
         filas.append(fila)
 
     resultado = pd.DataFrame(filas, columns=[*COLUMNAS_RESUMEN, *AGREGADOS])
-    # Ver comparar_planillas: avisa si una planilla es de antes de la regla.
-    resultado.attrs["no_participo_pagadas"] = no_participo_pagadas
+    # Ver comparar_planillas: avisa si una planilla se calculo con la regla.
+    resultado.attrs["no_participo_en_cero"] = no_participo_en_cero
     return resultado
 
 
@@ -568,7 +579,7 @@ def explicar_central(fila):
             # normal (85-95 % en casi todas, y reciben igual).
             if sin_a >= total_a:
                 yield (f"Según FD no tuvo participación en {nombre} ('No participó' "
-                       f"en todas sus {numero(total_a)} {que}: no se pagan).")
+                       f"en todas sus {numero(total_a)} {que}; el FD se toma como viene del archivo).")
         servicios_sin_fd = [
             nombre for nombre, adj, fd in (("CPF", adj_cpf, fd_cpf), ("CSF", adj_csf, fd_csf))
             if _hay(adj) and adj > 0 and _hay(fd) and fd == 0
@@ -1135,17 +1146,17 @@ def comparar_planillas(ruta_actual, ruta_anterior, registrar=print):
     actual = resumen_por_central(ruta_actual, registrar)
     anterior = resumen_por_central(ruta_anterior, registrar)
     lineas, tabla = comparar_resumenes(actual, anterior)
-    # Una planilla calculada antes de la regla "No participó" por direccion
-    # (2026-11-11) paga esas horas: la diferencia saldria como un cambio de
-    # FD de las centrales, cuando es un cambio del calculo.
+    # Una planilla calculada con la regla "No participó" -> FD = 0
+    # (2026-11-11, devuelta el 2026-11-18) no paga esas horas: la diferencia
+    # saldria como un cambio de FD de las centrales, cuando es del calculo.
     for nombre, resumen in ((ruta_actual.name, actual), (ruta_anterior.name, anterior)):
-        n = resumen.attrs.get("no_participo_pagadas", 0)
+        n = resumen.attrs.get("no_participo_en_cero", 0)
         if n:
             lineas.insert(0, (
-                f"ATENCIÓN: {nombre} se calculó antes de la regla 'No participó' por "
-                f"dirección ({n:,} filas adjudicadas con 'No participó' pagadas con FD > 0). "
-                f"Recalcúlala (E Costos y RE545) para comparar con el mismo criterio: si no, "
-                f"esa diferencia aparece como un cambio de FD."
+                f"ATENCIÓN: {nombre} se calculó con la regla 'No participó' -> FD = 0, "
+                f"ya devuelta ({n:,} filas adjudicadas con 'No participó' en FD 0 y el "
+                f"archivo con FD > 0). Recalcúlala (E Costos y RE545) para comparar con "
+                f"el mismo criterio: si no, esa diferencia aparece como un cambio de FD."
             ))
 
     from .parametros import CARPETA_LOG
