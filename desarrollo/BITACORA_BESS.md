@@ -6865,3 +6865,18 @@ bloqueo hecho afuera no deja correr). Captura revisada.
 `test_re545_ultima_ventana.py` (3, rehecha); `test_ecostos_fd_nuevo` prueba
 la fórmula del monto sin la regla. Suite completa con Python 3.12 + tkinter
 + xvfb: 542 OK.
+
+## 2026-11-18 (5) — C2 contando solo la inyección, encendida en la rama
+
+- Pedido del usuario: "mergea al main lo que hay ahora y haz el cambio en la
+  rama y lo corro con el cambio que propones". Se mergeó la PR #44 (con la
+  regla apagada) y en `claude/trusting-lamport-ysd1r4` queda
+  `re545_componentes.C2_SOLO_INYECCION = True`: la "Asignacion
+  Edisponible" cuenta solo la inyección real del bloque, con el mismo orden
+  y tope (obs. O2026-0052689, AES). Nota de la columna actualizada.
+- El usuario corre el programa en la rama y compara contra main. La macro
+  no se tocó.
+
+**Verificación:** `test_re545_c2_solo_inyeccion` ahora espera la regla
+encendida; suite completa 542 OK (52 salteadas sin tkinter).
+

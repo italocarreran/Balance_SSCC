@@ -318,7 +318,8 @@ ORIGEN_COLUMNAS_RE545 = {
         f"{_GRUPO}."
     ),
     "BU": (
-        "Si la inyección del periodo es 0, 0. Si no, la Energia Total sin "
+        "Si la inyección del periodo es 0, 0. Si no, la inyección del "
+        "periodo (solo lo realmente inyectado, obs. O2026-0052689) sin "
         "pasar el tope: Edisp_T (cuadro 5) − Energía ya Asignada − suma de "
         f"SSCC ultima hora de su {_GRUPO}."
     ),
