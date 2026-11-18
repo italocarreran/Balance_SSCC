@@ -12,6 +12,18 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **Ventanas completas (2026-11-18 (4)):** desde noviembre 2026 la ventana
+  0 de cada mes tiene que calcularse completa (24 h) con las últimas horas
+  del mes anterior (energía, SoC, CMg, reserva, FD, FMA, ofertas): falta
+  definir de dónde se traen (¿el 11_ del mes anterior, Definitivo o última
+  reliquidación?) y programarlo. Octubre 2026 ya deja su última ventana
+  pendiente.
+- **Obs. O2026-0052689, AES (2026-11-18 (4)):** C2 contando solo la
+  inyección. `re545_componentes.C2_SOLO_INYECCION` (False) y
+  `desarrollo/experimentos/c2_solo_inyeccion.py`: falta correrlo con el
+  11_PAGOS_BESS_2610 real para la diferencia en plata y que el usuario
+  decida.
+
 - **FD "No participó" devuelto (2026-11-18):** recalcular 2610 (E Costos
   y RE545) y confirmar en el `SSCC_Desempeño_2610` las horas de EMOAC (31-32
   y 345) y de Enel (Manzano, Don Humberto, La Cabaña); preguntar al DCO qué
@@ -6820,3 +6832,36 @@ saltean.
 archivo; la ventana apaga y vuelve a prender todo; cancelar no bloquea; un
 bloqueo hecho afuera no deja correr). Captura revisada.
 
+
+
+## 2026-11-18 (4) — Última ventana del mes pendiente; simulación de la C2 de AES
+
+- **Obs. O2026-0052718 (Tamakaya), acogida.** La RE545 paga "las ventanas
+  cuyo término haya ocurrido dentro del periodo de facturación". Decisión
+  del usuario (opción 1, híbrido por única vez en octubre 2026): la ventana
+  0 de octubre queda parcial (septiembre ya pagó su parte final) y la
+  última ventana del mes queda pendiente, para pagarse completa el mes
+  siguiente. Se descartó la opción 2 (ventana 0 completa restando lo pagado
+  en septiembre).
+  - `parametros.VENTANA_FINAL_PENDIENTE = True`.
+  - RE545 (`construir_resumen_ventanas_re545`): Edisp_T = 0 en la última
+    ventana (el mayor número de ventana de la tabla, 30 o 31). Vuelve el
+    `(AX<>31)` del .xlsm, pero con la ventana que de verdad es la última.
+    Deshace lo del 2026-11-02 (última ventana pagada parcial).
+  - E Costos (`calcular_monto_a_compensar`): monto 0 en el mayor
+    Copia_Ventana de la hoja (trae todas las filas de Medidores).
+  - Notas de columna (Edisp_T, Monto a compensar) y página RE545.
+  - Falta (Pendientes): la ventana 0 completa con el mes anterior desde
+    noviembre.
+- **Obs. O2026-0052689 (AES), en evaluación.** `C2_SOLO_INYECCION` en
+  `re545_componentes.py` (False: el programa no cambia) y el experimento
+  `desarrollo/experimentos/c2_solo_inyeccion.py <11_>`: recalcula RE545 y
+  COMPENSACION_CENTRAL con las dos reglas y da la diferencia por central.
+  Probado con el caso sintético de test_control_corrida (corre de punta a
+  punta). El 11_PAGOS_BESS_2610 real está en Drive (48 MB), pero la
+  descarga del conector tiene tope de 10 MB.
+
+**Verificación:** pruebas nuevas `test_re545_c2_solo_inyeccion.py` (4) y
+`test_re545_ultima_ventana.py` (3, rehecha); `test_ecostos_fd_nuevo` prueba
+la fórmula del monto sin la regla. Suite completa con Python 3.12 + tkinter
++ xvfb: 542 OK.

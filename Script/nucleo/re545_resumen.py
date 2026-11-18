@@ -5,7 +5,7 @@ RE545: la tabla por central+ventana (AW:BG) y BV.
 
 import pandas as pd
 
-from .parametros import INICIO_VENTANA
+from .parametros import INICIO_VENTANA, VENTANA_FINAL_PENDIENTE
 from .utiles import _normaliza_valor_vba, normalizar
 
 
@@ -31,10 +31,10 @@ from .utiles import _normaliza_valor_vba, normalizar
 #   AZ = primer U del grupo (G=AW, T=AX)   [INDEX/AGGREGATE(15,6,...,1)]
 #   BA = primer V del mismo grupo
 #   BB = SUMIFS(AU:AU, T:T,AX, G:G,AW)
-#   BC = MIN(MAX(MIN(AZ+BA, Capacidad*1000), BA), BB) * AY
-#        (el .xlsm multiplicaba ademas por (AX<>31); se quito: la
-#        primera y la ultima ventana del mes se pagan parciales en el
-#        mes, sea cual sea el numero de la ultima)
+#   BC = MIN(MAX(MIN(AZ+BA, Capacidad*1000), BA), BB) * AY, y 0 en la
+#        ultima ventana del mes, que queda pendiente para el mes
+#        siguiente (VENTANA_FINAL_PENDIENTE, obs. O2026-0052718; el
+#        .xlsm multiplicaba por (AX<>31), solo en meses de 31 dias)
 #   BF = SUMIFS(BV:BV, BR:BR,AX, G:G,AW)   (BV, ver calcular_bv_re545)
 #   BG = AND(AZ+BA - BF(ventana anterior) > Capacidad*1000, BF_previa<>0)*1
 #
@@ -185,8 +185,10 @@ def construir_resumen_ventanas_re545(
 
     capacidad = factor_num * 1000.0
 
-    # BC = MIN(MAX(MIN(AZ+BA, Pmax*1000), BA), BB) * AY. Sin el (AX<>31)
-    # del .xlsm: la ultima ventana del mes tambien se paga (parcial).
+    # BC = MIN(MAX(MIN(AZ+BA, Pmax*1000), BA), BB) * AY * (no es la
+    # ultima ventana del mes). La ultima queda pendiente para el mes
+    # siguiente (VENTANA_FINAL_PENDIENTE, obs. O2026-0052718); el .xlsm
+    # hacia lo mismo con (AX<>31), pero solo en meses de 31 dias.
     tabla["BC"] = (
         pd.concat(
             [
@@ -203,6 +205,16 @@ def construir_resumen_ventanas_re545(
         ).min(axis=1)
         * tabla["AY"]
     )
+    if VENTANA_FINAL_PENDIENTE:
+        ultima = ventana_num.max()
+        pendiente = ventana_num.eq(ultima) & ventana_num.notna()
+        if pendiente.any():
+            tabla.loc[pendiente, "BC"] = 0.0
+            registrar(
+                f"  Ventana {ultima:g} (ultima del mes): queda pendiente para "
+                f"el mes siguiente; Edisp_T = 0 en {int(pendiente.sum()):,} "
+                f"central(es)."
+            )
 
     # BG: la resta usa el BF de la MISMA central en la ventana anterior,
     # y ademas exige que el BF de la FILA ANTERIOR de esta tabla sea

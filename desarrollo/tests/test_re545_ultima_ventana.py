@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-La ultima ventana del mes se paga (parcial) aunque sea la 31: el .xlsm
-anulaba la Energia Disponible con (AX<>31), y solo en meses de 31 dias.
+La ultima ventana del mes queda pendiente para el mes siguiente
+(observacion O2026-0052718, acogida el 2026-11-18): Edisp_T = 0 en RE545 y
+monto 0 en E Costos, sea cual sea su numero (30 o 31). Entre el 2026-11-02
+y el 2026-11-18 se pagaba parcial en el mes.
 """
 
 import unittest
+from unittest import mock
 
 import pandas as pd
 
@@ -46,9 +49,35 @@ def _edisp(ventana):
 
 class UltimaVentana(unittest.TestCase):
 
-    def test_la_ventana_31_se_paga_igual_que_las_demas(self):
-        self.assertGreater(_edisp(31), 0.0)
-        self.assertEqual(_edisp(31), _edisp(30))
+    def test_la_ultima_ventana_queda_pendiente(self):
+        # Sola en la hoja, la ventana es la ultima del mes: Edisp_T = 0.
+        self.assertEqual(_edisp(31), 0.0)
+        self.assertEqual(_edisp(30), 0.0)
+
+    def test_sin_la_regla_se_pagaria_igual_que_las_demas(self):
+        from Script.nucleo import re545_resumen
+
+        with mock.patch.object(re545_resumen, "VENTANA_FINAL_PENDIENTE", False):
+            self.assertGreater(_edisp(31), 0.0)
+            self.assertEqual(_edisp(31), _edisp(30))
+
+
+class UltimaVentanaECostos(unittest.TestCase):
+
+    def test_el_monto_de_la_ultima_ventana_es_cero(self):
+        from Script.nucleo import ecostos_valorizacion as ev
+
+        df = pd.DataFrame({
+            "clave": ["SAE-X"] * 4, "Copia_Ventana": [29, 29, 30, 30],
+            "BA": [100.0, 100.0, 100.0, 100.0], "U": [0.0] * 4,
+        })
+        monto = ev.calcular_monto_a_compensar(df, registrar=silencio)
+        self.assertEqual(list(monto), [100.0, 100.0, 0.0, 0.0])
+        with mock.patch.object(ev, "VENTANA_FINAL_PENDIENTE", False):
+            self.assertEqual(
+                list(ev.calcular_monto_a_compensar(df, registrar=silencio)),
+                [100.0] * 4,
+            )
 
 
 if __name__ == "__main__":

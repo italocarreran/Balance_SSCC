@@ -15,6 +15,17 @@ from .externos import ofertas_adj
 # Equivale a Medidores!S1 en la planilla 11.
 INICIO_VENTANA = 10
 
+# La ultima ventana del mes (la que empieza el ultimo dia a la hora de
+# INICIO_VENTANA y termina el mes siguiente) NO se paga en el mes: queda
+# pendiente para pagarse completa, con sus 24 horas, en el mes siguiente.
+# Observacion O2026-0052718 (Tamakaya), acogida el 2026-11-18: la RE545
+# paga "las ventanas cuyo término haya ocurrido dentro del periodo de
+# facturación". Octubre 2026 es el primer mes: su ventana 0 queda parcial
+# (septiembre ya pago su parte final). Que la ventana 0 de los meses
+# siguientes se calcule completa con las horas del mes anterior queda
+# para despues. Vale para Calculo E Costos y Calculo RE545.
+VENTANA_FINAL_PENDIENTE = True
+
 # Umbral de la columna O. La planilla usa 6%.
 UMBRAL_SOC = 0.06
 

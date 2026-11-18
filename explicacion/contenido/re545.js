@@ -59,7 +59,7 @@ window.CONTENIDO = {
         "<b>mín(…, Capacidad):</b> la energía inicial se suma solo hasta llenar la batería.",
         "<b>máx(…, Almacenada):</b> lo cargado en la ventana nunca se recorta, aunque pase la capacidad, porque puede venir de varios ciclos.",
         "<b>mín(…, Reserva total):</b> no puede pasar lo que la reserva comprometió.",
-        "Vale 0 si la ventana no tuvo oferta completa. La primera y la última ventana del mes se pagan parciales, con las horas que caen en el mes.",
+        "Vale 0 si la ventana no tuvo oferta completa. La última ventana del mes no se paga en el mes: queda pendiente y se paga completa, con sus 24 horas, el mes siguiente (observación O2026-0052718). En octubre 2026 la primera ventana se paga parcial, porque septiembre ya pagó su parte.",
       ],
       figura: "ed",
       calculo: "mín( máx( mín(Inicial + Almacenada, Capacidad), Almacenada ), Reserva total )\nmín( máx( mín({re_eini} + {re_ealm}, {re_capacidad_kwh}), {re_ealm} ), {re_res_total} ) = {re_edisp}",

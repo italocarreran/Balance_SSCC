@@ -7,6 +7,7 @@ ajustada (AU:BA) y el monto a compensar (BC).
 import pandas as pd
 
 from .alertas import MEDIA, Alerta, anotar
+from .parametros import VENTANA_FINAL_PENDIENTE
 from .columnas_compartidas import calcular_n_o
 from .ecostos_columnas import _calcular_asignacion_energia
 from .utiles import normalizar
@@ -170,12 +171,16 @@ def calcular_valorizacion(df_ecostos, registrar=print):
     return ay, az, ay + az
 
 
-def calcular_monto_a_compensar(df_ecostos):
+def calcular_monto_a_compensar(df_ecostos, registrar=print):
     """
     Replica BC ("Monto a compensar"): por grupo (central + ciclo),
     (suma de BA - suma de U) / cantidad de filas del grupo, nunca
     negativo, y el MISMO valor en todas las filas del grupo. U no
     numerica cuenta como 0.
+
+    La ultima ventana del mes (el mayor Copia_Ventana de la hoja, que
+    trae todas las filas de Medidores) queda en 0: se paga el mes
+    siguiente (VENTANA_FINAL_PENDIENTE, obs. O2026-0052718).
     """
 
     grupo = _grupo(df_ecostos)
@@ -187,4 +192,19 @@ def calcular_monto_a_compensar(df_ecostos):
     suma_u = u.groupby(grupo).transform("sum")
     cantidad = ba.groupby(grupo).transform("size")
 
-    return ((suma_ba - suma_u) / cantidad).clip(lower=0.0)
+    monto = ((suma_ba - suma_u) / cantidad).clip(lower=0.0)
+
+    if VENTANA_FINAL_PENDIENTE:
+        ventana = pd.to_numeric(df_ecostos["Copia_Ventana"], errors="coerce")
+        ultima = ventana.max()
+        pendiente = ventana.eq(ultima) & ventana.notna()
+        if pendiente.any():
+            dejado = float(monto[pendiente].sum())
+            monto = monto.where(~pendiente, 0.0)
+            registrar(
+                f"  Ventana {ultima:g} (ultima del mes): queda pendiente para "
+                f"el mes siguiente; no se paga en este mes"
+                + (f" ({dejado:,.0f} CLP calculados quedan en 0)." if dejado else ".")
+            )
+
+    return monto
