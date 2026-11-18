@@ -15,6 +15,15 @@ from .re545_resumen import (
 from .utiles import _normaliza_valor_vba, normalizar
 
 
+# Observacion O2026-0052689 (AES Andes), EN EVALUACION: en la Componente
+# 2, la "Asignacion Edisponible" (BU) de un bloque con inyeccion cuenta
+# hoy la inyeccion MAS la Energia asignada de la C1 (BQ = BS + BN). Con
+# True cuenta solo la inyeccion real (BS), con el mismo orden y tope.
+# Por ahora solo lo usa desarrollo/experimentos/c2_solo_inyeccion.py:
+# el calculo del programa no cambia hasta que el usuario lo decida.
+C2_SOLO_INYECCION = False
+
+
 def calcular_bi_bj_re545(df_re545):
     """
     Replica BI ("Orden") y BJ ("Periodo"), las dos con el mismo salto
@@ -338,7 +347,11 @@ def calcular_componentes_re545(
                 - bt[posicion]
                 - suma_bv.get(clave, 0.0)
             )
-            bu[posicion] = max(0.0, min(float(_pos(bq)[posicion]), techo))
+            contado = (
+                float(valor_bs) if C2_SOLO_INYECCION
+                else float(_pos(bq)[posicion])
+            )
+            bu[posicion] = max(0.0, min(contado, techo))
 
         acumulado_bu[clave] = acumulado_bu.get(clave, 0.0) + bu[posicion]
 

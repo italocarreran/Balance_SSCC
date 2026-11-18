@@ -458,7 +458,8 @@ ORIGEN_COLUMNAS_E_COSTOS = {
     "BC": (
         f"Por {_GRUPO}: (Σ Total C1 − Σ Total C2) / número de filas del "
         "grupo, nunca negativo; el mismo valor en todas las filas del "
-        "grupo. Arriba, el total del mes."
+        "grupo. En la última ventana del mes es 0: queda pendiente y se "
+        "paga completa el mes siguiente. Arriba, el total del mes."
     ),
 }
 
@@ -644,7 +645,7 @@ def completar_calculo_e_costos_grupos(
     df["AY"], df["AZ"], df["BA"] = calcular_valorizacion(
         df, registrar=registrar
     )
-    df["BC"] = calcular_monto_a_compensar(df)
+    df["BC"] = calcular_monto_a_compensar(df, registrar=registrar)
 
     participa = int(df["L"].sum())
     registrar(

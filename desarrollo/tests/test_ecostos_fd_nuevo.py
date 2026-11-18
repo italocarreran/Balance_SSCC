@@ -109,7 +109,14 @@ class TestMetodoNuevoFD(unittest.TestCase):
         self.assertEqual(list(df["AX"].round(9)), [-100, -4, 0, 0, 0, 0, 0, 0])
 
     def test_valorizacion_sin_descuento_fd_y_monto(self):
-        df, _ = calcular()
+        # El caso tiene una sola ventana, que seria "la ultima del mes" y
+        # quedaria pendiente (test_re545_ultima_ventana): aca se prueba la
+        # formula del monto, sin esa regla.
+        from unittest import mock
+        from Script.nucleo import ecostos_valorizacion
+
+        with mock.patch.object(ecostos_valorizacion, "VENTANA_FINAL_PENDIENTE", False):
+            df, _ = calcular()
         # curva descarga 40,30,20,10: promedio de los 2 puestos asignados 35
         # curva carga 5,6,7,8: promedio 5,5
         self.assertEqual(list(df["AY"].round(9)[:2]), [3500, 2450])

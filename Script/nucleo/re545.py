@@ -403,7 +403,9 @@ ORIGEN_RESUMEN_RE545 = {
     "Edisp_T": (
         "MIN(MAX(MIN(EiniT + EalmT, Capacidad × 1000), EalmT), Total "
         "Reservas) × Oferta Completa. Capacidad de Centrales, Cuadro 1 "
-        "Resumen BESS. Es el tope de energía de la ventana."
+        "Resumen BESS. Es el tope de energía de la ventana. En la última "
+        "ventana del mes es 0: queda pendiente y se paga completa el mes "
+        "siguiente."
     ),
     "check 1": "Control: suma de Energía asignada de la ventana − Edisp_T.",
     "check 2": (
