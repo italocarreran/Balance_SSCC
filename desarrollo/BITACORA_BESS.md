@@ -12,6 +12,10 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **Gráficos RE545 (2026-11-18 (4)):** generar la página en el PC del
+  usuario con `Herramientas/Graficos_RE545.py` (ver que baje y guarde Plotly,
+  o dejar `plotly.min.js` en `Herramientas/`). Siguiente: lo mismo para E Costos.
+
 - **FD "No participó" devuelto (2026-11-18):** recalcular 2610 (E Costos
   y RE545) y confirmar en el `SSCC_Desempeño_2610` las horas de EMOAC (31-32
   y 345) y de Enel (Manzano, Don Humberto, La Cabaña); preguntar al DCO qué
@@ -6819,4 +6823,35 @@ saltean.
 **Verificación:** `desarrollo/tests/test_bloqueo_caso.py` (5 pruebas: el
 archivo; la ventana apaga y vuelve a prender todo; cancelar no bloquea; un
 bloqueo hecho afuera no deja correr). Captura revisada.
+
+## 2026-11-18 (4) — Gráficos interactivos del Calculo RE545
+
+- Pedido del usuario: elegir el archivo 11 ya calculado y ver la
+  compensación de cada central gráficamente, "lo más interactivo posible,
+  que los gráficos los pueda ver de cerca", partiendo por RE545 y viendo
+  "cómo afectan las variables, Energía disponible, reserva etc.".
+- `Script/nucleo/graficos_re545.py` + plantilla `graficos_re545.html`: lee
+  Calculo RE545 (las dos tablas; el resumen se separa por la posición de
+  "Central") y Centrales, y escribe una página HTML con Plotly embebido.
+  No recalcula en Python: usa los valores de la planilla. Si faltan
+  (planilla escrita por Python sin abrir en Excel), las fórmulas de pura
+  aritmética se completan con `reporte.completar_formulas`, "SSCC última
+  hora" con su regla, y lo que quede vacío del C1/C2 (la fórmula de prueba
+  de la primera fila) con las reglas de `re545_componentes.py`. Sin Pmax
+  o capacidad en Centrales, se estiman de la hoja y la página lo dice.
+- La página recalcula la ventana en el navegador (mismo algoritmo) para el
+  simulador: reserva × por servicio, energía inicial y almacenada ×,
+  capacidad, Pmax, tope de las cajas en C2 (real + C1 o solo real), descontar
+  la reserva de la última hora, marca de última hora y su constante (8).
+  Puede aplicarse a todo el mes.
+- `Herramientas/Graficos_RE545.py`: ventana para elegir la planilla
+  (recordada en `__config__/graficos_re545.json`), generar y abrir.
+
+**Verificación:** con `11_PAGOS_BESS_2610.xlsx` real (18 centrales, 576
+ventanas, 53.568 filas): el recálculo de la página da los mismos C1, C2,
+Energía Disponible y monto que la planilla en las 576 ventanas (72 con la
+marca de última hora encendida), comprobado en Chromium. Lectura ~18 s,
+página ~9,5 MB. `desarrollo/tests/test_graficos_re545.py` (4 pruebas).
+Suite: 540 OK, 52 salteadas. Falta abrirla en el PC del usuario (Windows,
+con y sin internet para Plotly).
 

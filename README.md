@@ -119,6 +119,25 @@ python Herramientas/Buscar_Rutas_PI.py
 python Herramientas/Comparar_Meses.py
 ```
 
+- `Graficos_RE545.py`: eliges una planilla 11_PAGOS_BESS ya calculada y
+  arma una página con gráficos interactivos del Calculo RE545 por central:
+  el mes (C1, C2 y monto por ventana, y qué limitó la Energía Disponible),
+  y por ventana la Energía Disponible, la ventana en el tiempo (CMg,
+  descarga/carga, reserva por servicio, SoC, monto por bloque), la curva
+  con las cajas de C1 y C2, la misma energía a dos precios y la cascada
+  C1 − C2. Trae un simulador (reserva por servicio, energía inicial y
+  almacenada, capacidad, Pmax, tope de C2 y última hora) que recalcula con
+  las mismas reglas del balance y avisa si con los valores de la planilla
+  no da lo mismo. Queda en `<carpeta de la planilla>/Log/Graficos_RE545_<AAMM>.html`
+  y se abre con doble clic. La librería de gráficos (Plotly) se embebe: la
+  primera vez se baja de internet y se guarda en `Herramientas/`; sin
+  internet, se puede dejar ahí `plotly.min.js` a mano. Usa el programa
+  (`Script/`).
+
+```bash
+python Herramientas/Graficos_RE545.py
+```
+
 - `Reorganizar_Carpetas.py` — pasa la carpeta de un mes armada antes de la
   división BESS/CRA (todo suelto) a la estructura nueva: lo del BESS a
   `BESS/`, lo del CRA a `CRA/`, `SSCC_Desempeño/` (o la `FD/` del CRA) a

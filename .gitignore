@@ -21,3 +21,6 @@ Balance_CRA.xlsx
 Consolidado_entradas.xlsx
 Pagos_BESS.xlsx
 debug_*.xlsx
+
+# Copia local de Plotly que baja Graficos_RE545.py
+Herramientas/plotly-*.min.js

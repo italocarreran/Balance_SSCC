@@ -52,6 +52,7 @@ Script/
         re545_reservas.py      <- RE545 AC:AT y AU
         re545_resumen.py       <- RE545 AW:BG y BV
         re545_componentes.py   <- RE545 BI:CE
+        graficos_re545.py      <- pagina de graficos RE545 desde una planilla 11 (+ graficos_re545.html, la plantilla; Herramientas/Graficos_RE545.py)
         prorrata_retiros.py    <- prorrata 15-min: quien paga, cuarto a cuarto
         compensacion.py        <- quien recibe: por central/ciclo, por central y por empresa
         equivalencias.py       <- buscar una central con todos sus nombres del Diccionario (aviso DIC-002)

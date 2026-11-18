@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gráficos RE545</title>
+<!-- Plantilla de Script/nucleo/graficos_re545.py: los datos y Plotly se
+     insertan al generar la pagina. No editar la pagina generada. -->
+/*__PLOTLY__*/
+<style>
+:root{
+  --bg:#f3f5f6; --surface:#fff; --sunk:#e9edf0; --ink:#16202a; --muted:#56636f; --line:#c9d1d8;
+  --c1:#0d7472; --c1-soft:#dcf0ef; --c2:#2d56b8; --c2-soft:#e2e9fa; --monto:#2f7a3a; --monto-soft:#e1f1e3;
+  --real:#7d8a96; --uh:#c46a00; --warn:#a33a2a; --warn-soft:#f8e3df; --carga:#8a4fbf;
+  --f:"Segoe UI",system-ui,-apple-system,sans-serif; --mono:Consolas,"SFMono-Regular",ui-monospace,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#10151a; --surface:#171f26; --sunk:#1d2730; --ink:#e4e9ee; --muted:#97a4af; --line:#2d3944;
+  --c1:#52c6c1; --c1-soft:#0f2e2d; --c2:#93b1ff; --c2-soft:#1b2846; --monto:#7cc487; --monto-soft:#16301b;
+  --real:#8796a3; --uh:#f0a254; --warn:#f08d7c; --warn-soft:#3a1d18; --carga:#c39af0; color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f);font-size:14.5px;line-height:1.45}
+header.top{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--line);padding:10px 18px;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+header.top h1{font-size:18px;margin:0;font-weight:700}
+header.top .file{font-family:var(--mono);font-size:12px;color:var(--muted)}
+select,button,input[type=number]{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:4px 8px}
+button{cursor:pointer}
+button:hover{border-color:var(--c1)}
+button.primary{background:var(--c1);border-color:var(--c1);color:var(--surface)}
+main{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;padding:16px 18px 60px;max-width:1700px;margin:0 auto}
+@media (max-width:1100px){main{grid-template-columns:1fr}}
+.col{display:grid;gap:16px;min-width:0;align-content:start}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:grid;gap:10px;min-width:0}
+.card h2{font-size:17px;margin:0}
+.card h3{font-size:14.5px;margin:0}
+.hint{color:var(--muted);font-size:13px}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 22px}
+.kpi{border-top:2px solid var(--line);padding-top:4px;min-width:110px}
+.kpi b{display:block;font-size:18px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.kpi span{font-size:12px;color:var(--muted)}
+.kpi small{display:block;font-size:12px;font-variant-numeric:tabular-nums}
+.kpi.c1{border-color:var(--c1)} .kpi.c1 b{color:var(--c1)}
+.kpi.c2{border-color:var(--c2)} .kpi.c2 b{color:var(--c2)}
+.kpi.m{border-color:var(--monto)} .kpi.m b{color:var(--monto)}
+.up{color:var(--monto)} .down{color:var(--warn)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chart{width:100%;min-height:300px}
+.explain{background:var(--sunk);border-radius:6px;padding:9px 12px;font-size:13.5px}
+.explain b{font-weight:700}
+.tag{font-family:var(--mono);font-size:11.5px;border-radius:999px;padding:1px 8px;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.tag.ok{background:var(--monto-soft);color:var(--monto)} .tag.bad{background:var(--warn-soft);color:var(--warn)}
+.tag.sim{background:var(--c2-soft);color:var(--c2)}
+aside .card{position:sticky;top:64px}
+@media (max-width:1100px){aside .card{position:static}}
+.ctl{display:grid;gap:3px;padding:6px 0;border-bottom:1px solid var(--line)}
+.ctl:last-of-type{border-bottom:0}
+.ctl label{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+.ctl label output{font-family:var(--mono);font-size:12px;color:var(--c2);white-space:nowrap}
+.ctl input[type=range]{width:100%;accent-color:var(--c2)}
+.ctl .base{font-size:11.5px;color:var(--muted)}
+.ctl.changed label{font-weight:700}
+.radio{display:grid;gap:2px;font-size:13px}
+details summary{cursor:pointer;font-weight:600}
+.tbl{overflow:auto;max-height:520px;border:1px solid var(--line);border-radius:6px}
+.tbl table{border-collapse:collapse;width:100%;font-size:12px;font-variant-numeric:tabular-nums}
+.tbl th,.tbl td{padding:3px 7px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
+.tbl th{position:sticky;top:0;background:var(--sunk);font-size:11px;color:var(--muted);font-weight:600}
+.tbl td:first-child,.tbl th:first-child{text-align:left}
+.tbl tr.hl td{background:var(--c2-soft)}
+.err{background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn);border-radius:6px;padding:10px 12px}
+.nav{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+:focus-visible{outline:2px solid var(--c2);outline-offset:2px}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Gráficos RE545</h1>
+  <span class="file" id="archivo"></span>
+  <label class="row">Central <select id="selCentral"></select></label>
+  <span class="nav">Ventana
+    <button type="button" id="prevV" title="Ventana anterior (←)">◀</button>
+    <select id="selVentana"></select>
+    <button type="button" id="nextV" title="Ventana siguiente (→)">▶</button>
+  </span>
+  <span class="hint">Rueda del mouse o arrastre para acercar · doble clic para volver · clic en la leyenda para ocultar series</span>
+</header>
+
+<main>
+<div class="col">
+  <div id="sinPlotly" class="err" hidden>No se pudo cargar la librería de gráficos (Plotly). Abre la página con internet una vez, o deja <code>plotly.min.js</code> en la carpeta Herramientas y vuelve a generar la página.</div>
+
+  <section class="card" id="cardMes">
+    <div class="row" style="justify-content:space-between"><h2 id="tituloMes">El mes</h2><span id="tagMes" class="tag"></span></div>
+    <div class="kpis" id="kpisMes"></div>
+    <div class="chart" id="chMes" style="min-height:340px"></div>
+    <p class="hint">Cada ventana tiene dos barras: C1, la energía retenida valorada en los bloques más caros, y C2, la misma energía valorada en los más baratos con inyección. La línea verde es el monto, máx(C1 − C2, 0). <b>Haz clic en una ventana</b> para ver su detalle.</p>
+    <div class="chart" id="chMesEd" style="min-height:300px"></div>
+    <p class="hint">Qué limitó la Energía Disponible en cada ventana. Es la menor entre lo que tenía y almacenó la batería y la reserva total comprometida (MW × FD × FMA).</p>
+  </section>
+
+  <section class="card" id="cardVentana">
+    <div class="row" style="justify-content:space-between"><h2 id="tituloV">Ventana</h2><span class="row"><span id="tagCheck" class="tag"></span><span id="tagSim" class="tag sim" hidden>simulado</span></span></div>
+    <div class="kpis" id="kpisV"></div>
+    <div class="explain" id="explicaEd"></div>
+    <div class="chart" id="chEd" style="min-height:250px"></div>
+  </section>
+
+  <section class="card">
+    <h3>1 · La ventana en el tiempo</h3>
+    <p class="hint">Bloques de 15 minutos en orden cronológico: precio, lo que hizo la batería, la reserva comprometida (por servicio) y cómo se repartió el monto. Las bandas naranjas marcan la última hora de la ventana.</p>
+    <div class="chart" id="chTiempo" style="min-height:720px"></div>
+  </section>
+
+  <section class="card">
+    <h3>2 · La curva: dónde se pone la Energía Disponible</h3>
+    <p class="hint">Eje horizontal: los puestos de la curva, del CMg más caro al más barato. Ya no es tiempo. Cada puesto es una caja de Pmax/4. <b>C1</b> rellena el espacio libre de las cajas desde la izquierda (las caras). <b>C2</b> pone la misma energía desde la derecha, solo en cajas con inyección real, hasta el tope de cada una.</p>
+    <div class="chart" id="chCurva" style="min-height:640px"></div>
+  </section>
+
+  <section class="card">
+    <h3>3 · Por qué hay monto: la misma energía a dos precios</h3>
+    <p class="hint">Cada kWh de la Energía Disponible, en el orden en que se asigna. El área bajo la curva verde azulada es C1; bajo la azul, C2. La diferencia entre las dos áreas es el monto.</p>
+    <div class="chart" id="chPrecio" style="min-height:360px"></div>
+    <div class="chart" id="chCascada" style="min-height:300px"></div>
+  </section>
+
+  <section class="card">
+    <details id="detTabla"><summary>Tabla por bloque / puesto</summary>
+      <p class="hint">Fila i = bloque i en el tiempo (izquierda) y puesto i de la curva (derecha), igual que en la hoja. Valores del escenario que se ve (planilla o simulado).</p>
+      <div class="tbl" id="tabla"></div>
+    </details>
+  </section>
+</div>
+
+<aside>
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><h2>Simulador</h2><button type="button" id="reset">Volver a la planilla</button></div>
+    <p class="hint">Mueve una variable y mira cómo cambian la Energía Disponible, C1, C2 y el monto. Se recalcula con las mismas reglas que el balance.</p>
+    <div id="controles"></div>
+    <label class="row" style="font-size:13px"><input type="checkbox" id="todoMes"> Aplicar también a todas las ventanas del mes</label>
+  </div>
+</aside>
+</main>
+
+<script>
+const D = /*__DATOS__*/null;
+
+/* ---------- utilidades ---------- */
+const $ = id => document.getElementById(id);
+const nf = (v, d = 0) => (v === null || v === undefined || !isFinite(v)) ? "—" : Number(v).toLocaleString("es-CL", {maximumFractionDigits: d, minimumFractionDigits: 0});
+const clp = v => "$" + nf(v);
+const kwh = v => nf(v) + " kWh";
+const sum = a => (a || []).reduce((s, v) => s + (v == null || !isFinite(v) ? 0 : v), 0);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const INI = D ? D.inicio_ventana : 10;
+const pad2 = n => String(n).padStart(2, "0");
+
+function colores(){
+  return {c1: css("--c1"), c2: css("--c2"), monto: css("--monto"), real: css("--real"), uh: css("--uh"),
+    ink: css("--ink"), muted: css("--muted"), line: css("--line"), surface: css("--surface"),
+    warn: css("--warn"), carga: css("--carga"), c1s: css("--c1-soft"), c2s: css("--c2-soft")};
+}
+function layoutBase(extra = {}){
+  const C = colores();
+  return Object.assign({
+    paper_bgcolor: C.surface, plot_bgcolor: C.surface, font: {family: "Segoe UI, system-ui, sans-serif", size: 12, color: C.ink},
+    margin: {l: 95, r: 20, t: 30, b: 40}, hovermode: "x unified", separators: ",.",
+    legend: {orientation: "h", y: 1.08, x: 0, font: {size: 11.5}},
+    xaxis: {gridcolor: C.line, zerolinecolor: C.line}, yaxis: {gridcolor: C.line, zerolinecolor: C.line},
+    hoverlabel: {font: {family: "Consolas, monospace", size: 12}},
+  }, extra);
+}
+const CONFIG = {responsive: true, displaylogo: false, scrollZoom: true,
+  modeBarButtonsToRemove: ["lasso2d", "select2d"], toImageButtonOptions: {format: "png", scale: 2}};
+const plot = (id, data, layout) => window.Plotly && Plotly.react(id, data, layout, CONFIG);
+
+/* ---------- el cálculo (mismo que re545_componentes.py) ----------
+   La fila i del grupo es el bloque i en el tiempo y el puesto i+1 de la curva. */
+const BASE = {res: {}, eini: 1, ealm: 1, cap: null, pmax: null, k: 8, uh: true, flag: null, tope: "planilla"};
+let P = JSON.parse(JSON.stringify(BASE));
+
+function simular(c, w, p){
+  const t = w.t, n = w.n;
+  const cap = p.cap ?? c.capacidad, pmax = p.pmax ?? c.pmax;
+  const au = new Array(n);
+  for (let i = 0; i < n; i++){
+    let a = t.au[i] || 0;
+    for (const s in w.srv){ const f = p.res[s] ?? 1; if (f !== 1) a += (w.srv[s].kwh[i] || 0) * (f - 1); }
+    au[i] = Math.max(0, a);
+  }
+  const reserva = sum(au);
+  const eini = (w.eini || 0) * p.eini, ealm = (w.ealm || 0) * p.ealm;
+  const tapa = Math.min(eini + ealm, cap * 1000), conAlm = Math.max(tapa, ealm);
+  const edisp = Math.min(conAlm, reserva) * (w.oferta ? 1 : 0);
+  let limita;
+  if (!w.oferta) limita = "oferta";
+  else if (reserva < conAlm) limita = "reserva";
+  else if (ealm > tapa) limita = "almacenada";
+  else if (eini + ealm > cap * 1000) limita = "capacidad";
+  else limita = "bateria";
+  const bv = au.map((a, i) => (p.uh && t.hora[i] === INI - 1 && a !== 0) ? a : 0);
+  const sbv = sum(bv);
+  const caja = pmax * 1000 / 4;
+  const bn = new Array(n).fill(null); let acc = 0;
+  for (let i = 0; i < n; i++){
+    const bs = t.bs[i]; if (bs == null) continue;
+    const v = Math.max(0, Math.min(Math.max(0, caja - bs), edisp - acc)); bn[i] = v; acc += v;
+  }
+  const bq = bn.map((b, i) => p.tope === "real" ? (t.bs[i] || 0) : (t.bs[i] || 0) + (b || 0));
+  const bu = new Array(n).fill(0), bt = new Array(n).fill(0); acc = 0;
+  for (let i = n - 1; i >= 0; i--){
+    bt[i] = acc; const bs = t.bs[i];
+    bu[i] = (!bs) ? 0 : Math.max(0, Math.min(bq[i], edisp - acc - sbv)); acc += bu[i];
+  }
+  const flag = p.flag ?? w.flag;
+  const bw = t.desc.map((d, i) => (d || 0) + (t.carga[i] || 0));
+  const bz = bw.map(b => (b < 0 ? 0 : p.k) * (flag ? 1 : 0));
+  const ca = bu.map((u, i) => u + bz[i]);
+  const bo = bn.map((b, i) => (b == null || t.bm[i] == null) ? 0 : b * t.bm[i]);
+  const cc = ca.map((a, i) => t.bm[i] == null ? 0 : a * t.bm[i]);
+  const c1 = sum(bo), c2 = sum(cc), c2uh = sum(bz.map((z, i) => t.bm[i] == null ? 0 : z * t.bm[i]));
+  const monto = Math.max(c1 - c2, 0);
+  const ce = au.map(a => reserva ? monto * a / reserva : 0);
+  return {au, reserva, eini, ealm, cap, pmax, caja, tapa, conAlm, edisp, limita, bv, sbv, bn, bq, bu, bt, bz, ca, bo, cc, c1, c2, c2uh, monto, ce, flag};
+}
+const cerca = (a, b) => Math.abs((a || 0) - (b || 0)) <= Math.max(10, 1e-5 * Math.abs(b || 0));
+const esBase = () => JSON.stringify(P) === JSON.stringify(BASE);
+
+/* ---------- estado ---------- */
+let ci = 0, wi = 0;
+const central = () => D.centrales[ci];
+const ventana = () => central().ventanas[wi];
+const etiquetaT = (t, i) => `d${t.dia[i]} ${pad2(t.hora[i])}:${pad2(t.min[i])}`;
+
+/* ---------- controles del simulador ---------- */
+function construirControles(){
+  const c = central(), w = ventana(), box = $("controles");
+  const servicios = [...new Set(c.ventanas.flatMap(v => Object.keys(v.srv)))];
+  const ctl = (id, texto, min, max, step, valor, base, fmt, ayuda) => `
+    <div class="ctl" id="ctl_${id}"><label for="r_${id}">${texto} <output id="o_${id}"></output></label>
+    <input type="range" id="r_${id}" min="${min}" max="${max}" step="${step}" value="${valor}">
+    <span class="base">${ayuda} · planilla: ${fmt(base)}</span></div>`;
+  let h = `<h3 style="margin-top:6px">Reserva comprometida</h3>`;
+  for (const s of servicios){
+    const mw = sum(c.ventanas.flatMap(v => v.srv[s] ? v.srv[s].mw : [])) / Math.max(1, sum(c.ventanas.map(v => v.srv[s] ? v.srv[s].mw.filter(x => x).length : 0)));
+    h += ctl("res_" + s, `Reserva ${s} ×`, 0, 3, 0.05, P.res[s] ?? 1, 1, v => "× " + nf(v, 2), `MW adjudicados (prom. ${nf(mw, 1)} MW) × FD × FMA`);
+  }
+  if (!servicios.length) h += `<p class="hint">Sin reservas adjudicadas en el mes.</p>`;
+  h += `<h3 style="margin-top:8px">Energía de la batería</h3>`;
+  h += ctl("eini", "Energía inicial ×", 0, 2, 0.05, P.eini, 1, v => "× " + nf(v, 2), `SoC del primer bloque × capacidad (esta ventana ${kwh(w.eini)})`);
+  h += ctl("ealm", "Energía almacenada ×", 0, 3, 0.05, P.ealm, 1, v => "× " + nf(v, 2), `Σ carga × eficiencia (esta ventana ${kwh(w.ealm)})`);
+  h += ctl("cap", "Capacidad [MWh]", 0, Math.max(10, Math.ceil((c.capacidad || 10) * 3)), 0.5, P.cap ?? c.capacidad, c.capacidad, v => nf(v, 1) + " MWh", "tope a inicial + almacenada");
+  h += ctl("pmax", "Pmax [MW]", 0, Math.max(10, Math.ceil((c.pmax || 10) * 3)), 0.5, P.pmax ?? c.pmax, c.pmax, v => nf(v, 1) + " MW", "tamaño de cada caja = Pmax × 1000 ÷ 4");
+  h += `<h3 style="margin-top:8px">Componente 2</h3>
+    <div class="ctl"><span class="radio"><b style="font-size:13px">Tope de cada caja en C2</b>
+      <label><input type="radio" name="tope" value="planilla" ${P.tope === "planilla" ? "checked" : ""}> inyección real + asignada en C1 (planilla)</label>
+      <label><input type="radio" name="tope" value="real" ${P.tope === "real" ? "checked" : ""}> solo la inyección real</label></span>
+      <span class="base">Punto en revisión: cambia cuánta energía cabe en cada caja.</span></div>
+    <div class="ctl"><label><span><input type="checkbox" id="c_uh" ${P.uh ? "checked" : ""}> Descontar la reserva de la última hora</span></label>
+      <span class="base">La reserva de la hora ${INI - 1} se resta de lo que se reparte en C2.</span></div>
+    <div class="ctl"><label><span><input type="checkbox" id="c_flag" ${(P.flag ?? w.flag) ? "checked" : ""}> Marca última hora encendida</span></label>
+      <span class="base">planilla en esta ventana: ${w.flag ? "encendida" : "apagada"}</span></div>
+    ${ctl("k", "Constante de la marca [kWh]", 0, 2500, 1, P.k, 8, v => nf(v), "se suma a cada puesto si la marca está encendida (la macro usa 8)")}`;
+  box.innerHTML = h;
+  const out = () => {
+    for (const s of servicios) $("o_res_" + s).textContent = "× " + nf(P.res[s] ?? 1, 2);
+    $("o_eini").textContent = "× " + nf(P.eini, 2);
+    $("o_ealm").textContent = "× " + nf(P.ealm, 2);
+    $("o_cap").textContent = nf(P.cap ?? c.capacidad, 1) + " MWh";
+    $("o_pmax").textContent = nf(P.pmax ?? c.pmax, 1) + " MW";
+    $("o_k").textContent = nf(P.k) + " kWh";
+    for (const s of servicios) $("ctl_res_" + s).classList.toggle("changed", (P.res[s] ?? 1) !== 1);
+    $("ctl_eini").classList.toggle("changed", P.eini !== 1);
+    $("ctl_ealm").classList.toggle("changed", P.ealm !== 1);
+    $("ctl_cap").classList.toggle("changed", P.cap !== null && P.cap !== c.capacidad);
+    $("ctl_pmax").classList.toggle("changed", P.pmax !== null && P.pmax !== c.pmax);
+    $("ctl_k").classList.toggle("changed", P.k !== 8);
+  };
+  const on = (id, f) => $(id).addEventListener("input", e => { f(+e.target.value); out(); pedirDibujo(); });
+  for (const s of servicios) on("r_res_" + s, v => { if (v === 1) delete P.res[s]; else P.res[s] = v; });
+  on("r_eini", v => P.eini = v);
+  on("r_ealm", v => P.ealm = v);
+  on("r_cap", v => P.cap = v === c.capacidad ? null : v);
+  on("r_pmax", v => P.pmax = v === c.pmax ? null : v);
+  on("r_k", v => P.k = v);
+  box.querySelectorAll("input[name=tope]").forEach(r => r.addEventListener("change", e => { P.tope = e.target.value; pedirDibujo(); }));
+  $("c_uh").addEventListener("change", e => { P.uh = e.target.checked; pedirDibujo(); });
+  $("c_flag").addEventListener("change", e => { const v = e.target.checked ? 1 : 0; P.flag = (v === ventana().flag) ? null : v; pedirDibujo(); });
+  out();
+}
+
+/* ---------- dibujo ---------- */
+let pendiente = false;
+function pedirDibujo(){ if (!pendiente){ pendiente = true; requestAnimationFrame(() => { pendiente = false; dibujar(); }); } }
+
+function kpi(cls, titulo, valor, base, fmt){
+  let extra = "";
+  if (base !== undefined && !cerca(valor, base)){
+    const d = valor - base;
+    extra = `<small class="${d >= 0 ? "up" : "down"}">${d >= 0 ? "+" : "−"}${fmt(Math.abs(d))} vs planilla (${fmt(base)})</small>`;
+  }
+  return `<div class="kpi ${cls}"><b>${fmt(valor)}</b><span>${titulo}</span>${extra}</div>`;
+}
+
+function dibujarMes(){
+  const c = central(), C = colores(), sim = $("todoMes").checked && !esBase();
+  const vs = c.ventanas, x = vs.map(v => "V" + v.v);
+  const S = sim ? vs.map(v => simular(c, v, Object.assign({}, P, {flag: null}))) : null;
+  const tot = k => sum(vs.map(v => v[k]));
+  const totS = k => sum(S.map(s => s[k]));
+  $("tituloMes").textContent = `${c.nombre} · el mes${D.periodo ? " (" + D.periodo + ")" : ""}`;
+  $("tagMes").textContent = [c.propietario, c.pmax != null ? nf(c.pmax, 1) + " MW" : null, c.capacidad != null ? nf(c.capacidad, 1) + " MWh" : null, c.eficiencia != null ? "η " + nf(c.eficiencia * 100, 1) + " %" : null,
+    (c.estimado || []).length ? "estimado de la hoja: " + c.estimado.join(" y ") : null].filter(Boolean).join(" · ");
+  const conMonto = vs.filter(v => v.monto > 0).length, sinOferta = vs.filter(v => !v.oferta).length;
+  $("kpisMes").innerHTML =
+    kpi("m", "Monto RE545 del mes", sim ? totS("monto") : tot("monto"), sim ? tot("monto") : undefined, clp) +
+    kpi("c1", "Total C1", sim ? totS("c1") : tot("c1"), sim ? tot("c1") : undefined, clp) +
+    kpi("c2", "Total C2", sim ? totS("c2") : tot("c2"), sim ? tot("c2") : undefined, clp) +
+    `<div class="kpi"><b>${conMonto} / ${vs.length}</b><span>ventanas con monto</span>${sinOferta ? `<small>${sinOferta} sin oferta completa (van a E Costos)</small>` : ""}</div>`;
+  const sel = vs.map((v, i) => i === wi ? 1 : 0.55);
+  const data = [
+    {type: "bar", name: "C1 (planilla)", x, y: vs.map(v => v.c1), marker: {color: C.c1, opacity: sel}, hovertemplate: "%{y:,.0f}"},
+    {type: "bar", name: "C2 (planilla)", x, y: vs.map(v => v.c2), marker: {color: C.c2, opacity: sel}, hovertemplate: "%{y:,.0f}"},
+    {type: "scatter", mode: "lines+markers", name: "Monto (planilla)", x, y: vs.map(v => v.monto), line: {color: C.monto, width: 2.5}, marker: {size: 7}, hovertemplate: "%{y:,.0f}"},
+  ];
+  if (sim) data.push({type: "scatter", mode: "lines+markers", name: "Monto simulado", x, y: S.map(s => s.monto), line: {color: C.uh, width: 2, dash: "dot"}, marker: {size: 7, symbol: "diamond"}, hovertemplate: "%{y:,.0f}"});
+  const shapes = vs.map((v, i) => v.oferta ? null : {type: "rect", xref: "x", yref: "paper", x0: i - 0.5, x1: i + 0.5, y0: 0, y1: 1, fillcolor: C.line, opacity: 0.35, line: {width: 0}}).filter(Boolean);
+  shapes.push({type: "rect", xref: "x", yref: "paper", x0: wi - 0.5, x1: wi + 0.5, y0: 0, y1: 1, fillcolor: "rgba(0,0,0,0)", line: {color: C.ink, width: 1.5, dash: "dot"}});
+  plot("chMes", data, layoutBase({barmode: "group", yaxis: {title: "CLP", gridcolor: C.line, tickformat: ",.0f"}, xaxis: {type: "category", gridcolor: C.line}, shapes,
+    annotations: sinOferta ? [{xref: "paper", yref: "paper", x: 1, y: 1.13, showarrow: false, text: "gris = sin oferta completa", font: {size: 11, color: C.muted}, xanchor: "right"}] : []}));
+
+  const E = sim ? S : vs.map(v => ({eini: v.eini, ealm: v.ealm, reserva: v.reserva, edisp: v.edisp, cap: c.capacidad}));
+  plot("chMesEd", [
+    {type: "bar", name: "Energía Disponible", x, y: E.map(e => e.edisp), marker: {color: C.c1, opacity: sel}, hovertemplate: "%{y:,.0f} kWh"},
+    {type: "scatter", mode: "lines+markers", name: "Inicial + almacenada", x, y: E.map(e => (e.eini || 0) + (e.ealm || 0)), line: {color: C.real, width: 2}, hovertemplate: "%{y:,.0f} kWh"},
+    {type: "scatter", mode: "lines+markers", name: "Reserva total (×FD×FMA)", x, y: E.map(e => e.reserva), line: {color: C.c2, width: 2}, hovertemplate: "%{y:,.0f} kWh"},
+    {type: "scatter", mode: "lines", name: "Capacidad", x, y: E.map(e => (e.cap ?? c.capacidad) * 1000), line: {color: C.warn, width: 1.5, dash: "dash"}, hovertemplate: "%{y:,.0f} kWh"},
+  ], layoutBase({yaxis: {title: "kWh", gridcolor: C.line, tickformat: ",.0f"}, xaxis: {type: "category", gridcolor: C.line}}));
+}
+
+const LIMITA = {
+  oferta: "La ventana <b>no tuvo oferta completa</b>: la Energía Disponible es 0 y su energía se paga por E Costos.",
+  reserva: "La limita <b>la reserva</b>: la batería tenía más energía de la que la reserva comprometió. Si sube la reserva (o el FD/FMA), sube la Energía Disponible.",
+  almacenada: "La limita <b>lo almacenado</b>: lo cargado en la ventana supera la capacidad (varios ciclos), y eso no se recorta. La reserva alcanza a cubrirlo.",
+  capacidad: "La limita <b>la capacidad</b>: inicial + almacenada pasa la capacidad, y la energía inicial solo se suma hasta llenarla. La reserva alcanza a cubrirlo.",
+  bateria: "La limita <b>la energía de la batería</b> (inicial + almacenada). La reserva comprometida es mayor, así que subir la reserva no cambia nada.",
+};
+
+function dibujarVentana(){
+  const c = central(), w = ventana(), t = w.t, C = colores();
+  const S = simular(c, w, P), B = simular(c, w, BASE), base = esBase();
+  const okPlanilla = cerca(B.c1, w.c1) && cerca(B.c2, w.c2) && cerca(B.monto, w.monto) && cerca(B.edisp, w.edisp);
+  $("tituloV").textContent = `Ventana ${w.v} · ${etiquetaT(t, 0)} → ${etiquetaT(t, w.n - 1)} (${w.n} bloques)`;
+  $("tagCheck").className = "tag " + (okPlanilla ? "ok" : "bad");
+  $("tagCheck").textContent = okPlanilla ? "✓ recálculo = planilla" : "≠ el recálculo no coincide con la planilla";
+  $("tagCheck").title = okPlanilla ? "Con los valores de la planilla, la página llega a los mismos C1, C2 y monto." :
+    `Recalculado: C1 ${clp(B.c1)}, C2 ${clp(B.c2)}, monto ${clp(B.monto)}. Planilla: C1 ${clp(w.c1)}, C2 ${clp(w.c2)}, monto ${clp(w.monto)}.`;
+  $("tagSim").hidden = base;
+  const ref = base ? undefined : null;
+  const b = (k, wk) => base ? undefined : (wk !== undefined ? wk : B[k]);
+  $("kpisV").innerHTML =
+    kpi("", "Energía inicial", S.eini, b("eini", w.eini), kwh) +
+    kpi("", "Energía almacenada", S.ealm, b("ealm", w.ealm), kwh) +
+    kpi("", "Reserva total (×FD×FMA)", S.reserva, b("reserva", w.reserva), kwh) +
+    kpi("c1", "Energía Disponible", S.edisp, b("edisp", w.edisp), kwh) +
+    kpi("c1", "Componente 1", S.c1, b("c1", w.c1), clp) +
+    kpi("c2", "Componente 2", S.c2, b("c2", w.c2), clp) +
+    kpi("m", "Monto a compensar", S.monto, b("monto", w.monto), clp);
+  $("explicaEd").innerHTML = LIMITA[S.limita] +
+    ` <span class="hint">Energía Disponible = mín( máx( mín(${nf(S.eini)} + ${nf(S.ealm)}, ${nf(S.cap * 1000)}), ${nf(S.ealm)} ), ${nf(S.reserva)} ) = <b>${nf(S.edisp)} kWh</b>.</span>` +
+    (S.sbv ? ` <span class="hint">Reserva de la última hora descontada en C2: ${kwh(S.sbv)}.</span>` : "") +
+    (S.flag ? ` <span class="hint">Marca de última hora encendida: +${nf(P.k)} kWh por puesto con inyección (${clp(S.c2uh)} de C2).</span>` : "");
+
+  // Energía Disponible: de dónde sale
+  const filas = [
+    ["Energía inicial", S.eini, C.real], ["Energía almacenada", S.ealm, C.carga],
+    ["Inicial + almacenada", S.eini + S.ealm, C.real], ["Capacidad", S.cap * 1000, C.warn],
+    ["Reserva total", S.reserva, C.c2], ["Energía Disponible", S.edisp, C.c1],
+  ].reverse();
+  plot("chEd", [{type: "bar", orientation: "h", y: filas.map(f => f[0]), x: filas.map(f => f[1]), marker: {color: filas.map(f => f[2])},
+      text: filas.map(f => kwh(f[1])), textposition: "outside", cliponaxis: false, hovertemplate: "%{x:,.0f} kWh<extra>%{y}</extra>"}],
+    layoutBase({hovermode: "closest", showlegend: false, margin: {l: 140, r: 90, t: 10, b: 30}, xaxis: {title: "kWh", gridcolor: C.line, tickformat: ",.0f"}, yaxis: {automargin: true}}));
+
+  // 1. En el tiempo
+  const x = t.dia.map((_, i) => i), tick = t.dia.map((_, i) => etiquetaT(t, i));
+  const step = Math.max(1, Math.round(w.n / 12));
+  const tickvals = x.filter(i => i % step === 0), ticktext = tickvals.map(i => tick[i]);
+  const uh = []; t.hora.forEach((h, i) => { if (h === INI - 1) uh.push(i); });
+  const shapesT = uh.length ? [{type: "rect", xref: "x", yref: "paper", x0: uh[0] - 0.5, x1: uh[uh.length - 1] + 0.5, y0: 0, y1: 1, fillcolor: C.uh, opacity: 0.12, line: {width: 0}}] : [];
+  const servCol = {"CPF(+)": C.c2, "CSF(+)": C.c1, "CPF(−)": C.uh, "CSF(−)": C.carga};
+  const resTraces = Object.keys(w.srv).map(s => ({type: "bar", name: "Reserva " + s, x, y: w.srv[s].kwh.map((v, i) => (v || 0) * (P.res[s] ?? 1)),
+    marker: {color: servCol[s] || C.real}, xaxis: "x", yaxis: "y3", customdata: w.srv[s].mw.map((m, i) => [m, w.srv[s].fd ? w.srv[s].fd[i] : null, w.srv[s].fma ? w.srv[s].fma[i] : null]),
+    hovertemplate: "%{y:,.0f} kWh (%{customdata[0]:,.1f} MW · FD %{customdata[1]:.2f} · FMA %{customdata[2]:.2f})"}));
+  plot("chTiempo", [
+    {type: "scatter", mode: "lines", name: "CMg", x, y: t.cmg, line: {color: C.ink, width: 1.6, shape: "hv"}, yaxis: "y", hovertemplate: "%{y:,.2f} CLP/kWh"},
+    {type: "bar", name: "Descarga", x, y: t.desc, marker: {color: C.monto}, yaxis: "y2", hovertemplate: "%{y:,.0f} kWh"},
+    {type: "bar", name: "Carga", x, y: t.carga, marker: {color: C.carga}, yaxis: "y2", hovertemplate: "%{y:,.0f} kWh"},
+    {type: "scatter", mode: "lines", name: "Caja Pmax/4", x, y: x.map(() => S.caja), line: {color: C.muted, dash: "dot", width: 1}, yaxis: "y2", hoverinfo: "skip"},
+    ...resTraces,
+    {type: "scatter", mode: "lines", name: "SoC", x, y: t.soc ? t.soc.map(v => v == null ? null : v * 100) : [], line: {color: C.c2, width: 1.8}, yaxis: "y4", hovertemplate: "%{y:.1f} %"},
+    {type: "bar", name: "Monto del bloque", x, y: S.ce, marker: {color: C.monto}, yaxis: "y5", hovertemplate: "%{y:,.0f} CLP"},
+  ], layoutBase({barmode: "relative", shapes: shapesT, height: 720,
+    grid: {rows: 5, columns: 1, subplots: [["xy"], ["xy2"], ["xy3"], ["xy4"], ["xy5"]], roworder: "top to bottom"},
+    xaxis: {tickvals, ticktext, gridcolor: C.line, showspikes: true, spikemode: "across", spikecolor: C.muted, spikethickness: 1},
+    yaxis: {title: {text: "CMg", font: {size: 11}}, gridcolor: C.line, domain: [0.82, 1]},
+    yaxis2: {title: {text: "Energía kWh", font: {size: 11}}, gridcolor: C.line, domain: [0.6, 0.79], tickformat: ",.0f"},
+    yaxis3: {title: {text: "Reserva kWh", font: {size: 11}}, gridcolor: C.line, domain: [0.4, 0.57], tickformat: ",.0f"},
+    yaxis4: {title: {text: "SoC %", font: {size: 11}}, gridcolor: C.line, domain: [0.21, 0.37]},
+    yaxis5: {title: {text: "Monto CLP", font: {size: 11}}, gridcolor: C.line, domain: [0, 0.18], tickformat: ",.0f"},
+    hoversubplots: "axis", legend: {orientation: "h", y: 1.06, x: 0, font: {size: 11}}}));
+
+  // 2. La curva
+  const pu = t.bm.map((_, i) => i + 1);
+  const conC2 = t.bs.map(v => !!v);
+  plot("chCurva", [
+    {type: "scatter", mode: "lines+markers", name: "CMg del puesto", x: pu, y: t.bm, line: {color: C.ink, width: 1.6, shape: "hv"}, marker: {size: 3}, yaxis: "y", hovertemplate: "%{y:,.2f} CLP/kWh"},
+    {type: "bar", name: "Inyección real", x: pu, y: t.bs, marker: {color: C.real}, yaxis: "y2", offsetgroup: "a", hovertemplate: "%{y:,.0f} kWh"},
+    {type: "bar", name: "Asignada C1", x: pu, y: S.bn, marker: {color: C.c1}, yaxis: "y2", offsetgroup: "a", base: t.bs.map(v => v || 0), hovertemplate: "%{y:,.0f} kWh"},
+    {type: "scatter", mode: "lines", name: "Caja Pmax/4", x: pu, y: pu.map(() => S.caja), line: {color: C.muted, dash: "dot", width: 1}, yaxis: "y2", hoverinfo: "skip"},
+    {type: "bar", name: "Tope C2", x: pu, y: S.bq.map((v, i) => conC2[i] ? v : 0), marker: {color: C.c2s, line: {color: C.c2, width: 1}}, yaxis: "y3", offsetgroup: "b", hovertemplate: "%{y:,.0f} kWh"},
+    {type: "bar", name: "Asignada C2", x: pu, y: S.bu, marker: {color: C.c2}, yaxis: "y3", offsetgroup: "c", hovertemplate: "%{y:,.0f} kWh"},
+    {type: "bar", name: "Última hora (marca)", x: pu, y: S.bz, marker: {color: C.uh}, yaxis: "y3", offsetgroup: "c", base: S.bu, hovertemplate: "%{y:,.0f} kWh"},
+    {type: "scatter", mode: "lines", name: "Valor C1 acumulado", x: pu, y: cumul(S.bo), line: {color: C.c1, width: 2}, yaxis: "y4", hovertemplate: "%{y:,.0f} CLP"},
+    {type: "scatter", mode: "lines", name: "Valor C2 acumulado", x: pu, y: cumulRev(S.cc), line: {color: C.c2, width: 2}, yaxis: "y4", hovertemplate: "%{y:,.0f} CLP"},
+  ], layoutBase({barmode: "overlay", height: 640,
+    grid: {rows: 4, columns: 1, subplots: [["xy"], ["xy2"], ["xy3"], ["xy4"]], roworder: "top to bottom"},
+    xaxis: {title: "puesto de la curva (1 = CMg más alto)", gridcolor: C.line, showspikes: true, spikemode: "across", spikecolor: C.muted, spikethickness: 1},
+    yaxis: {title: {text: "CMg", font: {size: 11}}, gridcolor: C.line, domain: [0.79, 1]},
+    yaxis2: {title: {text: "C1 kWh", font: {size: 11}}, gridcolor: C.line, domain: [0.53, 0.76], tickformat: ",.0f"},
+    yaxis3: {title: {text: "C2 kWh", font: {size: 11}}, gridcolor: C.line, domain: [0.27, 0.5], tickformat: ",.0f"},
+    yaxis4: {title: {text: "CLP acum.", font: {size: 11}}, gridcolor: C.line, domain: [0, 0.24], tickformat: ",.0f"},
+    hoversubplots: "axis"}));
+
+  // 3. Precio de cada kWh
+  const esc = (orden, cant) => { const xs = [0], ys = []; let acc = 0;
+    for (const i of orden){ const q = cant[i] || 0, p = t.bm[i]; if (q <= 0 || p == null) continue; ys.push(p); acc += q; xs.push(acc); }
+    const X = [], Y = []; xs.forEach((v, k) => { if (k < ys.length){ X.push(v, xs[k + 1]); Y.push(ys[k], ys[k]); } }); return {X, Y}; };
+  const idx = [...Array(w.n).keys()];
+  const e1 = esc(idx, S.bn), e2 = esc([...idx].reverse(), S.ca);
+  plot("chPrecio", [
+    {type: "scatter", mode: "lines", name: `C1: ${clp(S.c1)}`, x: e1.X, y: e1.Y, fill: "tozeroy", line: {color: C.c1, width: 2}, fillcolor: hexA(C.c1, 0.25), hovertemplate: "%{y:,.2f} CLP/kWh"},
+    {type: "scatter", mode: "lines", name: `C2: ${clp(S.c2)}`, x: e2.X, y: e2.Y, fill: "tozeroy", line: {color: C.c2, width: 2}, fillcolor: hexA(C.c2, 0.25), hovertemplate: "%{y:,.2f} CLP/kWh"},
+  ], layoutBase({hovermode: "x", xaxis: {title: "kWh de la Energía Disponible, en el orden en que se asignan", gridcolor: C.line, tickformat: ",.0f"},
+    yaxis: {title: "CMg del puesto [CLP/kWh]", gridcolor: C.line}}));
+
+  plot("chCascada", [{type: "waterfall", orientation: "v", x: ["C1", "− C2 (Energía Disponible)", "− C2 (marca última hora)", "Monto"],
+    measure: ["absolute", "relative", "relative", "total"], y: [S.c1, -(S.c2 - S.c2uh), -S.c2uh, 0],
+    text: [clp(S.c1), "−" + clp(S.c2 - S.c2uh), "−" + clp(S.c2uh), clp(S.c1 - S.c2)], textposition: "outside", cliponaxis: false,
+    increasing: {marker: {color: C.c1}}, decreasing: {marker: {color: C.c2}}, totals: {marker: {color: S.c1 - S.c2 > 0 ? C.monto : C.warn}},
+    connector: {line: {color: C.line}}, hovertemplate: "%{text}<extra></extra>"}],
+    layoutBase({hovermode: "closest", showlegend: false, yaxis: {title: "CLP", gridcolor: C.line, tickformat: ",.0f"},
+      annotations: S.c1 - S.c2 < 0 ? [{xref: "paper", yref: "paper", x: 1, y: 1.05, xanchor: "right", showarrow: false, text: "C1 − C2 < 0: el monto queda en 0", font: {color: C.warn}}] : []}));
+
+  if ($("detTabla").open) dibujarTabla(S);
+}
+function cumul(a){ let s = 0; return a.map(v => s += (v || 0)); }
+function cumulRev(a){ const r = new Array(a.length); let s = 0; for (let i = a.length - 1; i >= 0; i--){ s += a[i] || 0; r[i] = s; } return r; }
+function hexA(color, a){
+  const m = color.match(/^#([0-9a-f]{6})$/i); if (!m) return color;
+  const n = parseInt(m[1], 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+function dibujarTabla(S){
+  S = S || simular(central(), ventana(), P);
+  const t = ventana().t;
+  const cols = [["Bloque", i => etiquetaT(t, i)], ["CMg", i => nf(t.cmg[i], 2)], ["Descarga", i => nf(t.desc[i])], ["Carga", i => nf(t.carga[i])],
+    ["SoC %", i => t.soc ? nf(t.soc[i] * 100, 1) : ""], ["Reserva kWh", i => nf(S.au[i])], ["Monto", i => nf(S.ce[i])],
+    ["│ Puesto", i => i + 1], ["CMg puesto", i => nf(t.bm[i], 2)], ["Iny. real", i => nf(t.bs[i])], ["Asignada C1", i => nf(S.bn[i])],
+    ["Valor C1", i => nf(S.bo[i])], ["Tope C2", i => nf(S.bq[i])], ["Asignada C2", i => nf(S.ca[i])], ["Valor C2", i => nf(S.cc[i])]];
+  let h = "<table><thead><tr>" + cols.map(c => `<th>${c[0]}</th>`).join("") + "</tr></thead><tbody>";
+  for (let i = 0; i < ventana().n; i++) h += `<tr class="${t.hora[i] === INI - 1 ? "hl" : ""}">` + cols.map(c => `<td>${c[1](i)}</td>`).join("") + "</tr>";
+  $("tabla").innerHTML = h + "</tbody></table>";
+}
+
+function dibujar(){ dibujarMes(); dibujarVentana(); }
+
+/* ---------- selectores ---------- */
+function llenarVentanas(){
+  const c = central();
+  $("selVentana").innerHTML = c.ventanas.map((v, i) => `<option value="${i}">V${v.v}${v.oferta ? "" : " (sin oferta)"} · ${clp(v.monto)}</option>`).join("");
+  $("selVentana").value = wi;
+}
+function irVentana(i){
+  const n = central().ventanas.length; wi = Math.max(0, Math.min(n - 1, i));
+  $("selVentana").value = wi; P.flag = null; construirControles(); dibujar();
+}
+function irCentral(i){
+  ci = i; const vs = central().ventanas;
+  let mejor = 0; vs.forEach((v, k) => { if ((v.monto || 0) > (vs[mejor].monto || 0)) mejor = k; });
+  wi = mejor; P = JSON.parse(JSON.stringify(BASE)); llenarVentanas(); construirControles(); dibujar(); conectarClicks();
+}
+function conectarClicks(){
+  for (const id of ["chMes", "chMesEd"]){
+    const el = $(id); if (!el || !el.on || el._conectado) continue; el._conectado = true;
+    el.on("plotly_click", ev => { if (ev.points && ev.points.length) irVentana(ev.points[0].pointIndex); });
+  }
+}
+
+function iniciar(){
+  if (!D || !D.centrales || !D.centrales.length){ document.querySelector("main").innerHTML = `<div class="err">La planilla no trae filas de Calculo RE545.</div>`; return; }
+  if (!window.Plotly) $("sinPlotly").hidden = false;
+  $("archivo").textContent = D.archivo;
+  document.title = `Gráficos RE545 · ${D.archivo}`;
+  // Las centrales, de la que más recibe a la que menos (la página abre en la primera).
+  const montoC = c => sum(c.ventanas.map(v => v.monto));
+  const orden = D.centrales.map((c, i) => i).sort((a, b) => montoC(D.centrales[b]) - montoC(D.centrales[a]));
+  $("selCentral").innerHTML = orden.map(i => `<option value="${i}">${D.centrales[i].nombre} · ${clp(montoC(D.centrales[i]))}</option>`).join("");
+  $("selCentral").addEventListener("change", e => irCentral(+e.target.value));
+  $("selVentana").addEventListener("change", e => irVentana(+e.target.value));
+  $("prevV").addEventListener("click", () => irVentana(wi - 1));
+  $("nextV").addEventListener("click", () => irVentana(wi + 1));
+  $("reset").addEventListener("click", () => { P = JSON.parse(JSON.stringify(BASE)); construirControles(); dibujar(); });
+  $("todoMes").addEventListener("change", dibujarMes);
+  $("detTabla").addEventListener("toggle", () => { if ($("detTabla").open) dibujarTabla(); });
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+    if (e.key === "ArrowLeft") irVentana(wi - 1); if (e.key === "ArrowRight") irVentana(wi + 1);
+  });
+  irCentral(orden[0]);
+}
+iniciar();
+</script>
+</body>
+</html>
