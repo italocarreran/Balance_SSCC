@@ -156,7 +156,7 @@ class TestGenerarSoc(unittest.TestCase):
         self.base = Path(self.tmp.name)
         nucleo.crear_estructura_caso(self.base)
         escribir_centrales(
-            self.base / "Auxiliares" / "Centrales.xlsx",
+            nucleo.resolver_rutas(self.base)["centrales"],
             [
                 ("SAE-TOCOPILLA", "SAE TOCOPILLA", "SAE-TOCOPILLA",
                  "BAT_TOCOPILLA", "Tocopilla - BESS", RUTA_AF1),
@@ -208,7 +208,7 @@ class TestGenerarSoc(unittest.TestCase):
 
         # El programa lo encuentra y lo lee con extraer_soc.
         self.assertEqual(
-            nucleo.buscar_soc(self.base / "Medidas", "2610"), destino
+            nucleo.buscar_soc(nucleo.resolver_rutas(self.base)["medidas_dir"], "2610"), destino
         )
         df_soc, incidencias = nucleo.extraer_soc(destino, {})
         self.assertEqual(
@@ -223,7 +223,7 @@ class TestGenerarSoc(unittest.TestCase):
 
     def test_la_ruta_no_es_un_sinonimo_de_la_central(self):
         _, diccionario = nucleo.leer_centrales(
-            self.base / "Auxiliares" / "Centrales.xlsx"
+            nucleo.resolver_rutas(self.base)["centrales"]
         )
         mapa = nucleo.construir_homologacion(diccionario)
         self.assertNotIn(nucleo.normalizar(RUTA_AF1), mapa)
@@ -231,7 +231,7 @@ class TestGenerarSoc(unittest.TestCase):
                          "SAE-TOCOPILLA")
 
         centrales = nucleo.centrales_para_soc(
-            *nucleo.leer_centrales(self.base / "Auxiliares" / "Centrales.xlsx")
+            *nucleo.leer_centrales(nucleo.resolver_rutas(self.base)["centrales"])
         )
         self.assertEqual(centrales[0]["ruta"], RUTA_AF1)
         self.assertNotIn(RUTA_AF1, centrales[0]["nombres"])

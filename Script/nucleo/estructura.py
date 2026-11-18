@@ -10,11 +10,12 @@ from pathlib import Path
 from .externos import (
     Homologacion, extrae_cmg, fma_subastas, ofertas_adj,
 )
+from .carpetas import relativa
 from .parametros import (
     ARCHIVO_CENTRALES, ARCHIVO_CMG, ARCHIVO_CONTROL, ARCHIVO_MEDIDAS_SAE,
     ARCHIVO_PUNTOS_FALLIDOS, ARCHIVO_REGISTRO, ARCHIVO_SALIDA,
-    CARPETA_AUXILIARES, CARPETA_LOG, CARPETA_CMG,
-    CARPETA_DB_SUBASTAS, CARPETA_FD_FMA, CARPETA_MEDIDAS, FMA_CON_CTF,
+    CARPETA_AUXILIARES, CARPETA_CMG,
+    CARPETA_DB_SUBASTAS, CARPETA_FD_FMA, FMA_CON_CTF,
     CARPETA_OFERTAS, CARPETA_PRORRATA_RETIROS, CARPETA_SUBASTAS,
     HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545, HOJA_CENTRALES, HOJA_CMG,
     HOJA_COMPENSACION_CENTRAL, HOJA_DICCIONARIO, HOJA_FD, HOJA_FMA,
@@ -309,6 +310,17 @@ def _filas_de_hojas(ruta_archivo, secciones, nivel):
     return filas
 
 
+def _carpeta(rutas, clave):
+    """
+    Como se muestra una carpeta del caso en el arbol: relativa a la
+    carpeta del mes ("BESS/Medidas/", "FD y FMA/"), asi se ve cuales son
+    del BESS y cuales comunes con el CRA. En un caso de antes de la
+    division (todo suelto en la raiz) queda "Medidas/" como siempre.
+    """
+
+    return f"{relativa(rutas[clave], rutas['base'])}/"
+
+
 def revisar_estructura(carpeta_base, aamm=None):
     """
     Revisa la carpeta base y devuelve (rutas, filas), donde cada fila
@@ -348,7 +360,7 @@ def revisar_estructura(carpeta_base, aamm=None):
 
     # ---- Medidas/ -------------------------------------------------
     agregar(
-        "medidas_dir", f"{CARPETA_MEDIDAS}/", 0,
+        "medidas_dir", _carpeta(rutas, "medidas_dir"), 0,
         rutas["medidas_dir"].is_dir(),
         ruta=rutas["medidas_dir"], es_carpeta=True,
     )
@@ -434,7 +446,7 @@ def revisar_estructura(carpeta_base, aamm=None):
 
     # ---- Auxiliares/ ----------------------------------------------
     agregar(
-        "auxiliares_dir", f"{CARPETA_AUXILIARES}/", 0,
+        "auxiliares_dir", _carpeta(rutas, "auxiliares_dir"), 0,
         rutas["auxiliares_dir"].is_dir(),
         ruta=rutas["auxiliares_dir"], es_carpeta=True,
     )
@@ -524,7 +536,7 @@ def revisar_estructura(carpeta_base, aamm=None):
 
     # ---- Ofertas/ -------------------------------------------------
     agregar(
-        "ofertas_dir", f"{CARPETA_OFERTAS}/", 0,
+        "ofertas_dir", _carpeta(rutas, "ofertas_dir"), 0,
         rutas["ofertas_dir"].is_dir(),
         ruta=rutas["ofertas_dir"], es_carpeta=True,
     )
@@ -554,7 +566,7 @@ def revisar_estructura(carpeta_base, aamm=None):
     # de la unidad de red (boton "Traer"), y con ese CSV ya al
     # lado se genera cmg.xlsx ("Generar").
     agregar(
-        "cmg_dir", f"{CARPETA_CMG}/", 0, rutas["cmg_dir"].is_dir(),
+        "cmg_dir", _carpeta(rutas, "cmg_dir"), 0, rutas["cmg_dir"].is_dir(),
         ruta=rutas["cmg_dir"], es_carpeta=True,
     )
 
@@ -611,7 +623,7 @@ def revisar_estructura(carpeta_base, aamm=None):
     # Se muestra el nombre de la carpeta que REALMENTE se esta usando
     # (puede ser la vieja si el caso todavia no se renombro).
     agregar(
-        "sscc_dir", f"{rutas['sscc_desempeno_dir'].name}/", 0,
+        "sscc_dir", _carpeta(rutas, "sscc_desempeno_dir"), 0,
         rutas["sscc_desempeno_dir"].is_dir(),
         ruta=rutas["sscc_desempeno_dir"], es_carpeta=True,
     )
@@ -699,7 +711,7 @@ def revisar_estructura(carpeta_base, aamm=None):
 
     # ---- Subastas/ ------------------------------------------------
     agregar(
-        "subastas_dir", f"{CARPETA_SUBASTAS}/", 0,
+        "subastas_dir", _carpeta(rutas, "subastas_dir"), 0,
         rutas["subastas_dir"].is_dir(),
         ruta=rutas["subastas_dir"], es_carpeta=True,
     )
@@ -793,7 +805,7 @@ def revisar_estructura(carpeta_base, aamm=None):
 
     # ---- Prorrata de retiros --------------------------------------
     agregar(
-        "prorrata_dir", f"{CARPETA_PRORRATA_RETIROS}/", 0,
+        "prorrata_dir", _carpeta(rutas, "prorrata_retiros_dir"), 0,
         rutas["prorrata_retiros_dir"].is_dir(),
         ruta=rutas["prorrata_retiros_dir"], es_carpeta=True,
     )
@@ -865,7 +877,7 @@ def revisar_estructura(carpeta_base, aamm=None):
     # (Alertas, Ejecucion, Log) y el registro de la ultima corrida.
     filas.append(
         _fila(
-            "log_dir", f"{CARPETA_LOG}/", 0,
+            "log_dir", _carpeta(rutas, "log_dir"), 0,
             "ok" if rutas["log_dir"].is_dir() else "pendiente",
             "lo deja cada corrida",
             ruta=rutas["log_dir"], es_carpeta=True,

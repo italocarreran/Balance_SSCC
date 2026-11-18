@@ -62,9 +62,26 @@ def ruta_sellos(ruta_libro):
 
     ruta_libro = Path(ruta_libro)
     return (
-        carpeta_del_caso(ruta_libro.parent, _aamm_del_libro(ruta_libro))
+        carpeta_del_caso(_carpeta_del_mes(ruta_libro), _aamm_del_libro(ruta_libro))
         / f"sellos_{ruta_libro.stem}.json"
     )
+
+
+def _carpeta_del_mes(ruta_libro):
+    """
+    La carpeta del caso para los sellos: la del MES. Con la planilla en
+    <mes>/BESS/ (ver carpetas.py) es la de arriba; en un caso de antes,
+    la de la planilla. Asi un caso de antes que se reorganiza (planilla
+    movida a BESS/) conserva sus sellos, y los meses no quedan todos
+    como "BESS_<marca>" en __config__.
+    """
+
+    from .carpetas import CARPETA_BESS
+
+    carpeta = Path(ruta_libro).parent
+    if carpeta.name == CARPETA_BESS and carpeta.parent != carpeta:
+        return carpeta.parent
+    return carpeta
 
 
 def rutas_sellos_antiguas(ruta_libro):
