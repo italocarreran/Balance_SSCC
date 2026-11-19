@@ -14,10 +14,9 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 - **Reemplazos de SSCC (2026-11-19 (1) y (2)):** en Windows, dejar el
   `7_Reasignaciones_SSCC_2610*.xlsm` en `Subastas/`, regenerar la hoja
-  Subastas y recalcular E Costos y RE545. Falta que el usuario confirme si
-  las horas en que una BESS adjudicada fue reemplazada dejan de pagarse
-  (`QUITAR_REEMPLAZADAS`, hoy True). El MW horario sin ponderar queda así
-  "por ahora" (el usuario lo va a confirmar).
+  Subastas y recalcular E Costos y RE545. El MW horario sin ponderar queda
+  así "por ahora" (el usuario lo va a confirmar). Confirmado (2026-11-19):
+  una hora reemplazada no se paga (`QUITAR_REEMPLAZADAS = True`).
 
 - **Ventanas completas (2026-11-18 (4)):** desde noviembre 2026 la ventana
   0 de cada mes tiene que calcularse completa (24 h) con las últimas horas
@@ -7010,3 +7009,9 @@ real de E Costos + RE545 sobre el 11_ de octubre con y sin reemplazos.
 **Verificación:** `test_reasignaciones.py` actualizado (nombres exactos,
 parque vs. batería, tramos sucesivos y simultáneos). Corrida real de
 octubre repetida.
+
+## 2026-11-19 (3) — Confirmado: lo reemplazado no se paga
+
+- El usuario: "está bien que no se pague más. Si está reemplazada, no se
+  paga". `QUITAR_REEMPLAZADAS` queda en True, incluidas las "(Parcial)". Sin
+  cambios de código.
