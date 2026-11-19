@@ -72,6 +72,10 @@ from .rutas import (
 )
 from .soc import extraer_soc
 from .subastas_accdb import construir_subastas_desde_consolidado
+from .reasignaciones import (
+    buscar_archivo_reasignaciones, leer_subastas_consolidado,
+    marcar_reemplazadas, reemplazos_desde_archivo, subastas_para_calculo,
+)
 from .utiles import ErrorEntrada, _texto_seguro
 
 
@@ -164,6 +168,7 @@ def generar_consolidado(
     avisos, incidencias = [], []
     df_wxy = df_resumen_ventana = None
     df_cmg = df_fd_csf = df_fd_cpf = df_subastas = None
+    df_reemplazos = None
 
     avanzar(5)
 
@@ -401,6 +406,33 @@ def generar_consolidado(
                 registrar=registrar,
             )
 
+            # Reemplazos de SSCC (asignaciones directas): el
+            # 7_Reasignaciones_SSCC_AAMM de la misma carpeta. Marca lo
+            # adjudicado que fue reemplazado y arma el Cuadro N° 2 con
+            # los reemplazos que involucran una BESS (reasignaciones.py).
+            ruta_7 = buscar_archivo_reasignaciones(
+                rutas["subastas_dir"], aamm_val
+            )
+            if ruta_7 is None:
+                registrar(
+                    f"  [AVISO] No esta el 7_Reasignaciones_SSCC_"
+                    f"{aamm_val} en {rutas['subastas_dir']}: Subastas va "
+                    f"sin reemplazos (sin columna 'Reemplazado' ni "
+                    f"Cuadro N° 2)."
+                )
+            else:
+                try:
+                    _, diccionario_7 = leer_centrales_una_vez()
+                except ErrorEntrada:
+                    diccionario_7 = None
+                df_reemplazos = reemplazos_desde_archivo(
+                    ruta_7, aamm_val, diccionario_7, df_subastas,
+                    registrar=registrar,
+                )
+                df_subastas = marcar_reemplazadas(
+                    df_subastas, df_reemplazos, registrar=registrar
+                )
+
         else:
             raise ErrorEntrada(
                 f"No esta {consolidado_subastas.name} en "
@@ -429,6 +461,7 @@ def generar_consolidado(
         ruta_control=rutas["control"],
         centrales=centrales_a_escribir,
         tablas_fma=tablas_fma,
+        df_reemplazos=df_reemplazos,
     )
 
     # El control "Centrales por origen" con lo que haya ya en la
@@ -508,9 +541,11 @@ def matriz_desde_consolidado(ruta_salida, registrar=print, **ya_leidos):
                 valor = None
         datos[clave] = valor
 
+    def _no_vacia(df):
+        return None if df is None or df.empty else df
+
     def tabla(hoja):
-        df = leer_hoja_con_fila_vacia(libro, hoja)
-        return None if df.empty else df
+        return _no_vacia(leer_hoja_con_fila_vacia(libro, hoja))
 
     registrar("Armando la matriz de centrales por origen...")
     with abrir_excel(ruta_salida) as libro:
@@ -528,7 +563,8 @@ def matriz_desde_consolidado(ruta_salida, registrar=print, **ya_leidos):
             ruta_salida, registrar=callado, libro=libro)[0])
         leer("df_cmg", HOJA_CMG, lambda: leer_cmg_consolidado(
             ruta_salida, registrar=callado, libro=libro))
-        leer("df_subastas", HOJA_SUBASTAS, lambda: tabla(HOJA_SUBASTAS))
+        leer("df_subastas", HOJA_SUBASTAS, lambda: _no_vacia(
+            leer_subastas_consolidado(libro, HOJA_SUBASTAS)[0]))
         if "df_fd_csf" not in datos or "df_fd_cpf" not in datos:
             fd = (None, None)
             if HOJA_FD in libro.sheet_names:
@@ -634,7 +670,9 @@ def _leer_entradas_del_consolidado(
         registrar(f"Leyendo hoja 'Subastas' de {ruta_salida.name}...")
 
         try:
-            df_subastas = leer_hoja_con_fila_vacia(libro, "Subastas")
+            df_subastas, df_reemplazos = leer_subastas_consolidado(
+                libro, HOJA_SUBASTAS
+            )
         except ValueError as error:
             raise ErrorEntrada(
                 f"{ruta_salida.name} no tiene la hoja 'Subastas' "
@@ -648,6 +686,14 @@ def _leer_entradas_del_consolidado(
                 f"vacia. Genera esa hoja primero "
                 f"(tildando 'Subastas')."
             )
+
+        # Los reemplazos (columna 'Reemplazado' y Cuadro N° 2): el
+        # calculo usa lo adjudicado sin lo reemplazado, mas lo que una
+        # BESS presto como reemplazante (reasignaciones.py). Una hoja de
+        # antes, sin los dos, queda igual.
+        df_subastas = subastas_para_calculo(
+            df_subastas, df_reemplazos, registrar=registrar
+        )
 
         # La hoja no trae Control, Sub_Baj, Clave horaria ni Ciclo (se
         # arman de las demas): se reponen para el calculo.

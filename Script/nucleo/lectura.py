@@ -506,6 +506,9 @@ ROL_FD = "fd"
 ROL_SUBASTAS = "subastas"
 ROL_OFERTAS = "ofertas"
 ROL_FMA_CPF = "fma_cpf"
+# Como nombra el Coordinador a la central en el 7_Reasignaciones_SSCC
+# (columna opcional; ver reasignaciones.py). Ej.: ELENA es "PFV-ELENA".
+ROL_REASIGNACIONES = "reasignaciones"
 # La ruta del elemento en PI AF de donde sale el SoC (boton "Traer" de
 # la fila del SoC, ver nucleo.soc.generar_soc). No es un nombre de la
 # central: no entra en la homologacion.
@@ -518,6 +521,7 @@ TITULOS_DICCIONARIO = {
     "subastas": ROL_SUBASTAS,
     "ofertas": ROL_OFERTAS,
     "fma cpf": ROL_FMA_CPF,
+    "reasignaciones": ROL_REASIGNACIONES,
     "soc pi": ROL_SOC_PI,
     "ruta soc": ROL_SOC_PI,
 }

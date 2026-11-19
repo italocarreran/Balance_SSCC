@@ -57,6 +57,8 @@ NOMBRES_CON_UNIDAD = {
     },
     HOJA_SUBASTAS: {
         "Energía SSCC": "Energía SSCC [MW]",
+        # Cuadro N° 2 (reemplazos, ver reasignaciones.py).
+        "Minutos": "Minutos [min]",
     },
     HOJA_CMG: {
         "F_CMg": f"F_CMg {CLP_KWH}",

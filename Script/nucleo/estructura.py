@@ -993,7 +993,10 @@ SECCIONES_CONSOLIDADO = (
         f"los Access, boton 'Consolidar') y la hoja '{HOJA_CENTRALES}' "
         f"(Propietario). "
         f"Llega hasta 'Energía SSCC': ya no lleva FD ni FMA, que se "
-        f"aplican recien en Calculo RE545.",
+        f"aplican recien en Calculo RE545. Si en {CARPETA_SUBASTAS}/ "
+        f"esta el 7_Reasignaciones_SSCC_AAMM, marca lo reemplazado "
+        f"(columna 'Reemplazado') y agrega el Cuadro N° 2 con los "
+        f"reemplazos que involucran una BESS.",
         (HOJA_SUBASTAS,),
     ),
 )

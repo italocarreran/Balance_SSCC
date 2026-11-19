@@ -12,6 +12,14 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **Reemplazos de SSCC (2026-11-19 (1)):** en Windows, dejar el
+  `7_Reasignaciones_SSCC_2610*.xlsm` en `Subastas/`, regenerar la hoja
+  Subastas y recalcular E Costos y RE545. Confirmar con el usuario: (a)
+  sacar del calculo las horas reemplazadas (`QUITAR_REEMPLAZADAS`), incluso
+  las "(Parcial)"; (b) el MW de la reemplazante ponderado por minutos; (c)
+  que "PFV-ELENA" del 7_ es la BESS (hoy se toma por terminacion del nombre;
+  si conviene, poner la columna "Reasignaciones" en el Diccionario).
+
 - **Ventanas completas (2026-11-18 (4)):** desde noviembre 2026 la ventana
   0 de cada mes tiene que calcularse completa (24 h) con las últimas horas
   del mes anterior (energía, SoC, CMg, reserva, FD, FMA, ofertas): falta
@@ -6932,3 +6940,47 @@ lo de adentro). Capturas revisadas.
 
 **Verificación:** suite completa con Python 3.12 + tkinter + xvfb: 547 OK.
 
+## 2026-11-19 (1) — Reemplazos de SSCC (7_Reasignaciones) en Subastas, E Costos y RE545
+
+- Observación sobre SAE-CRCA-PFV-ELENA (2610): las horas en que una BESS es
+  **reemplazante** de otra unidad (asignación directa del Coordinador, en el
+  `7_Reasignaciones_SSCC_AAMM` y en el RIO) no estaban en Subastas, que sale
+  solo de los Access adjudicados: Adj SSCC = 0 y su energía fuera de C1/C2.
+  Revisando el 11_ de octubre salió lo contrario también: de 136 horas en
+  que una BESS adjudicada fue **reemplazada**, 134 seguían en Subastas y 97
+  con FD = 1 (muchas "No Participó" con FD = 1).
+- Pedido del usuario: el 7_ queda en la carpeta Subastas; en la hoja
+  Subastas, columna bandera "Reemplazado" en el Cuadro N° 1 y un Cuadro N° 2
+  con la misma información pero de los reemplazos, solo los que involucran
+  BESS; incorporarlo también a RE545.
+- Nuevo `Script/nucleo/reasignaciones.py`:
+  - lee la hoja "Consolidado SSCC" del 7_ (tramos con Inicio/Fin,
+    Instrucción, Configuración, Disponibilidad MW, Reemplazado 1..8) y la
+    reparte por hora (periodo = hora que termina, como Subastas; 23:59 =
+    24:00). MW de la hora = promedio ponderado por minutos; columna
+    "Minutos" con lo cubierto.
+  - nombres: columna opcional "Reasignaciones" del Diccionario
+    (`ROL_REASIGNACIONES` en lectura.py), cualquier otro nombre de la fila,
+    el nombre tal cual y, si no, la BESS que termina igual ("PFV-ELENA" →
+    "SAE-CRCA-PFV-ELENA", con aviso). Las que se reemplazan a sí mismas no
+    cuentan.
+  - Cuadro N° 2: Concepto … Energía SSCC + "Reemplaza a", "Minutos", "Rol
+    BESS" (Reemplazante / Reemplazada / las dos).
+  - `subastas_para_calculo`: Cuadro N° 1 sin `Reemplazado = 1`
+    (`QUITAR_REEMPLAZADAS`) + horas de BESS reemplazante
+    (`SUMAR_REEMPLAZANTES`); si la hora y servicio ya estaban adjudicados se
+    suma el MW a esa fila (la prorrata SSCC cuenta filas). Lo usan E Costos,
+    RE545, la matriz de centrales y el reporte.
+- `proceso.py` (armar Subastas: busca el 7_, marca y arma el Cuadro N° 2;
+  calcular: `leer_subastas_consolidado` lee los dos cuadros),
+  `escritura.py` (Cuadro N° 2 a la derecha), `reporte.py`, `unidades.py`
+  ("Minutos [min]"), `estructura.py` (texto de la sección).
+- Octubre 2610 (11_ "Sin_tama_AES", solo E Costos + RE545, recalculado acá):
+  134 adjudicadas fuera, 93 horas de reemplazante agregadas y 29 sumadas.
+  Monto a compensar E Costos 765,55 → 769,10 MM (+3,55); RE545 1.325,82 →
+  1.321,46 MM (−4,36). ELENA +2,99 MM, ANDES2B +3,79, NUEVO-QUILLAGUA −3,59,
+  MANZANO −2,08, TOCOPILLA −1,47, ARENA +1,38.
+
+**Verificación:** `desarrollo/tests/test_reasignaciones.py` (7). Suite: 554,
+2 errores de siempre por falta de tkinter (test_actualizar_github). Corrida
+real de E Costos + RE545 sobre el 11_ de octubre con y sin reemplazos.
