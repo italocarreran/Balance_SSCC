@@ -6932,3 +6932,13 @@ lo de adentro). Capturas revisadas.
 
 **Verificación:** suite completa con Python 3.12 + tkinter + xvfb: 547 OK.
 
+## 2026-11-19 (2) — test_actualizar_github se saltea sin tkinter
+
+- La herramienta importa tkinter al cargar, así que `TestComparar` daba
+  ERROR en un Python sin tkinter (la suite de `REGLAS.md` sin xvfb). Ahora
+  se saltea igual que las pruebas de ventana. Mismo arreglo que en la rama
+  `2609-Definitivo-Obs-AES`.
+
+**Verificación:** suite completa sin tkinter OK (con las de ventana
+salteadas) y con Python 3.12 + tkinter + xvfb OK.
+
