@@ -40,6 +40,9 @@ Script/
         ofertas_sscc.py        <- la hoja Ofertas SSCC (y R, S, T, V)
         hojas_entrada.py       <- hojas CMg, FD y Subastas
         subastas_accdb.py      <- Subastas desde los Access
+        reasignaciones.py      <- reemplazos de SSCC (7_Reasignaciones): bandera
+                                  'Reemplazado', Cuadro N° 2 de Subastas y la
+                                  Subastas efectiva del calculo
         fma.py                 <- el FMA y el FD de cada fila de Subastas
         factores_subastas.py   <- ...aplicados en RE545 desde las hojas FD y FMA
         diccionarios.py        <- los diccionarios de Resumen BESS y CMg

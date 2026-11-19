@@ -57,6 +57,21 @@ class TestVigencia(unittest.TestCase):
         filas = _estados(self.base)
         self.assertFalse([i for i, f in filas.items() if f.get("desactualizada")])
 
+    def test_el_7_reasignaciones_deja_vieja_la_hoja_subastas(self):
+        # Sin el 7_ la fila sale como opcional y no bloquea ni marca nada.
+        filas = _estados(self.base)
+        self.assertEqual(filas["reasignaciones_7"]["estado"], "pendiente")
+        self.assertFalse(filas["consolidado:subastas"].get("desactualizada"))
+        # Llega (o cambia) el 7_ despues de armar la hoja: queda vieja.
+        carpeta = nucleo.resolver_rutas(self.base, "2607")["subastas_dir"]
+        carpeta.mkdir(parents=True, exist_ok=True)
+        archivo = carpeta / "7_Reasignaciones_SSCC_2607_pre.xlsm"
+        archivo.write_bytes(b"x")
+        os.utime(archivo, (self.t0 + 50, self.t0 + 50))
+        filas = _estados(self.base)
+        self.assertEqual(filas["reasignaciones_7"]["estado"], "ok")
+        self.assertTrue(filas["consolidado:subastas"].get("desactualizada"))
+
     def test_todo_al_dia_no_marca_nada(self):
         filas = _estados(self.base)
         self.assertFalse([i for i, f in filas.items() if f.get("desactualizada")])

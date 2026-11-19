@@ -42,6 +42,10 @@ from .sellos import sellar
 from .unidades import con_unidades
 from .utiles import normalizar
 from .hojas_entrada import fd_para_hoja, subastas_para_hoja
+from .reasignaciones import (
+    TITULO_CUADRO_1 as TITULO_CUADRO_1_SUBASTAS,
+    TITULO_CUADRO_2 as TITULO_CUADRO_2_SUBASTAS,
+)
 from .lectura import (
     TITULO_CENTRALES_DICCIONARIO, TITULO_CENTRALES_RESUMEN, titulo_de_cuadro,
 )
@@ -1626,6 +1630,7 @@ def escribir_salida(
     ruta_control=None,
     centrales=None,
     tablas_fma=None,
+    df_reemplazos=None,
 ):
     """
     Escribe la MITAD DE ENTRADAS de la planilla de salida: la tabla
@@ -1786,14 +1791,25 @@ def escribir_salida(
             if df_subastas is not None:
                 # Fila 1 vacia, titulo de cuadro en la 2, encabezado en
                 # la 3 (como PRORRATA_RETIROS).
+                hoja_subastas = subastas_para_hoja(df_subastas)
                 _volcar(
-                    writer, HOJA_SUBASTAS, subastas_para_hoja(df_subastas), 2,
-                    COLUMNA_MARGEN,
+                    writer, HOJA_SUBASTAS, hoja_subastas, 2, COLUMNA_MARGEN,
                 )
                 writer.sheets[HOJA_SUBASTAS].cell(
                     2, COLUMNA_MARGEN + 1,
-                    titulo_de_cuadro(1, "subastas adjudicadas del periodo"),
+                    titulo_de_cuadro(1, TITULO_CUADRO_1_SUBASTAS),
                 )
+                # Cuadro N° 2: los reemplazos con BESS del 7_ (ver
+                # reasignaciones.py), a la derecha con una columna vacia.
+                if df_reemplazos is not None:
+                    _escribir_tabla_con_titulo(
+                        writer, HOJA_SUBASTAS, df_reemplazos,
+                        titulo_de_cuadro(2, TITULO_CUADRO_2_SUBASTAS),
+                        fila_inicio=1,
+                        columna_inicio=(
+                            COLUMNA_MARGEN + len(hoja_subastas.columns) + 1
+                        ),
+                    )
         else:
             _preservar_o_avisar(writer, HOJA_SUBASTAS)
 

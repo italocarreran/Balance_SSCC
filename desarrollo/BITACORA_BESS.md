@@ -12,6 +12,12 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
+- **Reemplazos de SSCC (2026-11-19 (1) y (2)):** en Windows, dejar el
+  `7_Reasignaciones_SSCC_2610*.xlsm` en `Subastas/`, regenerar la hoja
+  Subastas y recalcular E Costos y RE545. El MW horario sin ponderar queda
+  así "por ahora" (el usuario lo va a confirmar). Confirmado (2026-11-19):
+  una hora reemplazada no se paga (`QUITAR_REEMPLAZADAS = True`).
+
 - **Ventanas completas (2026-11-18 (4)):** desde noviembre 2026 la ventana
   0 de cada mes tiene que calcularse completa (24 h) con las últimas horas
   del mes anterior (energía, SoC, CMg, reserva, FD, FMA, ofertas): falta
@@ -6941,4 +6947,118 @@ lo de adentro). Capturas revisadas.
 
 **Verificación:** suite completa sin tkinter OK (con las de ventana
 salteadas) y con Python 3.12 + tkinter + xvfb OK.
+
+## 2026-11-19 (1) — Reemplazos de SSCC (7_Reasignaciones) en Subastas, E Costos y RE545
+
+- Observación sobre SAE-CRCA-PFV-ELENA (2610): las horas en que una BESS es
+  **reemplazante** de otra unidad (asignación directa del Coordinador, en el
+  `7_Reasignaciones_SSCC_AAMM` y en el RIO) no estaban en Subastas, que sale
+  solo de los Access adjudicados: Adj SSCC = 0 y su energía fuera de C1/C2.
+  Revisando el 11_ de octubre salió lo contrario también: de 136 horas en
+  que una BESS adjudicada fue **reemplazada**, 134 seguían en Subastas y 97
+  con FD = 1 (muchas "No Participó" con FD = 1).
+- Pedido del usuario: el 7_ queda en la carpeta Subastas; en la hoja
+  Subastas, columna bandera "Reemplazado" en el Cuadro N° 1 y un Cuadro N° 2
+  con la misma información pero de los reemplazos, solo los que involucran
+  BESS; incorporarlo también a RE545.
+- Nuevo `Script/nucleo/reasignaciones.py`:
+  - lee la hoja "Consolidado SSCC" del 7_ (tramos con Inicio/Fin,
+    Instrucción, Configuración, Disponibilidad MW, Reemplazado 1..8) y la
+    reparte por hora (periodo = hora que termina, como Subastas; 23:59 =
+    24:00). MW de la hora = promedio ponderado por minutos; columna
+    "Minutos" con lo cubierto.
+  - nombres: columna opcional "Reasignaciones" del Diccionario
+    (`ROL_REASIGNACIONES` en lectura.py), cualquier otro nombre de la fila,
+    el nombre tal cual y, si no, la BESS que termina igual ("PFV-ELENA" →
+    "SAE-CRCA-PFV-ELENA", con aviso). Las que se reemplazan a sí mismas no
+    cuentan.
+  - Cuadro N° 2: Concepto … Energía SSCC + "Reemplaza a", "Minutos", "Rol
+    BESS" (Reemplazante / Reemplazada / las dos).
+  - `subastas_para_calculo`: Cuadro N° 1 sin `Reemplazado = 1`
+    (`QUITAR_REEMPLAZADAS`) + horas de BESS reemplazante
+    (`SUMAR_REEMPLAZANTES`); si la hora y servicio ya estaban adjudicados se
+    suma el MW a esa fila (la prorrata SSCC cuenta filas). Lo usan E Costos,
+    RE545, la matriz de centrales y el reporte.
+- `proceso.py` (armar Subastas: busca el 7_, marca y arma el Cuadro N° 2;
+  calcular: `leer_subastas_consolidado` lee los dos cuadros),
+  `escritura.py` (Cuadro N° 2 a la derecha), `reporte.py`, `unidades.py`
+  ("Minutos [min]"), `estructura.py` (texto de la sección).
+- Octubre 2610 (11_ "Sin_tama_AES", solo E Costos + RE545, recalculado acá):
+  134 adjudicadas fuera, 93 horas de reemplazante agregadas y 29 sumadas.
+  Monto a compensar E Costos 765,55 → 769,10 MM (+3,55); RE545 1.325,82 →
+  1.321,46 MM (−4,36). ELENA +2,99 MM, ANDES2B +3,79, NUEVO-QUILLAGUA −3,59,
+  MANZANO −2,08, TOCOPILLA −1,47, ARENA +1,38.
+
+**Verificación:** `desarrollo/tests/test_reasignaciones.py` (7). Suite: 554,
+2 errores de siempre por falta de tkinter (test_actualizar_github). Corrida
+real de E Costos + RE545 sobre el 11_ de octubre con y sin reemplazos.
+
+## 2026-11-19 (2) — Reemplazos: MW horario sin ponderar y nombres exactos
+
+- El usuario: "megawatt reemplazante es todo, no hagáis ponderaciones, da lo
+  mismo si es parcial, que sea horaria, los 75 son". `Energía SSCC` del
+  Cuadro N° 2 es el MW del tramo. Si en la hora hay varios tramos de la
+  misma reemplazante y servicio, los simultáneos se suman (reemplaza a dos
+  unidades a la vez, cada fila con su MW) y los sucesivos no (gana el
+  mayor). "Minutos" queda solo como información (unión de los tramos).
+- "El nombre Elena tiene que ser exactamente SAE-CRCA-PFV-ELENA: esa es la
+  batería; PFV-ELENA es solo el parque fotovoltaico, medidores distintos y
+  se pagan por separado". Fuera la búsqueda por terminación del nombre y por
+  los otros nombres de la fila del Diccionario: solo el nombre exacto, o la
+  columna opcional "Reasignaciones" si se llena. Que se reemplace a sí misma
+  es solo con el mismo nombre exacto (SAE ELENA por PFV-ELENA sí es
+  reemplazo).
+- Consecuencia en octubre: en el 7_ todas las horas de ELENA como
+  reemplazante son de "PFV-ELENA" (el parque), así que la batería no suma
+  nada como reemplazante; sí aparece reemplazada (PEHUENCHE, RALCO, etc.,
+  días 17 y 31) y PFV-ELENA reemplazando a ESTEPA y DEL-DESIERTO (días 15 y
+  18). Cuadro N° 2: 253 filas; cálculo: 134 fuera, 73 agregadas, 29 sumadas.
+  Monto a compensar: E Costos 765,55 → 766,11 MM (+0,56), RE545 1.325,82 →
+  1.321,46 MM (−4,36); total −3,80 MM. ELENA sin cambio.
+
+**Verificación:** `test_reasignaciones.py` actualizado (nombres exactos,
+parque vs. batería, tramos sucesivos y simultáneos). Corrida real de
+octubre repetida.
+
+## 2026-11-19 (3) — Confirmado: lo reemplazado no se paga
+
+- El usuario: "está bien que no se pague más. Si está reemplazada, no se
+  paga". `QUITAR_REEMPLAZADAS` queda en True, incluidas las "(Parcial)". Sin
+  cambios de código.
+
+## 2026-11-19 (4) — Ofertas SSCC: la última ventana del mes no aparece
+
+- Pedido del usuario: "vamos a pagar meses por separado; la última ventana
+  parcial del mes se paga el mes siguiente [...] quita esa ventana, que salga
+  solamente la ventana hasta la 30, y si son 30 días hasta la 29". La
+  ventana 0 queda como está (parcial).
+- `construir_resumen_ventana_oferta` (con `VENTANA_FINAL_PENDIENTE`): saca
+  del Cuadro N° 2 de Ofertas SSCC la última ventana (la mayor de Medidores).
+- `completar_ofertas_en_medidores`: las filas de esa ventana quedan con
+  T = 0, sin el aviso de "no encontraron su grupo".
+- `construir_resumen_ventanas_re545`: la ventana pendiente es la última del
+  MES (la mayor de la hoja RE545 / Medidores), no la mayor de la tabla; si
+  no, con la 31 fuera del resumen, se habría dejado en 0 la 30.
+- Octubre real (11_ con reemplazos): monto a compensar igual, E Costos
+  766,11 MM y RE545 1.321,46 MM (la 31 ya no se pagaba). Cambian solo el C1 y
+  el C2 de E Costos de la ventana 31 (que tenían monto 0).
+- Un 11_ ya armado sigue con la 31 en Ofertas SSCC hasta regenerar esa hoja
+  ("Medidores + Ofertas SSCC"); el cálculo da lo mismo con o sin ella.
+
+**Verificación:** `test_re545_ultima_ventana.py` (8, +5). Suite: 559, los
+2 errores de siempre por falta de tkinter.
+
+## 2026-11-19 (5) — El 7_Reasignaciones en la ventana principal
+
+- Pregunta del usuario: "¿agregaste a la ventana principal el 7_?". No
+  estaba. Ahora el árbol (`estructura.revisar_estructura`) muestra, dentro
+  de `Subastas/`, la fila `reasignaciones_7`: "ok" con el nombre del archivo
+  si está, o "pendiente" con "opcional: déjalo aquí" si no. No bloquea nada
+  (no es requisito de ninguna tarea).
+- `vigencia.USOS_OPCIONALES`: si el 7_ es más nuevo que la hoja Subastas, la
+  hoja (y lo que sale de ella) queda desactualizada.
+- Falta ver la ventana en Windows (acá no hay tkinter).
+
+**Verificación:** prueba nueva en `test_vigencia.py`. Suite: 560, los 2
+errores de siempre por falta de tkinter.
 

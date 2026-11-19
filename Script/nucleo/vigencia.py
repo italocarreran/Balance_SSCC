@@ -30,6 +30,17 @@ from pathlib import Path
 
 from .sellos import leer_sellos
 
+
+# Filas del arbol que una tarea usa sin requerirlas: {id de tarea: (filas)}.
+def _usos_opcionales():
+    from .reasignaciones import ID_FILA_REASIGNACIONES, TAREA_QUE_LO_USA
+
+    return {TAREA_QUE_LO_USA: (ID_FILA_REASIGNACIONES,)}
+
+
+USOS_OPCIONALES = _usos_opcionales()
+
+
 # Margen para no marcar como vieja una hoja escrita en el mismo segundo
 # que su entrada (relojes y sistemas de archivo redondean distinto).
 MARGEN_SEGUNDOS = 2.0
@@ -118,6 +129,10 @@ def aplicar_vigencia(rutas, filas):
 
         for requisito in tarea.requisitos:
             yield requisito
+        # Entradas opcionales: no bloquean, pero si cambian despues de
+        # armar la hoja la dejan vieja (el 7_Reasignaciones de Subastas).
+        for opcional in USOS_OPCIONALES.get(tarea.id, ()):
+            yield opcional
         for dep in tarea.depende + tarea.depende_opcional:
             yield TAREA_POR_ID[dep].fila_estado
 

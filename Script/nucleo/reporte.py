@@ -220,6 +220,7 @@ def resumen_por_central(ruta_planilla, registrar=print):
     )
     from .ofertas_sscc import leer_ofertas_sscc_consolidado
     from .subastas_accdb import construir_mapa_propietario
+    from .reasignaciones import leer_subastas_consolidado, subastas_para_calculo
 
     ruta_planilla = Path(ruta_planilla)
     if not ruta_planilla.is_file():
@@ -233,8 +234,14 @@ def resumen_por_central(ruta_planilla, registrar=print):
                         lambda: _hoja_de_calculo(libro, HOJA_CALCULO_ECOSTOS), registrar)
         re545 = _leer(libro, HOJA_CALCULO_RE545,
                       lambda: _hoja_de_calculo(libro, HOJA_CALCULO_RE545), registrar)
+        # Lo mismo con que calculo E Costos / RE545: lo adjudicado sin lo
+        # reemplazado mas lo que una BESS presto como reemplazante
+        # (reasignaciones.py). Hoja de antes: igual que siempre.
         subastas = _leer(libro, HOJA_SUBASTAS,
-                         lambda: leer_hoja_con_fila_vacia(libro, HOJA_SUBASTAS), registrar)
+                         lambda: subastas_para_calculo(
+                             *leer_subastas_consolidado(libro, HOJA_SUBASTAS),
+                             registrar=callado),
+                         registrar)
         fd = _leer(libro, HOJA_FD, lambda: leer_fd_consolidado(
             ruta_planilla, registrar=callado, libro=libro), registrar)
         ofertas = _leer(libro, HOJA_OFERTAS_SSCC, lambda: leer_ofertas_sscc_consolidado(

@@ -25,6 +25,7 @@ from .parametros import (
 )
 from .origenes import origen as origen_de
 from .prorrata_retiros import buscar_archivo_prorrata
+from .reasignaciones import ID_FILA_REASIGNACIONES, buscar_archivo_reasignaciones
 from .rutas import (
     buscar_archivo_ofertas, buscar_archivo_sscc_desempeno,
     buscar_soc, resolver_rutas, validar_aamm,
@@ -803,6 +804,32 @@ def revisar_estructura(carpeta_base, aamm=None):
             )
         )
 
+    # El 7_Reasignaciones_SSCC_AAMM del Coordinador (reemplazos de SSCC,
+    # ver reasignaciones.py). Opcional: sin el, la hoja Subastas va sin
+    # la columna 'Reemplazado' ni el Cuadro N° 2. No bloquea nada; si
+    # cambia despues de armar la hoja, la deja desactualizada (vigencia).
+    archivo_7 = (
+        buscar_archivo_reasignaciones(rutas["subastas_dir"], aamm_valido)
+        if aamm_valido else None
+    )
+    rutas["reasignaciones"] = archivo_7
+    if archivo_7:
+        filas.append(_fila(
+            ID_FILA_REASIGNACIONES, archivo_7.name, 1, "ok",
+            "reemplazos de SSCC: marca 'Reemplazado' y arma el Cuadro N° 2 "
+            "de la hoja Subastas",
+            ruta=archivo_7,
+        ))
+    else:
+        filas.append(_fila(
+            ID_FILA_REASIGNACIONES,
+            f"7_Reasignaciones_SSCC_{aamm_valido or 'AAMM'}.xlsm", 1,
+            "pendiente",
+            "opcional: déjalo aquí (reporte del Coordinador); sin él, "
+            "Subastas va sin reemplazos",
+            ruta=rutas["subastas_dir"], es_carpeta=True,
+        ))
+
     # ---- Prorrata de retiros --------------------------------------
     agregar(
         "prorrata_dir", _carpeta(rutas, "prorrata_retiros_dir"), 0,
@@ -993,7 +1020,10 @@ SECCIONES_CONSOLIDADO = (
         f"los Access, boton 'Consolidar') y la hoja '{HOJA_CENTRALES}' "
         f"(Propietario). "
         f"Llega hasta 'Energía SSCC': ya no lleva FD ni FMA, que se "
-        f"aplican recien en Calculo RE545.",
+        f"aplican recien en Calculo RE545. Si en {CARPETA_SUBASTAS}/ "
+        f"esta el 7_Reasignaciones_SSCC_AAMM, marca lo reemplazado "
+        f"(columna 'Reemplazado') y agrega el Cuadro N° 2 con los "
+        f"reemplazos que involucran una BESS.",
         (HOJA_SUBASTAS,),
     ),
 )
