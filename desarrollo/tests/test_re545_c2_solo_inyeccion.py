@@ -40,9 +40,9 @@ def _pago(inyeccion, solo_inyeccion):
 
 class TestComponente2(unittest.TestCase):
 
-    def test_por_defecto_sigue_la_regla_de_siempre(self):
-        # Obs. O2026-0052689 pendiente (2026-11-18).
-        self.assertFalse(rc.C2_SOLO_INYECCION)
+    def test_en_esta_rama_cuenta_solo_la_inyeccion(self):
+        # Rama 2609-Definitivo-Obs-AES: obs. O2026-0052689 acogida.
+        self.assertTrue(rc.C2_SOLO_INYECCION)
 
     def test_sin_inyeccion_no_cambia(self):
         self.assertEqual(_pago([0.0] * 8, False), (48750, 0, 48750))

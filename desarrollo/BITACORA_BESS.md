@@ -6932,3 +6932,22 @@ lo de adentro). Capturas revisadas.
 
 **Verificación:** suite completa con Python 3.12 + tkinter + xvfb: 547 OK.
 
+## 2026-11-19 — Rama 2609-Definitivo-Obs-AES (C2 contando solo la inyección)
+
+- Pedido del usuario: "crea una rama que se llame Septiembre-Con OBS AES o
+  algo así", desde main (elegido por el usuario). Nombre según la
+  convención de las ramas de mes (2608-Definitivo, 2609-Definitivo,
+  2610-Preliminar): `2609-Definitivo-Obs-AES`.
+- En esta rama `C2_SOLO_INYECCION = True` y la nota de la columna
+  "Asignacion Edisponible" dice que se cuenta solo lo inyectado. En main
+  sigue apagada.
+- Argumento para acoger (conversado con el usuario): el "y" de
+  "inyecciones físicas y de la Energía Disponible" se lee como contar las
+  inyecciones hasta completar la Energía Disponible; contar la Energía
+  Disponible t hasta alcanzar la Energía Disponible sería circular, y como
+  suma deja el pago en 0 sin ventas (o salta con 1 kWh, con el arreglo de
+  la macro).
+
+**Verificación:** `test_re545_c2_solo_inyeccion` espera la regla encendida;
+suite completa 547 OK (con y sin tkinter). Arreglo de paso: test_actualizar_github se saltea sin tkinter (fallaba en main).
+

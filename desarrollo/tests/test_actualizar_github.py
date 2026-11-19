@@ -62,6 +62,7 @@ def _carpeta_local(base):
         (base / ruta).write_bytes(contenido)
 
 
+@unittest.skipUnless(tk is not None, "sin tkinter (la herramienta lo importa al cargar)")
 class TestComparar(unittest.TestCase):
 
     def test_solo_lo_que_se_ocupa_para_correr(self):
