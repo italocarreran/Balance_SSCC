@@ -80,15 +80,26 @@ class TestReasignaciones(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        # ELENA (como "PFV-ELENA", el nombre del Coordinador) reemplaza a
+        # La bateria SAE-CRCA-PFV-ELENA reemplaza a
         # un parque eolico de 09:07 a 10:00 y a DEL-DESIERTO (BESS) de
         # 06:45 a 07:00; PEHUENCHE reemplaza a ELENA de 23:00 a 23:59; una
         # unidad que se reemplaza a si misma no cuenta.
         self.ruta = _escribir_7(self.tmp.name, [
-            _fila_7(17, "09:07", "10:00", "CSF(-)", "PFV-ELENA", 75, "PE-SANJUAN"),
-            _fila_7(15, "06:45", "07:00", "CSF(+)", "PFV-ELENA", 80, "SAE-DEL-DESIERTO"),
+            _fila_7(17, "09:07", "10:00", "CSF(-)", "SAE-CRCA-PFV-ELENA", 75, "PE-SANJUAN"),
+            _fila_7(15, "06:45", "07:00", "CSF(+)", "SAE-CRCA-PFV-ELENA", 80, "SAE-DEL-DESIERTO"),
             _fila_7(17, "23:00", "23:59", "CSF(-)", "PEHUENCHE", 76, "SAE-CRCA-PFV-ELENA"),
-            _fila_7(29, "17:00", "18:00", "CSF(+)", "PFV-ELENA", 10, "PFV-ELENA"),
+            _fila_7(29, "17:00", "18:00", "CSF(+)", "SAE-CRCA-PFV-ELENA", 10, "SAE-CRCA-PFV-ELENA"),
+            # El parque fotovoltaico PFV-ELENA no es la bateria: si
+            # reemplaza a la bateria es un reemplazo, y lo que presta
+            # el parque no cuenta como BESS.
+            _fila_7(20, "10:00", "11:00", "CSF(+)", "PFV-ELENA", 30, "SAE-CRCA-PFV-ELENA"),
+            _fila_7(21, "10:00", "11:00", "CSF(+)", "PFV-ELENA", 30, "PE-SANJUAN"),
+            # Dos tramos seguidos en la misma hora: gana el mayor (no se
+            # suman ni se ponderan); dos a la vez se suman.
+            _fila_7(1, "02:00", "02:35", "CTF(+)", "SAE-DEL-DESIERTO", 26, "PE-UNO"),
+            _fila_7(1, "02:35", "03:00", "CTF(+)", "SAE-DEL-DESIERTO", 37, "PE-UNO"),
+            _fila_7(2, "09:05", "10:00", "CSF(+)", "SAE-DEL-DESIERTO", 50, "PE-UNO"),
+            _fila_7(2, "09:05", "10:00", "CSF(+)", "SAE-DEL-DESIERTO", 54, "PE-DOS"),
             _fila_7(1, "01:00", "02:00", "CTF(+)", "TOCOPILLA U16", 16, "RUCATAYO"),
         ])
         self.sub = _subastas(
@@ -109,12 +120,20 @@ class TestReasignaciones(unittest.TestCase):
 
     def test_cuadro_2_solo_con_bess_y_por_hora(self):
         c2 = self.c2.set_index(["Configuración", "Hora_mes", "Concepto"])
-        # 09:07-10:00 es la hora 10 (la que termina), 53 minutos,
-        # MW ponderado 75*53/60.
+        # 09:07-10:00 es la hora 10 (la que termina), 53 minutos, y el
+        # MW es el del tramo, sin ponderar.
         fila = c2.loc[("SAE-CRCA-PFV-ELENA", 16 * 24 + 10, "CSF(-)")]
         self.assertEqual(fila[R.COLUMNA_MINUTOS], 53)
-        self.assertAlmostEqual(fila["Energía SSCC"], 75 * 53 / 60)
+        self.assertEqual(fila["Energía SSCC"], 75)
         self.assertEqual(fila[R.COLUMNA_ROL_BESS], R.ROL_REEMPLAZANTE)
+        self.assertEqual(c2.loc[("SAE-DEL-DESIERTO", 3, "CTF(+)"), "Energía SSCC"], 37)
+        self.assertEqual(c2.loc[("SAE-DEL-DESIERTO", 3, "CTF(+)"), R.COLUMNA_MINUTOS], 60)
+        self.assertEqual(c2.loc[("SAE-DEL-DESIERTO", 24 + 10, "CSF(+)"), "Energía SSCC"], 104)
+        # El parque reemplaza a la bateria: reemplazo, rol "Reemplazada".
+        fila = c2.loc[("PFV-ELENA", 19 * 24 + 11, "CSF(+)")]
+        self.assertEqual(fila[R.COLUMNA_ROL_BESS], R.ROL_REEMPLAZADA)
+        # El parque reemplazando a un eolico no involucra BESS.
+        self.assertNotIn(("PFV-ELENA", 20 * 24 + 11, "CSF(+)"), c2.index)
         # BESS que reemplaza a BESS.
         self.assertEqual(
             c2.loc[("SAE-CRCA-PFV-ELENA", 14 * 24 + 7, "CSF(+)"), R.COLUMNA_ROL_BESS],
@@ -127,15 +146,17 @@ class TestReasignaciones(unittest.TestCase):
         self.assertEqual(fila[R.COLUMNA_ROL_BESS], R.ROL_REEMPLAZADA)
         # Sin BESS (TOCOPILLA U16 por RUCATAYO) y la que se reemplaza a
         # si misma no entran.
-        self.assertEqual(len(self.c2), 3)
+        self.assertEqual(len(self.c2), 6)
         self.assertTrue(any("a si misma" in a for a in self.avisos))
-        self.assertTrue(any("PFV-ELENA" in a and "SAE-CRCA-PFV-ELENA" in a for a in self.avisos))
 
     def test_columna_reasignaciones_del_diccionario(self):
         nombres = R.NombresBess(DICCIONARIO, [], registrar=lambda *_: None)
         self.assertEqual(nombres.resolver("COORD-OTRA"), "SAE-OTRA")
         self.assertTrue(nombres.es_bess("SAE-OTRA"))
         self.assertEqual(nombres.resolver("PE-SANJUAN"), "PE-SANJUAN")
+        # Exacto: el parque no se toma por la bateria.
+        self.assertEqual(nombres.resolver("PFV-ELENA"), "PFV-ELENA")
+        self.assertFalse(nombres.es_bess("PFV-ELENA"))
         self.assertFalse(nombres.es_bess("PE-SANJUAN"))
 
     def test_bandera_y_subastas_para_calculo(self):
@@ -153,9 +174,10 @@ class TestReasignaciones(unittest.TestCase):
         # La del 17 h10 ya estaba adjudicada: se suma el MW, no se repite.
         h10 = ef[(ef["Configuración"] == "SAE-CRCA-PFV-ELENA") & (ef["Hora_mes"] == 16 * 24 + 10)]
         self.assertEqual(len(h10), 1)
-        self.assertAlmostEqual(h10["Energía SSCC"].iloc[0], 5 + 75 * 53 / 60)
-        # No se cuenta una PEHUENCHE (no es BESS).
+        self.assertEqual(h10["Energía SSCC"].iloc[0], 5 + 75)
+        # No se cuentan PEHUENCHE ni el parque PFV-ELENA (no son BESS).
         self.assertNotIn("PEHUENCHE", set(ef["Configuración"]))
+        self.assertNotIn("PFV-ELENA", set(ef["Configuración"]))
 
         # L de E Costos y la prorrata ven la hora nueva.
         ef = reponer_auxiliares_subastas(ef)
@@ -196,7 +218,7 @@ class TestReasignaciones(unittest.TestCase):
         self.assertEqual(len(c1), 4)
         self.assertEqual(c1[R.COLUMNA_REEMPLAZADO].tolist(), [1, 1, 0, 0])
         self.assertEqual(list(c2.columns), list(R.COLUMNAS_REEMPLAZOS))
-        self.assertEqual(len(c2), 3)
+        self.assertEqual(len(c2), 6)
         self.assertEqual(str(c2["Hora_mes"].dtype), "Int64")
 
     def test_hoja_de_antes_una_sola_tabla(self):

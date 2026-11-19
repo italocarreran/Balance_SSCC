@@ -32,9 +32,18 @@ Lectura del 7_: hoja "Consolidado SSCC", una fila por tramo (Fecha,
 Inicio Periodo, Fin Periodo, Instrucción, Configuración, Disponibilidad
 [MW], Reemplazado 1..8). Cada tramo se reparte en las horas que toca
 (periodo 1..24 = la hora que termina, como Subastas: 05:00-06:00 es la
-6). El MW de la hora es el promedio ponderado por los minutos del
-tramo en la hora (un tramo de 09:07 a 10:00 con 75 MW da 66,2 MW en la
-hora 10; "Minutos" dice cuanto de la hora cubrio el reemplazo).
+6). El calculo es horario (pedido del usuario 2026-11-19: "no hagais
+ponderaciones, da lo mismo si es parcial"): un tramo de 09:07 a 10:00
+con 75 MW da 75 MW en la hora 10. Si en la misma hora hay varios tramos
+de la misma reemplazante y servicio, los que van al mismo tiempo se
+suman (reemplaza a dos unidades a la vez) y los que van uno despues del
+otro no (gana el mayor). "Minutos" solo informa cuanto de la hora
+cubrio el reemplazo.
+
+Nombres: tal cual. "PFV-ELENA" (el parque fotovoltaico) NO es
+"SAE-CRCA-PFV-ELENA" (la bateria): tienen medidores distintos y se
+pagan por separado. Para una BESS que el Coordinador nombre distinto
+esta la columna opcional "Reasignaciones" del Diccionario.
 """
 
 from pathlib import Path
@@ -223,7 +232,8 @@ def tramos_por_hora(tramos):
             if minutos > 0:
                 filas.append(dict(
                     Fecha=hora.normalize(), Hora_dia=hora.hour + 1,
-                    Minutos=minutos, Concepto=tramo.Concepto,
+                    Minutos=minutos, Desde=desde, Hasta=hasta,
+                    Concepto=tramo.Concepto,
                     Reemplazante=tramo.Reemplazante, MW=tramo.MW,
                     Reemplazados=tramo.Reemplazados,
                     Comentario=tramo.Comentario,
@@ -231,8 +241,8 @@ def tramos_por_hora(tramos):
             hora = siguiente
     return pd.DataFrame(
         filas,
-        columns=["Fecha", "Hora_dia", "Minutos", "Concepto", "Reemplazante",
-                 "MW", "Reemplazados", "Comentario"],
+        columns=["Fecha", "Hora_dia", "Minutos", "Desde", "Hasta", "Concepto",
+                 "Reemplazante", "MW", "Reemplazados", "Comentario"],
     )
 
 
@@ -242,15 +252,13 @@ def tramos_por_hora(tramos):
 
 class NombresBess:
     """
-    Traduce un nombre del 7_ al nombre con que la central esta en
-    Subastas y dice si es una BESS.
+    El nombre del 7_ como esta en Subastas, y si es una BESS.
 
-    Orden: la columna "Reasignaciones" del Diccionario (opcional; para
-    las que el Coordinador nombra distinto, p. ej. ELENA es "PFV-ELENA"
-    en el 7_), cualquier otro nombre de la fila del Diccionario, el
-    nombre tal cual si ya esta en Subastas, y por ultimo una BESS
-    conocida que termine en ese nombre ("PFV-ELENA" ->
-    "SAE-CRCA-PFV-ELENA"), con aviso.
+    Siempre por el nombre EXACTO (sin distinguir mayusculas ni espacios
+    repetidos): "PFV-ELENA" es el parque fotovoltaico y
+    "SAE-CRCA-PFV-ELENA" la bateria; no se confunden. Lo unico que
+    traduce es la columna opcional "Reasignaciones" del Diccionario, para
+    una BESS que el Coordinador nombre distinto en el 7_.
     """
 
     def __init__(self, diccionario, nombres_subastas, registrar=print):
@@ -263,53 +271,22 @@ class NombresBess:
             if not _tiene_valor(destino):
                 continue
             self._bess.add(normalizar(destino))
-        # La columna Reasignaciones manda sobre los demas nombres.
-        for rol in (ROL_REASIGNACIONES, None):
-            for fila in filas:
-                destino = fila.get(ROL_SUBASTAS) or fila.get(ROL_BALANCE_BESS)
-                if not _tiene_valor(destino):
-                    continue
-                valores = (
-                    [fila.get(rol)] if rol is not None
-                    else [v for r, v in fila.items() if r != ROL_REASIGNACIONES]
-                )
-                for valor in valores:
-                    clave = normalizar(valor)
-                    if clave and clave not in self._de:
-                        self._de[clave] = destino
+            clave = normalizar(fila.get(ROL_REASIGNACIONES))
+            if clave and clave not in self._de:
+                self._de[clave] = destino
         self._subastas = {}
         for nombre in nombres_subastas:
             texto = _texto_seguro(nombre)
             if texto:
                 self._subastas.setdefault(normalizar(texto), texto)
                 self._bess.add(normalizar(texto))
-        self._avisados = set()
 
     def resolver(self, nombre):
         clave = normalizar(nombre)
-        if not clave:
-            return nombre
         if clave in self._de:
             return self._de[clave]
         if clave in self._subastas:
             return self._subastas[clave]
-        candidatos = sorted({
-            texto for norm, texto in self._subastas.items()
-            if norm.endswith("-" + clave)
-        } | {
-            destino for norm, destino in self._de.items()
-            if norm.endswith("-" + clave)
-        })
-        if len(candidatos) == 1:
-            if clave not in self._avisados:
-                self._avisados.add(clave)
-                self.registrar(
-                    f"  [AVISO] Reasignaciones: '{nombre}' se toma como "
-                    f"'{candidatos[0]}' (termina igual). Si no es la misma "
-                    f"central, ponelo en la columna 'Reasignaciones' del "
-                    f"Diccionario."
-                )
-            return candidatos[0]
         return nombre
 
     def es_bess(self, nombre_resuelto):
@@ -322,6 +299,32 @@ class NombresBess:
 # ------------------------------------------------------------
 # Cuadro N° 2 y la bandera del Cuadro N° 1
 # ------------------------------------------------------------
+
+def _mw_de_la_hora(tramos):
+    """
+    El MW de la hora, sin ponderar por minutos: el mayor MW que hay en
+    algun momento de la hora, sumando los tramos que van al mismo tiempo.
+    """
+
+    mejor = 0.0
+    for momento in {desde for desde, _, _ in tramos}:
+        activos = sum(mw for desde, hasta, mw in tramos if desde <= momento < hasta)
+        mejor = max(mejor, activos)
+    return round(mejor, 6)
+
+
+def _minutos_cubiertos(tramos):
+    """Minutos de la hora con algun tramo (la union, sin contar dos veces)."""
+
+    total, fin_actual = 0.0, None
+    for desde, hasta, _ in sorted(tramos):
+        if fin_actual is not None and desde < fin_actual:
+            desde = fin_actual
+        if hasta > desde:
+            total += (hasta - desde).total_seconds() / 60
+            fin_actual = hasta if fin_actual is None else max(fin_actual, hasta)
+    return round(total, 2)
+
 
 def construir_reemplazos(horas, aamm, nombres, registrar=print):
     """
@@ -350,10 +353,11 @@ def construir_reemplazos(horas, aamm, nombres, registrar=print):
         if not reemplazadas:
             continue
         clave = (fila.Concepto, fila.Fecha, fila.Hora_dia, reemplazante)
-        actual = filas.setdefault(clave, dict(mw_min=0.0, minutos=0.0, reemplazadas=[]))
-        if pd.notna(fila.MW):
-            actual["mw_min"] += float(fila.MW) * fila.Minutos
-        actual["minutos"] += fila.Minutos
+        actual = filas.setdefault(clave, dict(tramos=[], reemplazadas=[]))
+        actual["tramos"].append((
+            fila.Desde, fila.Hasta,
+            float(fila.MW) if pd.notna(fila.MW) else 0.0,
+        ))
         for nombre in reemplazadas:
             if nombre not in actual["reemplazadas"]:
                 actual["reemplazadas"].append(nombre)
@@ -382,9 +386,9 @@ def construir_reemplazos(horas, aamm, nombres, registrar=print):
             "Dia": fecha.day,
             "Hora_dia": hora_dia,
             "Configuración": reemplazante,
-            "Energía SSCC": round(datos["mw_min"] / 60, 6),
+            "Energía SSCC": _mw_de_la_hora(datos["tramos"]),
             COLUMNA_REEMPLAZA_A: SEPARADOR.join(datos["reemplazadas"]),
-            COLUMNA_MINUTOS: round(min(datos["minutos"], 60.0), 2),
+            COLUMNA_MINUTOS: _minutos_cubiertos(datos["tramos"]),
             COLUMNA_ROL_BESS: rol,
         })
 

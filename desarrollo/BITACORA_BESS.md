@@ -12,13 +12,12 @@ Desde 2026-10-06 la bitácora está separada en dos: esta, del BESS (`Balance_BE
 
 ## Pendientes abiertos
 
-- **Reemplazos de SSCC (2026-11-19 (1)):** en Windows, dejar el
+- **Reemplazos de SSCC (2026-11-19 (1) y (2)):** en Windows, dejar el
   `7_Reasignaciones_SSCC_2610*.xlsm` en `Subastas/`, regenerar la hoja
-  Subastas y recalcular E Costos y RE545. Confirmar con el usuario: (a)
-  sacar del calculo las horas reemplazadas (`QUITAR_REEMPLAZADAS`), incluso
-  las "(Parcial)"; (b) el MW de la reemplazante ponderado por minutos; (c)
-  que "PFV-ELENA" del 7_ es la BESS (hoy se toma por terminacion del nombre;
-  si conviene, poner la columna "Reasignaciones" en el Diccionario).
+  Subastas y recalcular E Costos y RE545. Falta que el usuario confirme si
+  las horas en que una BESS adjudicada fue reemplazada dejan de pagarse
+  (`QUITAR_REEMPLAZADAS`, hoy True). El MW horario sin ponderar queda así
+  "por ahora" (el usuario lo va a confirmar).
 
 - **Ventanas completas (2026-11-18 (4)):** desde noviembre 2026 la ventana
   0 de cada mes tiene que calcularse completa (24 h) con las últimas horas
@@ -6984,3 +6983,30 @@ lo de adentro). Capturas revisadas.
 **Verificación:** `desarrollo/tests/test_reasignaciones.py` (7). Suite: 554,
 2 errores de siempre por falta de tkinter (test_actualizar_github). Corrida
 real de E Costos + RE545 sobre el 11_ de octubre con y sin reemplazos.
+
+## 2026-11-19 (2) — Reemplazos: MW horario sin ponderar y nombres exactos
+
+- El usuario: "megawatt reemplazante es todo, no hagáis ponderaciones, da lo
+  mismo si es parcial, que sea horaria, los 75 son". `Energía SSCC` del
+  Cuadro N° 2 es el MW del tramo. Si en la hora hay varios tramos de la
+  misma reemplazante y servicio, los simultáneos se suman (reemplaza a dos
+  unidades a la vez, cada fila con su MW) y los sucesivos no (gana el
+  mayor). "Minutos" queda solo como información (unión de los tramos).
+- "El nombre Elena tiene que ser exactamente SAE-CRCA-PFV-ELENA: esa es la
+  batería; PFV-ELENA es solo el parque fotovoltaico, medidores distintos y
+  se pagan por separado". Fuera la búsqueda por terminación del nombre y por
+  los otros nombres de la fila del Diccionario: solo el nombre exacto, o la
+  columna opcional "Reasignaciones" si se llena. Que se reemplace a sí misma
+  es solo con el mismo nombre exacto (SAE ELENA por PFV-ELENA sí es
+  reemplazo).
+- Consecuencia en octubre: en el 7_ todas las horas de ELENA como
+  reemplazante son de "PFV-ELENA" (el parque), así que la batería no suma
+  nada como reemplazante; sí aparece reemplazada (PEHUENCHE, RALCO, etc.,
+  días 17 y 31) y PFV-ELENA reemplazando a ESTEPA y DEL-DESIERTO (días 15 y
+  18). Cuadro N° 2: 253 filas; cálculo: 134 fuera, 73 agregadas, 29 sumadas.
+  Monto a compensar: E Costos 765,55 → 766,11 MM (+0,56), RE545 1.325,82 →
+  1.321,46 MM (−4,36); total −3,80 MM. ELENA sin cambio.
+
+**Verificación:** `test_reasignaciones.py` actualizado (nombres exactos,
+parque vs. batería, tramos sucesivos y simultáneos). Corrida real de
+octubre repetida.
