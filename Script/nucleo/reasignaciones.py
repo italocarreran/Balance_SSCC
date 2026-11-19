@@ -72,6 +72,11 @@ SUMAR_REEMPLAZANTES = True
 PATRON_ARCHIVO = "*Reasignaciones_SSCC_{aamm}*.xls*"
 HOJA_7 = "Consolidado SSCC"
 
+# La fila del 7_ en el arbol de la ventana (estructura.py) y lo que deja
+# desactualizada si cambia (vigencia.py).
+ID_FILA_REASIGNACIONES = "reasignaciones_7"
+TAREA_QUE_LO_USA = "consolidado:subastas"
+
 COLUMNA_REEMPLAZADO = "Reemplazado"
 COLUMNA_REEMPLAZA_A = "Reemplaza a"
 COLUMNA_MINUTOS = "Minutos"

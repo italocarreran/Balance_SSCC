@@ -7038,3 +7038,17 @@ octubre repetida.
 **Verificación:** `test_re545_ultima_ventana.py` (8, +5). Suite: 559, los
 2 errores de siempre por falta de tkinter.
 
+## 2026-11-19 (5) — El 7_Reasignaciones en la ventana principal
+
+- Pregunta del usuario: "¿agregaste a la ventana principal el 7_?". No
+  estaba. Ahora el árbol (`estructura.revisar_estructura`) muestra, dentro
+  de `Subastas/`, la fila `reasignaciones_7`: "ok" con el nombre del archivo
+  si está, o "pendiente" con "opcional: déjalo aquí" si no. No bloquea nada
+  (no es requisito de ninguna tarea).
+- `vigencia.USOS_OPCIONALES`: si el 7_ es más nuevo que la hoja Subastas, la
+  hoja (y lo que sale de ella) queda desactualizada.
+- Falta ver la ventana en Windows (acá no hay tkinter).
+
+**Verificación:** prueba nueva en `test_vigencia.py`. Suite: 560, los 2
+errores de siempre por falta de tkinter.
+
