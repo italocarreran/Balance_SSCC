@@ -206,7 +206,12 @@ def construir_resumen_ventanas_re545(
         * tabla["AY"]
     )
     if VENTANA_FINAL_PENDIENTE:
-        ultima = ventana_num.max()
+        # La ultima del MES (la de Medidores), no la de esta tabla: desde
+        # 2026-11-19 el resumen de Ofertas ya no la trae, y la mayor de
+        # la tabla seria la penultima, que si se paga.
+        ultima = max(
+            pd.to_numeric(df["T"], errors="coerce").max(), ventana_num.max()
+        )
         pendiente = ventana_num.eq(ultima) & ventana_num.notna()
         if pendiente.any():
             tabla.loc[pendiente, "BC"] = 0.0

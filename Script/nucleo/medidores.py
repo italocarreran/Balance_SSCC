@@ -12,7 +12,7 @@ from .ofertas_sscc import (
 )
 from .parametros import (
     ARCHIVO_MEDIDAS_SAE, COLUMNAS_MEDIDORES_SALIDA, INICIO_VENTANA,
-    UMBRAL_SOC,
+    UMBRAL_SOC, VENTANA_FINAL_PENDIENTE,
 )
 from .utiles import normalizar
 
@@ -422,6 +422,22 @@ def completar_ofertas_en_medidores(
     t_valor, sin_match_t = calcular_t(
         df["clave"], df["Ventana"], df_resumen_ventana
     )
+    # La ultima ventana del mes ya no esta en el resumen (se paga el mes
+    # siguiente, ver construir_resumen_ventana_oferta): sus filas quedan
+    # con T = 0, sin aviso. No se paga en ninguna de las dos hojas
+    # (VENTANA_FINAL_PENDIENTE).
+    if VENTANA_FINAL_PENDIENTE and sin_match_t:
+        ventana = pd.to_numeric(df["Ventana"], errors="coerce")
+        en_resumen = pd.to_numeric(df_resumen_ventana["Ventana T"], errors="coerce")
+        ultima = ventana.max()
+        pendiente = (
+            t_valor.isna().to_numpy() & ventana.eq(ultima).to_numpy()
+            & ~en_resumen.eq(ultima).any()
+        )
+        if pendiente.any():
+            t_valor = t_valor.copy()
+            t_valor[pendiente] = 0
+            sin_match_t = int(t_valor.isna().sum())
     df["Ventana_No_Completa"] = t_valor
 
     if sin_match_t:

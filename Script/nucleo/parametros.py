@@ -24,6 +24,8 @@ INICIO_VENTANA = 10
 # (septiembre ya pago su parte final). Que la ventana 0 de los meses
 # siguientes se calcule completa con las horas del mes anterior queda
 # para despues. Vale para Calculo E Costos y Calculo RE545.
+# Desde 2026-11-19 esa ventana tampoco sale en el resumen de la hoja
+# Ofertas SSCC (construir_resumen_ventana_oferta).
 VENTANA_FINAL_PENDIENTE = True
 
 # Umbral de la columna O. La planilla usa 6%.

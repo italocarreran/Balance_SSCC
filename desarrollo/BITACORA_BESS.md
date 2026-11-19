@@ -7015,3 +7015,26 @@ octubre repetida.
 - El usuario: "está bien que no se pague más. Si está reemplazada, no se
   paga". `QUITAR_REEMPLAZADAS` queda en True, incluidas las "(Parcial)". Sin
   cambios de código.
+
+## 2026-11-19 (4) — Ofertas SSCC: la última ventana del mes no aparece
+
+- Pedido del usuario: "vamos a pagar meses por separado; la última ventana
+  parcial del mes se paga el mes siguiente [...] quita esa ventana, que salga
+  solamente la ventana hasta la 30, y si son 30 días hasta la 29". La
+  ventana 0 queda como está (parcial).
+- `construir_resumen_ventana_oferta` (con `VENTANA_FINAL_PENDIENTE`): saca
+  del Cuadro N° 2 de Ofertas SSCC la última ventana (la mayor de Medidores).
+- `completar_ofertas_en_medidores`: las filas de esa ventana quedan con
+  T = 0, sin el aviso de "no encontraron su grupo".
+- `construir_resumen_ventanas_re545`: la ventana pendiente es la última del
+  MES (la mayor de la hoja RE545 / Medidores), no la mayor de la tabla; si
+  no, con la 31 fuera del resumen, se habría dejado en 0 la 30.
+- Octubre real (11_ con reemplazos): monto a compensar igual, E Costos
+  766,11 MM y RE545 1.321,46 MM (la 31 ya no se pagaba). Cambian solo el C1 y
+  el C2 de E Costos de la ventana 31 (que tenían monto 0).
+- Un 11_ ya armado sigue con la 31 en Ofertas SSCC hasta regenerar esa hoja
+  ("Medidores + Ofertas SSCC"); el cálculo da lo mismo con o sin ella.
+
+**Verificación:** `test_re545_ultima_ventana.py` (8, +5). Suite: 559, los
+2 errores de siempre por falta de tkinter.
+

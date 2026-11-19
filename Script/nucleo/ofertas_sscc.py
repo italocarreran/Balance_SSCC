@@ -13,7 +13,9 @@ from .lectura import (
     fila_de_titulos,
 )
 from .lector import leer_excel
-from .parametros import COLUMNA_CENTRAL, HOJA_OFERTAS_SSCC, INICIO_VENTANA
+from .parametros import (
+    COLUMNA_CENTRAL, HOJA_OFERTAS_SSCC, INICIO_VENTANA, VENTANA_FINAL_PENDIENTE,
+)
 from .utiles import (
     ErrorEntrada, _es_numero, _texto_seguro, _tiene_valor, _valor_clave,
 )
@@ -923,6 +925,21 @@ def construir_resumen_ventana_oferta(
         f"central x ventana; ultima ventana detectada "
         f"{ultima_ventana:g}"
     )
+
+    # Los meses se pagan por separado (VENTANA_FINAL_PENDIENTE, obs.
+    # O2026-0052718): la ultima ventana del mes, parcial, se paga el mes
+    # siguiente junto con su ventana 0, y ahi queda completa. Pedido del
+    # usuario (2026-11-19): que no aparezca en la hoja; queda hasta la
+    # 30 en un mes de 31 dias, hasta la 29 en uno de 30. Sus filas de
+    # Medidores quedan con T = 0 (ver completar_ofertas_en_medidores).
+    if VENTANA_FINAL_PENDIENTE:
+        ultima = (resumen["Ventana T"] - ultima_ventana).abs() < 1e-6
+        if ultima.any():
+            resumen = resumen[~ultima].reset_index(drop=True)
+            registrar(
+                f"  Ventana {ultima_ventana:g} (ultima del mes, parcial): "
+                f"fuera del resumen, se paga el mes siguiente."
+            )
 
     return resumen
 
