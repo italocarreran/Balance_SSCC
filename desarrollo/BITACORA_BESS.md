@@ -7139,3 +7139,43 @@ errores de siempre por falta de tkinter.
 
 **Verificación:** `test_responsables.py` (+2). Suite: 567 OK (56 salteadas).
 
+## 2026-11-20 (4) — Comparador: Componente 1 = cambio de C1; hoja "Resumen por central"
+
+- El usuario (2610 Definitivo vs Preliminar): "ANDES3 tiene 0 % de
+  variación, pero en el desglose sale −11 millones y en Cambios por central
+  el C1 cambia 2,5 millones; me hace falta un resumen de diferencias por
+  central sin el detalle". Dos problemas reales:
+  1. Con Owen sobre max(0, C1 − C2), "Componente 1" no era el cambio de C1:
+     lo compartido iba a "C1 y C2" y el max por ventana se mezclaba con todo.
+  2. Con el CMg igual, el precio promedio de la curva se movía porque
+     entraban otros bloques, y se partía en −$21 MM de Edisp y +$9,5 MM de
+     "CMg" que se cancelaban.
+- Ahora (`responsables._por_componente`): por lado, cambio del monto =
+  cambio de C1 (Componente 1, repartido entre sus factores) − cambio de C2
+  (Componente 2) + Reparto (lo que el max(0, ·) por ciclo/ventana recorta).
+  Componente 1 y 2 dan exacto los "Total C1/C2" de Cambios por central
+  (verificado en las 18 centrales de octubre). Si el CMg promedio de la
+  central es igual en las dos planillas, el precio va junto con la energía
+  que lo mueve (FD y prorrata en C1 de E Costos, Horas en C2, Edisp en
+  RE545) y el texto lo dice. Los reemplazos (planilla recalculada sin ellos)
+  también se parten en C1, C2 y reparto. Se sacaron Owen y el aproximado de
+  reemplazos (X_EC_L0 / X_RE_A0). `_repartir`: lo que aparece o desaparece
+  va al factor que pasó de 0 a algo.
+- Hoja nueva "Resumen por central" (`reporte.resumen_diferencias`): recibe
+  antes / ahora, diferencia y %, diferencia E Costos y RE545, cambio de C1 y
+  C2 de cada lado, cuánto es de reemplazos y lo que más movió
+  (lado · componente · responsable), con fila de total.
+
+**Verificación:** `test_responsables.py` (reescritas las de componentes) y
+`test_reporte.py`. Suite: 567 OK (56 salteadas).
+
+## 2026-11-20 (5) — Responsables: lo que recibe, al lado del nombre
+
+- El usuario: "que en la hoja Responsables también salgan los totales, al
+  menos el total total al lado del nombre, no como columna sino que se vea".
+  La fila de cada central dice "SAE-X  ·  recibe $138 MM → $139 MM (+$1 MM)";
+  en el árbol del mes, lo mismo en E Costos, RE545 y el total
+  (`responsables._con_total`, `reporte._totales_central` / `_totales_mes`).
+
+**Verificación:** prueba nueva en `test_responsables.py`. Suite: 568 OK.
+

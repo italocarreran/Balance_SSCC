@@ -61,7 +61,10 @@ class TestDescomponer(unittest.TestCase):
         actual = fila_ec([(100.0, 60.0)])
         efectos = rs.descomponer(actual, anterior)
         self.assertEqual(list(efectos), ["E Costos"])
-        self.assertAlmostEqual(efectos["E Costos"][rs.CMG], 40.0)
+        # C2 baja 60 (Componente 2 = +60) y el max por ciclo recorta 20:
+        # antes C1 - C2 era -20 y no se pagaba.
+        self.assertAlmostEqual(efectos["E Costos"][rs.CMG], 60.0)
+        self.assertAlmostEqual(efectos["E Costos"][rs.REPARTO], -20.0)
         self.assertAlmostEqual(sum(efectos["E Costos"].values()), 40.0)
 
     def test_sube_el_factor_fd_prorrata(self):
@@ -81,14 +84,18 @@ class TestDescomponer(unittest.TestCase):
         actual = fila_ec([(100.0, 25.0), (10.0, 45.0)])
         efectos = rs.descomponer(actual, anterior)["E Costos"]
         self.assertAlmostEqual(sum(efectos.values()), 75.0 - 50.0)
-        self.assertAlmostEqual(efectos[rs.CMG], 25.0)
+        # C2 baja de 140 a 70; el ciclo negativo no paga: el reparto lo recorta.
+        self.assertAlmostEqual(efectos[rs.CMG], 70.0)
+        self.assertAlmostEqual(efectos[rs.REPARTO], 25.0 - 70.0)
 
     def test_factor_que_aparece(self):
         """Caso ARENA: sept con C1 = 0 (FD CPF 0); oct con C1."""
         anterior = fila_ec([(0.0, 90.0)], q=0.0)
         actual = fila_ec([(150.0, 90.0)], q=600.0)
         efectos = rs.descomponer(actual, anterior)["E Costos"]
-        self.assertAlmostEqual(efectos[rs.FD_PRORRATA], 60.0)
+        # C1 aparece entero por el FD; el max por ciclo recorta lo que C2 se come.
+        self.assertAlmostEqual(efectos[rs.FD_PRORRATA], 150.0)
+        self.assertNotIn(rs.CMG, efectos)
         self.assertAlmostEqual(sum(efectos.values()), 60.0)
 
     def test_central_nueva_y_que_ya_no_esta(self):
@@ -202,37 +209,31 @@ class TestComponentesYReemplazos(unittest.TestCase):
     cambian: dentro de cada responsable se reparte con Owen.
     """
 
-    def test_owen_con_grupos_de_uno_es_shapley_y_cierra(self):
-        valor = lambda c: (2 if "x" in c else 1) * (3 if "y" in c else 1) * (5 if "z" in c else 1)  # noqa: E731
-        e = rs.owen({"X": ["x"], "Y": ["y"], "Z": ["z"]}, valor)
-        self.assertAlmostEqual(sum(e.values()), 30 - 1)
-        # Mismo grupo: el grupo se lleva lo mismo que si fuera un jugador.
-        g = rs.owen({"X": ["x"], "YZ": ["y", "z"]}, valor)
-        solo = rs.owen({"X": ["x"], "YZ": ["yz"]},
-                       lambda c: valor({"x"} & c | ({"y", "z"} if "yz" in c else set())))
-        self.assertAlmostEqual(g["y"] + g["z"], solo["yz"])
-        self.assertAlmostEqual(g["x"], solo["x"])
-
     def test_el_cmg_de_c2_va_al_componente_2(self):
         anterior = fila_ec([(100.0, 120.0)])
         actual = fila_ec([(100.0, 60.0)])
         detalle = rs.descomponer_detalle(actual, anterior)["E Costos"]
-        self.assertEqual(set(detalle), {(rs.CMG, rs.C2)})
-        self.assertAlmostEqual(detalle[(rs.CMG, rs.C2)], 40.0)
+        self.assertEqual(set(detalle), {(rs.CMG, rs.C2), (rs.REPARTO, rs.COMP_REPARTO)})
+        self.assertAlmostEqual(detalle[(rs.CMG, rs.C2)], 60.0)
 
-    def test_reemplazos_aproximado_sale_de_las_horas(self):
-        # Mismas horas en el mes anterior; ahora 800 kWh en horas Adj SSCC,
-        # de los que 200 son por reemplazos (sin ellos, 600).
-        anterior = fila_ec([(75.0, 30.0)], l=600.0, q=450.0)
-        sin_l0 = fila_ec([(100.0, 40.0)])
-        con_l0 = fila_ec([(100.0, 40.0)], **{rs.X_EC_L0[0]: 600.0})
-        antes = rs.descomponer(sin_l0, anterior)["E Costos"]
-        ahora = rs.descomponer(con_l0, anterior)["E Costos"]
-        self.assertNotIn(rs.REEMPLAZOS, antes)
-        self.assertGreater(ahora[rs.REEMPLAZOS], 0)
-        # s0 es igual al mes anterior: todo lo de las horas es de los reemplazos.
-        self.assertAlmostEqual(ahora.get(rs.HORAS, 0.0) + ahora[rs.REEMPLAZOS], antes[rs.HORAS])
-        self.assertAlmostEqual(sum(ahora.values()), sum(antes.values()))
+    def test_componente_1_es_el_cambio_de_c1(self):
+        """2026-11-20 (ANDES3): Componente 1 tiene que ser el cambio de Total C1."""
+        anterior = fila_ec([(100.0, 80.0), (50.0, 10.0)])
+        actual = fila_ec([(90.0, 85.0), (70.0, 20.0)], q=640.0)
+        detalle = rs.descomponer_detalle(actual, anterior)["E Costos"]
+        c1 = sum(v for (_, comp), v in detalle.items() if comp == rs.C1)
+        c2 = sum(v for (_, comp), v in detalle.items() if comp == rs.C2)
+        self.assertAlmostEqual(c1, 160.0 - 150.0)
+        self.assertAlmostEqual(c2, -(105.0 - 90.0))
+        self.assertAlmostEqual(sum(detalle.values()), 55.0 - 60.0)
+
+    def test_con_el_cmg_igual_el_precio_no_sale_como_cmg(self):
+        """ANDES3: el CMg igual; el precio promedio cambia porque entran otros bloques."""
+        anterior = fila_ec([(100.0, 80.0)], **{r.C_CMG: 10.0})
+        actual = fila_ec([(120.0, 80.0)], **{r.C_CMG: 10.0})
+        detalle = rs.descomponer_detalle(actual, anterior)["E Costos"]
+        self.assertEqual(set(detalle), {(rs.FD_PRORRATA, rs.C1)})
+        self.assertAlmostEqual(detalle[(rs.FD_PRORRATA, rs.C1)], 20.0)
 
     def test_reemplazos_exacto_con_la_planilla_sin_reemplazos(self):
         anterior = pd.DataFrame([fila_ec([(100.0, 80.0)], nombre="A")])        # 20
@@ -243,7 +244,9 @@ class TestComponentesYReemplazos(unittest.TestCase):
         self.assertAlmostEqual(total[rs.REEMPLAZOS], 20.0)
         self.assertAlmostEqual(total["Total (= diferencia del mes)"], 30.0)
         fila = por_central[por_central["Responsable"] == rs.REEMPLAZOS].iloc[0]
-        self.assertEqual((fila["Lado"], fila["Componente"]), ("E Costos", rs.AMBAS))
+        # C1 sube 20 por los reemplazos (130 con, 110 sin), C2 igual.
+        self.assertEqual((fila["Lado"], fila["Componente"]), ("E Costos", rs.C1))
+        self.assertAlmostEqual(fila["Aporte [CLP]"], 20.0)
         arbol = rs.arbol_mes(por_central)
         self.assertEqual(arbol[rs.COLUMNA_ARBOL_MES].iloc[-1], rs.TOTAL_MES)
         self.assertAlmostEqual(arbol["Aporte [CLP]"].iloc[-1], 30.0)
@@ -258,14 +261,14 @@ class TestComponentesYReemplazos(unittest.TestCase):
         _, por_central, _ = rs.tablas_responsables(actual, anterior)
         mes = rs.arbol_mes(por_central)
         self.assertEqual(list(mes[rs.COLUMNA_ARBOL_MES]),
-                         ["E Costos", rs.C2, rs.CMG, rs.TOTAL_MES])
-        self.assertEqual(mes.attrs["niveles"], [0, 1, 2, -1])
-        for valor in mes["Aporte [CLP]"]:
-            self.assertAlmostEqual(valor, 40.0)
+                         ["E Costos", rs.C2, rs.CMG, rs.COMP_REPARTO, rs.REPARTO, rs.TOTAL_MES])
+        self.assertEqual(mes.attrs["niveles"], [0, 1, 2, 1, 2, -1])
+        self.assertAlmostEqual(mes["Aporte [CLP]"].iloc[0], 40.0)
+        self.assertAlmostEqual(mes["Aporte [CLP]"].iloc[-1], 40.0)
         central = rs.arbol_por_central(por_central)
-        self.assertEqual(list(central[rs.COLUMNA_ARBOL_CENTRAL]),
+        self.assertEqual(list(central[rs.COLUMNA_ARBOL_CENTRAL])[:4],
                          ["A", "E Costos", rs.C2, rs.CMG])
-        self.assertEqual(central.attrs["niveles"], [0, 1, 2, 3])
+        self.assertEqual(central.attrs["niveles"][:4], [0, 1, 2, 3])
         with tempfile.TemporaryDirectory() as carpeta:
             destino = Path(carpeta) / "c.xlsx"
             r.escribir_reporte(destino, [("Responsables", mes, central, "Mes")])
@@ -306,3 +309,20 @@ class TestPesoSobreLoMovido(unittest.TestCase):
         principal, desglose = rs._textos_central(lista, 2e6, {}, {})
         self.assertIn("(51 %)", principal)
         self.assertIn("Se compensan", desglose)
+
+
+class TestTotalesAlLadoDelNombre(unittest.TestCase):
+    """2026-11-20: "que se vea el total al lado del nombre, no como columna"."""
+
+    def test_la_central_y_el_mes_traen_lo_que_reciben(self):
+        anterior = pd.DataFrame([fila_ec([(100.0, 120.0)], nombre="A")])
+        actual = pd.DataFrame([fila_ec([(100.0, 60.0)], nombre="A")])
+        _, por_central, _ = rs.tablas_responsables(actual, anterior)
+        central = rs.arbol_por_central(por_central, {"A": (0.0, 40.0)})
+        self.assertEqual(central[rs.COLUMNA_ARBOL_CENTRAL].iloc[0],
+                         f"A  ·  recibe {r.plata_corta(0.0)} → {r.plata_corta(40.0)} (+{r.plata_corta(40.0)})")
+        mes = rs.arbol_mes(por_central, {"total": (0.0, 40.0), "E Costos": (0.0, 40.0)})
+        self.assertTrue(mes[rs.COLUMNA_ARBOL_MES].iloc[0].startswith("E Costos  ·  recibe"))
+        self.assertTrue(mes[rs.COLUMNA_ARBOL_MES].iloc[-1].startswith(rs.TOTAL_MES + "  ·  recibe"))
+        # Sin totales, el nombre solo (como antes).
+        self.assertEqual(rs.arbol_por_central(por_central)[rs.COLUMNA_ARBOL_CENTRAL].iloc[0], "A")
