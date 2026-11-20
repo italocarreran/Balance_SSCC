@@ -309,3 +309,20 @@ class TestPesoSobreLoMovido(unittest.TestCase):
         principal, desglose = rs._textos_central(lista, 2e6, {}, {})
         self.assertIn("(51 %)", principal)
         self.assertIn("Se compensan", desglose)
+
+
+class TestTotalesAlLadoDelNombre(unittest.TestCase):
+    """2026-11-20: "que se vea el total al lado del nombre, no como columna"."""
+
+    def test_la_central_y_el_mes_traen_lo_que_reciben(self):
+        anterior = pd.DataFrame([fila_ec([(100.0, 120.0)], nombre="A")])
+        actual = pd.DataFrame([fila_ec([(100.0, 60.0)], nombre="A")])
+        _, por_central, _ = rs.tablas_responsables(actual, anterior)
+        central = rs.arbol_por_central(por_central, {"A": (0.0, 40.0)})
+        self.assertEqual(central[rs.COLUMNA_ARBOL_CENTRAL].iloc[0],
+                         f"A  ·  recibe {r.plata_corta(0.0)} → {r.plata_corta(40.0)} (+{r.plata_corta(40.0)})")
+        mes = rs.arbol_mes(por_central, {"total": (0.0, 40.0), "E Costos": (0.0, 40.0)})
+        self.assertTrue(mes[rs.COLUMNA_ARBOL_MES].iloc[0].startswith("E Costos  ·  recibe"))
+        self.assertTrue(mes[rs.COLUMNA_ARBOL_MES].iloc[-1].startswith(rs.TOTAL_MES + "  ·  recibe"))
+        # Sin totales, el nombre solo (como antes).
+        self.assertEqual(rs.arbol_por_central(por_central)[rs.COLUMNA_ARBOL_CENTRAL].iloc[0], "A")

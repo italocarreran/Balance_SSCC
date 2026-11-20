@@ -7169,3 +7169,13 @@ errores de siempre por falta de tkinter.
 **Verificación:** `test_responsables.py` (reescritas las de componentes) y
 `test_reporte.py`. Suite: 567 OK (56 salteadas).
 
+## 2026-11-20 (5) — Responsables: lo que recibe, al lado del nombre
+
+- El usuario: "que en la hoja Responsables también salgan los totales, al
+  menos el total total al lado del nombre, no como columna sino que se vea".
+  La fila de cada central dice "SAE-X  ·  recibe $138 MM → $139 MM (+$1 MM)";
+  en el árbol del mes, lo mismo en E Costos, RE545 y el total
+  (`responsables._con_total`, `reporte._totales_central` / `_totales_mes`).
+
+**Verificación:** prueba nueva en `test_responsables.py`. Suite: 568 OK.
+

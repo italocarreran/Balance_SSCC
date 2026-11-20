@@ -1274,7 +1274,8 @@ def comparar_planillas(ruta_actual, ruta_anterior, registrar=print):
          f"{ruta_actual.name} contra {ruta_anterior.name}"),
         ("Resumen por central", [], resumen,
          "Diferencias por central, sin el detalle (C1 y C2 como en 'Cambios por central')"),
-        ("Responsables", arbol_mes(por_central), arbol_por_central(por_central),
+        ("Responsables", arbol_mes(por_central, _totales_mes(actual, anterior)),
+         arbol_por_central(por_central, _totales_central(actual, anterior)),
          "De dónde sale la diferencia del mes: lado > componente > responsable (la suma da la diferencia; el % es sobre todo lo que se movió, sin signo)"),
         ("Cambios por central", [], cambios,
          "Cada concepto de cada central: anterior, actual y si cambió"),
@@ -1344,6 +1345,27 @@ def resumen_diferencias(actual, anterior, por_central, orden=None):
         total["Diferencia [%]"] = total["Diferencia [CLP]"] / abs(antes) * 100 if antes else math.nan
         tabla = pd.concat([tabla, pd.DataFrame([total])], ignore_index=True)[list(tabla.columns)]
     return tabla
+
+
+def _totales_central(actual, anterior):
+    """{central: (recibe anterior, recibe actual)}."""
+
+    totales = {}
+    for indice, df in ((1, actual), (0, anterior)):
+        for nombre, valor in zip(df[C_CENTRAL], df[C_TOTAL]):
+            par = list(totales.get(nombre, (0.0, 0.0)))
+            par[indice] = _o_cero(valor)
+            totales[nombre] = tuple(par)
+    return totales
+
+
+def _totales_mes(actual, anterior):
+    """{"total" | lado: (anterior, actual)} de lo que se recibe en el mes."""
+
+    return {
+        clave: (_o_cero(anterior[col].sum(min_count=1)), _o_cero(actual[col].sum(min_count=1)))
+        for clave, col in (("total", C_TOTAL), ("E Costos", C_ECOSTOS), ("RE545", C_RE545))
+    }
 
 
 def _o_cero(valor):

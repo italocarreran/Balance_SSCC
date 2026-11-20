@@ -921,10 +921,29 @@ def _a_tabla(filas, columnas, con_texto):
     return tabla
 
 
-def arbol_mes(por_central):
+def _con_total(nombre, totales):
+    """
+    'SAE-X  ·  recibe $138 MM → $139 MM (+$1 MM)': lo que recibe en total
+    al lado del nombre (pedido del usuario 2026-11-20: "que se vea el total
+    al lado del nombre, no como columna"). totales: (anterior, actual) o None.
+    """
+
+    from . import reporte as r
+
+    if not totales:
+        return nombre
+    antes, ahora = (_cero(v) for v in totales)
+    dif = ahora - antes
+    return (f"{nombre}  ·  recibe {r.plata_corta(antes)} → {r.plata_corta(ahora)} "
+            f"({'+' if dif >= 0 else '-'}{r.plata_corta(abs(dif))})")
+
+
+def arbol_mes(por_central, totales=None):
     """
     El mes en arbol: Lado > Componente > Responsable, cada nivel con el
     subtotal de abajo, y al final el total (= diferencia del mes).
+    totales: {"total" | lado: (anterior, actual)} de lo que recibe, para
+    ponerlo al lado del nombre del lado y del total.
     """
 
     columnas = [COLUMNA_ARBOL_MES, "Aporte [CLP]", PESO]
@@ -932,17 +951,22 @@ def arbol_mes(por_central):
         return _a_tabla([], columnas, False)
     delta = por_central["Aporte [CLP]"].sum()
     bruto = por_central["Aporte [CLP]"].abs().sum()
-    filas = [(n, a, p, t, nivel - 1) for n, a, p, t, nivel in
-             _ramas(por_central, bruto)]
-    filas.append((TOTAL_MES, delta, _peso(delta, bruto), "", -1))
+    totales = totales or {}
+    filas = [
+        (_con_total(n, totales.get(n)) if nivel == 1 else n, a, p, t, nivel - 1)
+        for n, a, p, t, nivel in _ramas(por_central, bruto)
+    ]
+    filas.append((_con_total(TOTAL_MES, totales.get("total")), delta,
+                  _peso(delta, bruto), "", -1))
     return _a_tabla(filas, columnas, False)
 
 
-def arbol_por_central(por_central):
+def arbol_por_central(por_central, totales=None):
     """
     Cada central en arbol: Central (su cambio) > Lado > Componente >
     Responsable (con lo que se movio), cada nivel con su subtotal y el peso
-    sobre el cambio de la central.
+    sobre el cambio de la central. totales: {central: (anterior, actual)}
+    de lo que recibe, al lado del nombre.
     """
 
     columnas = [COLUMNA_ARBOL_CENTRAL, "Aporte [CLP]", PESO, "Qué se movió"]
@@ -953,7 +977,8 @@ def arbol_por_central(por_central):
         de_central = por_central[por_central["Central"] == central]
         delta = de_central["Aporte [CLP]"].sum()
         bruto = de_central["Aporte [CLP]"].abs().sum()
-        filas.append((central, delta, _peso(delta, bruto), "", 0))
+        filas.append((_con_total(central, (totales or {}).get(central)), delta,
+                      _peso(delta, bruto), "", 0))
         filas.extend(_ramas(de_central, bruto, texto=True))
     return _a_tabla(filas, columnas, True)
 
