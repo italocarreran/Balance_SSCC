@@ -204,7 +204,8 @@ def construir_resumen(compensacion_total, pagos, registrar=None):
     Los dos lados vienen de fuentes distintas -RECIBE del Propietario
     de 'Resumen BESS', PAGA del Suministrador de la prorrata del CEN-,
     asi que el cruce se hace por el nombre NORMALIZADO (minuscula, sin
-    tildes, sin espacios de mas). Cruzando por el texto crudo, una
+    tildes, sin espacios de mas). Lo que se MUESTRA es el nombre literal
+    de la prorrata si la empresa paga; si solo recibe, el Propietario. Cruzando por el texto crudo, una
     empresa que recibe y paga aparecia dos veces, cada una con la
     mitad de la historia y un NETO que no era su neto.
     """
@@ -235,9 +236,10 @@ def construir_resumen(compensacion_total, pagos, registrar=None):
     registrar(
         f"  Resumen: {len(df):,} empresa(s); {cruzadas:,} reciben y pagan."
     )
-    # El nombre visible es el del Propietario cuando la empresa recibe;
-    # si solo paga, el del Suministrador de la prorrata.
-    df["NOMBRE"] = df["NOMBRE"].fillna(df["NOMBRE_PAGA"])
+    # El nombre visible es el de la prorrata, literal, cuando la empresa
+    # paga (pedido del usuario, 2026-11-20); si solo recibe, el del
+    # Propietario de 'Resumen BESS'.
+    df["NOMBRE"] = df["NOMBRE_PAGA"].fillna(df["NOMBRE"])
     df = df.fillna({"RECIBE": 0.0, "PAGA": 0.0})
     df["NETO"] = df["RECIBE"] - df["PAGA"]
     # Lo que se recibe y lo que se paga son la MISMA plata mirada desde

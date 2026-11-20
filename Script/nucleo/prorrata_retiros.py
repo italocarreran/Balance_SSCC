@@ -69,6 +69,17 @@ def buscar_archivo_prorrata(carpeta, aamm=None):
     return candidatos[0] if candidatos else None
 
 
+def _nombre_literal(valor):
+    """El texto de la celda tal cual; '' si esta vacia. Un numero entero
+    leido como 123.0 vuelve a '123'."""
+
+    if valor is None or (isinstance(valor, float) and np.isnan(valor)):
+        return ""
+    if isinstance(valor, float) and valor.is_integer():
+        return str(int(valor))
+    return str(valor)
+
+
 def leer_prorrata_retiros(ruta, registrar=None):
     """Lee la hoja ``Prorrata 15min``: A cuarto, B suministrador, C prorrata.
 
@@ -100,11 +111,14 @@ def leer_prorrata_retiros(ruta, registrar=None):
 
     cuarto = pd.to_numeric(df[COL_CUARTO], errors="coerce")
     prorrata = pd.to_numeric(df[COL_PRORRATA], errors="coerce")
-    suministrador = df[COL_SUMINISTRADOR].fillna("").astype(str).str.strip()
+    # El nombre del suministrador va LITERAL, tal como viene en la
+    # prorrata (pedido del usuario, 2026-11-20): sin quitar espacios ni
+    # cambiar mayusculas. Solo se decide si hay nombre o no.
+    suministrador = df[COL_SUMINISTRADOR].map(_nombre_literal)
 
     # Fila utilizable = tiene cuarto y tiene empresa. Una prorrata
     # vacia se lee como 0 (esa empresa no retiro en ese cuarto).
-    utilizable = cuarto.notna() & suministrador.ne("")
+    utilizable = cuarto.notna() & suministrador.str.strip().ne("")
     descartadas = int((~utilizable).sum())
     if descartadas:
         registrar(

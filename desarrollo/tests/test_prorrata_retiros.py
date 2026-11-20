@@ -145,3 +145,40 @@ class TestProrrataRetiros(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestNombreLiteral(unittest.TestCase):
+    """
+    Pedido del usuario (2026-11-20): el nombre de la empresa sale LITERAL,
+    igual que en la prorrata (sin quitar espacios ni cambiar mayusculas),
+    en PRORRATA_RETIROS y en el Resumen.
+    """
+
+    def test_la_lectura_no_toca_el_nombre(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = Path(carpeta) / "Prorrata_Retiros_2610_pre.xlsx"
+            _fuente(ruta, [
+                (1, "Engie Energía Chile S.A. ", 0.5),
+                (1, "  ENEL Generación", 0.5),
+                (2, "   ", 1.0),
+            ])
+            cargada = nucleo.leer_prorrata_retiros(ruta)
+        self.assertEqual(
+            sorted(cargada["Suministrador"]),
+            ["  ENEL Generación", "Engie Energía Chile S.A. "],
+        )
+
+    def test_el_resumen_muestra_el_nombre_de_la_prorrata(self):
+        compensacion = pd.DataFrame({
+            "Empresa": ["ENGIE ENERGIA CHILE S.A.", "Solo Recibe SpA"],
+            "Compensación Total [$]": [150.0, 20.0],
+        })
+        pagos = pd.DataFrame({
+            "Suministrador": ["Engie Energía Chile S.A. "],
+            "Total a pagar [$]": [100.0],
+        })
+        resumen = nucleo.construir_resumen(compensacion, pagos).set_index("NOMBRE")
+        self.assertEqual(
+            set(resumen.index), {"Engie Energía Chile S.A. ", "Solo Recibe SpA"}
+        )
+        self.assertAlmostEqual(resumen.loc["Engie Energía Chile S.A. ", "NETO"], 50.0)
