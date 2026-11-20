@@ -7256,3 +7256,18 @@ ventana no se pudo ver acá (sin tkinter).
 
 **Verificación:** `test_detalle_horario_ofertas.py` (2). Suite: 573 OK.
 
+## 2026-11-20 (10) — Ofertas SSCC: el detalle horario, simple, en el Cuadro N° 1
+
+- El usuario: "más simple, 1 y cero no más, todas las horas del mes de cada
+  central, en la primera tabla; es para que los coordinados vean el
+  detalle". Fuera el Cuadro N° 3 en árbol (2026-11-20 (9)).
+- `ofertas_sscc.agregar_horas`: el Cuadro N° 1 (central × día) lleva H01..H24
+  (H25 si algún día la tiene) entre "Dia" y "Oferta completa": 1 si esa hora
+  tiene todos los servicios _RS ofertados, 0 si a alguno le falta (o la
+  central no está en el archivo ese día), vacía si la hora no existe (cambio
+  de hora). Lo llama `medidores.construir_ofertas_sscc`; el cálculo no usa
+  esas columnas (la lectura de la hoja las trae y no molestan).
+
+**Verificación:** `test_detalle_horario_ofertas.py` reescrito (2). Suite:
+573 OK. Falta verlo con un OfertasSSCC real.
+

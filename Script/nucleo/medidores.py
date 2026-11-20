@@ -383,17 +383,14 @@ def construir_ofertas_sscc(
         mes=mes,
     )
 
-    # El detalle horario (Cuadro N° 3 de la hoja) va con df_wxy: lo escribe
-    # escritura.escribir_salida, el calculo no lo usa.
-    from .ofertas_sscc import construir_detalle_horario
+    # Cada hora del mes con 1/0, en el mismo Cuadro N° 1 (para que los
+    # coordinados vean que hora les falto). El calculo no las usa.
+    from .ofertas_sscc import agregar_horas
 
     try:
-        df_wxy.attrs["detalle_horario"] = construir_detalle_horario(
-            df_wxy, df_resumen_ventana,
-            df_resumen_ofertas.attrs.get("faltantes"), anio, mes,
-        )
+        df_wxy = agregar_horas(df_wxy, df_resumen_ofertas, anio, mes)
     except Exception as error:  # noqa: BLE001 - es solo un detalle
-        avisos.append(f"no se pudo armar el detalle horario de ofertas: {error}")
+        avisos.append(f"no se pudo agregar el detalle horario de ofertas: {error}")
 
     return df_wxy, df_resumen_ventana, avisos
 
