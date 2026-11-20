@@ -258,6 +258,9 @@ def construir_resumen_ofertas_sscc(ruta_ofertas, registrar=print):
             registrar(f"  Cambio de hora {detalle}")
 
     filas_salida = []
+    # Las horas que le faltan a cada servicio incompleto (para el detalle
+    # horario de la hoja, ver construir_detalle_horario).
+    faltantes = []
 
     for clave_grupo, servicios_grupo in grupos.items():
 
@@ -273,10 +276,17 @@ def construir_resumen_ofertas_sscc(ruta_ofertas, registrar=print):
         exigidas = _horas_exigidas(anio, mes, dia)
 
         for servicio in lista_servicios:
-            completo = exigidas <= servicios_grupo.get(servicio, set())
+            ofertadas = servicios_grupo.get(servicio, set())
+            completo = exigidas <= ofertadas
             fila_salida[servicio] = 1 if completo else 0
             if not completo:
                 todos_completos = False
+                faltantes.append({
+                    "Nombre": _normalizar_nombre_clave(nombre),
+                    "Dia": int(dia) if _es_numero(dia) else dia,
+                    "Servicio": servicio,
+                    "Horas": sorted(exigidas - ofertadas),
+                })
 
         fila_salida["Oferta completa"] = (
             1 if todos_completos and lista_servicios else 0
@@ -299,6 +309,8 @@ def construir_resumen_ofertas_sscc(ruta_ofertas, registrar=print):
         .drop(columns="_orden_nombre")
         .reset_index(drop=True)
     )
+
+    df_resumen.attrs["faltantes"] = faltantes
 
     registrar(
         f"  Resumen Ofertas SSCC: {len(df_resumen):,} registros, "
@@ -981,6 +993,10 @@ def calcular_t(clave, ventana, resumen_ventana_oferta):
 # reexporta aca porque medio modulo la busca por este nombre.
 TITULO_OFERTAS_POR_DIA = "Cuadro N° 1 — Ofertas SSCC por dia"
 TITULO_RESUMEN_VENTANA = "Cuadro N° 2 — Resumen ventana oferta"
+TITULO_DETALLE_HORARIO = (
+    "Cuadro N° 3 — Detalle horario: central > ventana > día > horas que faltan"
+)
+COLUMNAS_DETALLE_HORARIO = ("Central", "Ventana", "Día", "Horas (periodo 1–24)", "Detalle")
 # Los de antes (en la fila 1, con el parentesis): un libro viejo se
 # sigue leyendo.
 _TITULOS_ANTERIORES = {
@@ -1100,3 +1116,138 @@ def leer_ofertas_sscc_consolidado(ruta_consolidado, registrar=print, libro=None)
     )
 
     return df_wxy, df_resumen_ventana
+
+
+# ============================================================
+# DETALLE HORARIO (Cuadro N° 3 de la hoja)
+# ============================================================
+
+HORAS = COLUMNAS_DETALLE_HORARIO[3]
+
+
+def _rangos(horas):
+    """[1, 2, 3, 7] -> '01–03, 07'."""
+
+    partes, inicio, previa = [], None, None
+    for hora in sorted(horas):
+        if inicio is None:
+            inicio = previa = hora
+        elif hora == previa + 1:
+            previa = hora
+        else:
+            partes.append((inicio, previa))
+            inicio = previa = hora
+    if inicio is not None:
+        partes.append((inicio, previa))
+    return ", ".join(
+        f"{a:02d}" if a == b else f"{a:02d}–{b:02d}" for a, b in partes
+    )
+
+
+def construir_detalle_horario(
+    df_wxy, df_resumen_ventana, faltantes, anio, mes, inicio_ventana=INICIO_VENTANA,
+):
+    """
+    El Cuadro N° 3 de la hoja Ofertas SSCC, en arbol por columnas:
+    Central > Ventana > Dia > Horas que faltan. Pedido del usuario
+    (2026-11-20): "un detalle horario de las ofertas, jerarquico,
+    mostrando como un cero en una hora puede tocar dos ventanas".
+
+    Por que un cero toca dos ventanas: la oferta completa es POR DIA (todos
+    los servicios _RS ofertados en todas las horas del dia) y la ventana T
+    va del dia T a las {inicio} hasta el dia T+1 a las {inicio}: usa dos
+    dias. Si el dia T+1 no esta completo, por una sola hora, quedan
+    incompletas la ventana T (que usa sus horas 00–{inicio}) y la T+1 (que
+    usa el resto), aunque la hora que falta este en solo una de las dos.
+
+    Cada ventana completa va en una fila; las incompletas se abren en sus
+    dias, y los dias incompletos en los servicios y las horas que faltan
+    (a que ventana pertenece cada hora).
+    """
+
+    dias_del_mes = calendar.monthrange(int(anio), int(mes))[1]
+    completo_dia = {}
+    nombre_de = {}
+    for nombre, central, dia, oferta in zip(
+        df_wxy["Nombre"], df_wxy[COLUMNA_CENTRAL] if COLUMNA_CENTRAL in df_wxy
+        else df_wxy["Nombre"], df_wxy["Dia"], df_wxy["Oferta completa"],
+    ):
+        central = _texto_seguro(central) or _texto_seguro(nombre)
+        if not central or pd.isna(dia):
+            continue
+        completo_dia[(central, int(dia))] = _valor_oferta_binario(oferta)
+        nombre_de.setdefault(central, set()).add(_normalizar_nombre_clave(nombre))
+
+    por_nombre_dia = {}
+    for f in faltantes or []:
+        por_nombre_dia.setdefault((f["Nombre"], f["Dia"]), []).append(f)
+
+    def dias_de(ventana):
+        """[(dia, desde, hasta)] que usa la ventana (horas del periodo 1..24)."""
+
+        if ventana == 0:
+            return [(1, 1, inicio_ventana - 1)]
+        partes = [(ventana, inicio_ventana, 24)]
+        if ventana + 1 <= dias_del_mes:
+            partes.append((ventana + 1, 1, inicio_ventana - 1))
+        return partes
+
+    def ventanas_de_hora(dia, hora):
+        return dia if hora >= inicio_ventana else dia - 1
+
+    filas = []
+    resumen = df_resumen_ventana.copy()
+    resumen["Ventana T"] = pd.to_numeric(resumen["Ventana T"], errors="coerce")
+    for central in sorted(resumen["Central"].dropna().unique(), key=lambda c: str(c).upper()):
+        de_central = resumen[resumen["Central"] == central].sort_values("Ventana T")
+        completas = int(pd.to_numeric(de_central["Completa"], errors="coerce").fillna(0).sum())
+        filas.append({"Central": central, "Ventana": "", "Día": "", HORAS: "",
+                      "Detalle": f"{completas} de {len(de_central)} ventanas con oferta completa"})
+        nombres = nombre_de.get(central, set())
+        for _, v in de_central.iterrows():
+            if pd.isna(v["Ventana T"]):
+                continue
+            ventana = int(v["Ventana T"])
+            partes = dias_de(ventana)
+            rango = "; ".join(
+                f"día {d} {desde - 1:02d}:00–{hasta:02d}:00" for d, desde, hasta in partes
+            )
+            if int(pd.to_numeric(v["Completa"], errors="coerce") or 0) == 1:
+                filas.append({"Central": "", "Ventana": f"Ventana {ventana}", "Día": "",
+                              HORAS: "", "Detalle": f"completa ({rango})"})
+                continue
+            malos = [d for d, *_ in partes if completo_dia.get((central, d), 0) != 1]
+            filas.append({
+                "Central": "", "Ventana": f"Ventana {ventana}", "Día": "", HORAS: "",
+                "Detalle": (f"INCOMPLETA ({rango}): " + (
+                    f"el día {' y el día '.join(str(d) for d in malos)} no tiene oferta completa"
+                    if malos else
+                    "los días están completos, pero faltan cuartos de hora en Medidores"
+                )),
+            })
+            for dia, desde, hasta in partes:
+                if completo_dia.get((central, dia), 0) == 1:
+                    filas.append({"Central": "", "Ventana": "", "Día": f"Día {dia}",
+                                  HORAS: "", "Detalle": "oferta completa"})
+                    continue
+                toca = sorted({w for w in (dia - 1, dia) if 0 <= w <= dias_del_mes})
+                filas.append({
+                    "Central": "", "Ventana": "", "Día": f"Día {dia}", HORAS: "",
+                    "Detalle": ("SIN oferta completa: la oferta es por día entero, así que "
+                                f"deja incompletas las ventanas {' y '.join(str(w) for w in toca)}"),
+                })
+                detalle = [f for n in nombres for f in por_nombre_dia.get((n, dia), [])]
+                if not detalle:
+                    filas.append({"Central": "", "Ventana": "", "Día": "", HORAS: "todo el día",
+                                  "Detalle": "no está en el archivo de ofertas ese día"})
+                    continue
+                for f in sorted(detalle, key=lambda x: str(x["Servicio"])):
+                    horas = f["Horas"]
+                    de_ventana = sorted({ventanas_de_hora(dia, h) for h in horas})
+                    filas.append({
+                        "Central": "", "Ventana": "", "Día": "", HORAS: _rangos(horas),
+                        "Detalle": (f"falta {f['Servicio']}"
+                                    + (" (todo el día)" if len(horas) >= 23 else "")
+                                    + f" — horas de la ventana {' y '.join(str(w) for w in de_ventana)}"),
+                    })
+    return pd.DataFrame(filas, columns=list(COLUMNAS_DETALLE_HORARIO))
