@@ -540,7 +540,6 @@ def resumen_por_central(ruta_planilla, registrar=print):
     datos.update(agregados(
         ecostos, re545,
         subastas if subastas is not None and _col(subastas, "Configuración") is not None else None,
-        subastas_sin_reemplazos=sin_reemplazos,
     ))
 
     centrales_norm = sorted(nombres, key=lambda c: nombres[c].upper())
@@ -1269,9 +1268,12 @@ def comparar_planillas(ruta_actual, ruta_anterior, registrar=print):
                 f"en Subastas): si la otra sí, la diferencia de los reemplazos sale en "
                 f"'Reemplazos (7_Reasignaciones)'."
             )
+    resumen = resumen_diferencias(actual, anterior, por_central, list(tabla[C_CENTRAL]))
     escribir_reporte(destino, [
         ("Comparacion", lineas, tabla,
          f"{ruta_actual.name} contra {ruta_anterior.name}"),
+        ("Resumen por central", [], resumen,
+         "Diferencias por central, sin el detalle (C1 y C2 como en 'Cambios por central')"),
         ("Responsables", arbol_mes(por_central), arbol_por_central(por_central),
          "De dónde sale la diferencia del mes: lado > componente > responsable (la suma da la diferencia; el % es sobre todo lo que se movió, sin signo)"),
         ("Cambios por central", [], cambios,
@@ -1279,6 +1281,73 @@ def comparar_planillas(ruta_actual, ruta_anterior, registrar=print):
     ])
     registrar(f"Reporte: {destino}")
     return destino, lineas, tabla
+
+
+def resumen_diferencias(actual, anterior, por_central, orden=None):
+    """
+    La hoja "Resumen por central" (pedido del usuario 2026-11-20: "las
+    diferencias por central pero resumido, sin el detalle"): por central lo
+    que recibe antes y ahora, la diferencia por lado, cuanto cambiaron C1 y
+    C2 de cada lado, cuanto es de los reemplazos y el responsable que mas
+    pesa. Al final, el total.
+    """
+
+    from .responsables import REEMPLAZOS
+
+    a = actual.set_index(actual[C_CENTRAL].map(normalizar))
+    b = anterior.set_index(anterior[C_CENTRAL].map(normalizar))
+    claves = list(dict.fromkeys(
+        [normalizar(c) for c in (orden or [])] + sorted(set(a.index) | set(b.index))
+    ))
+    columnas_dif = (
+        ("Diferencia E Costos [CLP]", C_ECOSTOS), ("Diferencia RE545 [CLP]", C_RE545),
+        ("Cambio C1 E Costos [CLP]", C_EC_C1), ("Cambio C2 E Costos [CLP]", C_EC_C2),
+        ("Cambio C1 RE545 [CLP]", C_RE_C1), ("Cambio C2 RE545 [CLP]", C_RE_C2),
+    )
+    filas = []
+    for clave in claves:
+        fila_a = a.loc[clave].to_dict() if clave in a.index else {}
+        fila_b = b.loc[clave].to_dict() if clave in b.index else {}
+        nombre = fila_a.get(C_CENTRAL) or fila_b.get(C_CENTRAL)
+        antes, ahora = _o_cero(fila_b.get(C_TOTAL)), _o_cero(fila_a.get(C_TOTAL))
+        fila = {
+            C_CENTRAL: nombre,
+            C_EMPRESA: fila_a.get(C_EMPRESA) or fila_b.get(C_EMPRESA) or "",
+            "Recibe anterior [CLP]": antes, "Recibe actual [CLP]": ahora,
+            "Diferencia [CLP]": ahora - antes,
+            "Diferencia [%]": (ahora - antes) / abs(antes) * 100 if antes else math.nan,
+        }
+        for titulo, columna in columnas_dif:
+            fila[titulo] = _o_cero(fila_a.get(columna)) - _o_cero(fila_b.get(columna))
+        de_central = (
+            por_central[por_central[C_CENTRAL] == nombre]
+            if por_central is not None and len(por_central) else None
+        )
+        fila["De eso, reemplazos [CLP]"] = (
+            de_central.loc[de_central["Responsable"] == REEMPLAZOS, "Aporte [CLP]"].sum()
+            if de_central is not None else 0.0
+        )
+        principal = ""
+        if de_central is not None and len(de_central) and abs(fila["Diferencia [CLP]"]) >= CAMBIO_MINIMO_CLP:
+            mayor = de_central.loc[de_central["Aporte [CLP]"].abs().idxmax()]
+            principal = (
+                f"{mayor['Lado']} · {mayor['Componente']} · {mayor['Responsable']}: "
+                f"{'+' if mayor['Aporte [CLP]'] >= 0 else '-'}{plata_corta(abs(mayor['Aporte [CLP]']))}"
+            )
+        fila["Lo que más movió"] = principal
+        filas.append(fila)
+    tabla = pd.DataFrame(filas)
+    if len(tabla):
+        total = {c: tabla[c].sum() for c in tabla.columns if "[CLP]" in c}
+        total.update({C_CENTRAL: "Total", C_EMPRESA: "", "Lo que más movió": ""})
+        antes = total["Recibe anterior [CLP]"]
+        total["Diferencia [%]"] = total["Diferencia [CLP]"] / abs(antes) * 100 if antes else math.nan
+        tabla = pd.concat([tabla, pd.DataFrame([total])], ignore_index=True)[list(tabla.columns)]
+    return tabla
+
+
+def _o_cero(valor):
+    return valor if _hay(valor) else 0.0
 
 
 def resumen_sin_reemplazos(ruta_planilla, registrar=print):
@@ -1552,7 +1621,7 @@ FILA_ENCABEZADO_REPORTE = 3
 FILA_TITULOS_REPORTE = 2
 _TEXTOS_LARGOS = (
     "Resumen", "Observación", "Qué pasó", "Principal responsable", "Desglose en $",
-    "Qué se movió",
+    "Qué se movió", "Lo que más movió",
 )
 
 
@@ -1577,7 +1646,7 @@ def dar_formato_reporte(ws):
         if nombre in _TEXTOS_LARGOS:
             ws.column_dimensions[letra].width = {
                 "Resumen": 60, "Qué pasó": 70, "Principal responsable": 55,
-                "Desglose en $": 80, "Qué se movió": 60,
+                "Desglose en $": 80, "Qué se movió": 60, "Lo que más movió": 50,
             }.get(nombre, 90)
             for celda in celdas:
                 celda.alignment = Alignment(

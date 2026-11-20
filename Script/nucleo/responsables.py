@@ -39,19 +39,17 @@ El cambio de cada producto se reparte entre sus factores con Shapley (el
 promedio de su efecto en todos los ordenes posibles): la suma de los
 efectos da EXACTO la diferencia, sin residuo.
 
-Reemplazos y componentes (pedido del usuario 2026-11-20): cada responsable
-es un grupo de factores y adentro se reparte con el valor de Owen (Shapley
-entre grupos y, dentro del grupo, entre sus factores), asi el total de cada
-responsable sigue siendo el de siempre y se puede ver:
-  - de que componente sale (C1, C2, los dos, o el reparto por ciclo/ventana):
-    el CMg de C1 (precio de la curva) y el de C2 por separado, lo mismo el
-    tope de Edisp en RE545;
-  - lo que se debe a los reemplazos del 7_Reasignaciones: s = s0 + d en E
-    Costos (s0 las horas adjudicadas en las subastas, d lo que suman o restan
-    los reemplazos) y A = A0 + dA en RE545. "Reemplazos" es la parte d / dA;
-    "Horas adjudicadas" y "Adjudicación en Subastas" quedan con el resto. Si un factor no existe en un
-mes (por ejemplo la central no tenia energia en E Costos), todo el cambio
-de ese producto va al factor que aparece o desaparece.
+Componentes (pedido del usuario 2026-11-20): cada lado se arma como
+  cambio del monto = cambio de C1 - cambio de C2 + reparto
+y cada parte se reparte entre sus factores: "Componente 1" da exacto el
+cambio de Total C1, "Componente 2" el de Total C2 (con signo contrario) y el
+"Reparto" lo que el max(0, C1 - C2) por ciclo/ventana recorta. Si el CMg de
+la central no cambio, el precio promedio va junto con la energia que lo
+mueve (no sale como "CMg").
+
+Reemplazos: si una planilla trae reemplazos se recalcula sin ellos
+(reporte.resumen_sin_reemplazos) y "Reemplazos" es la diferencia, tambien
+partida en C1, C2 y reparto.
 """
 
 import itertools
@@ -70,14 +68,11 @@ X_EC_Q = ("x:ec_q_d", "x:ec_q_c")                # energia ajustada FD-prorrata
 X_EC_C1 = ("x:ec_c1_d", "x:ec_c1_c")             # valorizacion C1
 X_EC_C2 = ("x:ec_c2_d", "x:ec_c2_c")             # valorizacion C2
 X_EC_I = "x:ec_ingreso"
-# La energia en horas adjudicadas SIN los reemplazos (solo el Cuadro N° 1 de
-# Subastas): la diferencia con X_EC_L es lo que movieron los reemplazos.
-X_EC_L0 = ("x:ec_l0_d", "x:ec_l0_c")
+
 # La energia ajustada solo con la prorrata (FD = 1): para "cuanto dejo de
 # recibir por FD" en el reporte de la corrida.
 X_EC_QP = ("x:ec_qp_d", "x:ec_qp_c")
 X_RE_A = "x:re_adjudicado"                       # A, en kWh
-X_RE_A0 = "x:re_adjudicado_sin_reemplazos"       # A0: solo el Cuadro N° 1
 X_RE_R0 = "x:re_reserva"                         # reserva sin FD ni FMA
 X_RE_R = "x:re_reserva_fd_fma"
 X_RE_RFMA = "x:re_reserva_fma"                   # con FMA, sin FD (FD = 1)
@@ -93,8 +88,8 @@ X_EC_GRUPOS = "x:ec_grupos"    # [(C1d, C1c, C2d, C2c), ...]
 X_RE_GRUPOS = "x:re_grupos"    # [(C1, C2, con reserva), ...]
 
 AGREGADOS = (
-    *X_EC_E_TOT, *X_EC_E, *X_EC_L, *X_EC_L0, *X_EC_Q, *X_EC_C1, *X_EC_C2, X_EC_I,
-    *X_EC_QP, X_RE_A, X_RE_A0, X_RE_R0, X_RE_R, X_RE_RFMA, X_RE_EA, X_RE_EB, X_RE_C1, X_RE_C2, X_RE_I,
+    *X_EC_E_TOT, *X_EC_E, *X_EC_L, *X_EC_Q, *X_EC_C1, *X_EC_C2, X_EC_I,
+    *X_EC_QP, X_RE_A, X_RE_R0, X_RE_R, X_RE_RFMA, X_RE_EA, X_RE_EB, X_RE_C1, X_RE_C2, X_RE_I,
     X_EC_GRUPOS, X_RE_GRUPOS,
 )
 
@@ -154,16 +149,12 @@ def _sumar(df, valores):
     return tabla.groupby("c")["v"].sum().to_dict()
 
 
-def agregados(ecostos, re545, subastas, subastas_sin_reemplazos=None):
+def agregados(ecostos, re545, subastas):
     """
     {columna de AGREGADOS: {central normalizada: suma}} desde las dos hojas
     de calculo (ya con completar_formulas) y Subastas (ya con el nombre
     Balance_BESS). Lo que falta queda fuera (sin dato).
 
-    subastas es la Subastas con que se calculo (reasignaciones.
-    subastas_para_calculo); subastas_sin_reemplazos, el Cuadro N° 1 tal
-    cual (con su Sub_Baj y el nombre Balance_BESS), solo si la planilla trae
-    reemplazos. Sin el, "sin reemplazos" es lo mismo que lo calculado.
     """
 
     datos = {}
@@ -185,8 +176,6 @@ def agregados(ecostos, re545, subastas, subastas_sin_reemplazos=None):
             datos[X_EC_E[i]] = _sumar(ecostos, e)
             if l is not None:
                 datos[X_EC_L[i]] = _sumar(ecostos, l * e)
-                l0 = _l_sin_reemplazos(ecostos, subastas_sin_reemplazos)
-                datos[X_EC_L0[i]] = _sumar(ecostos, (l if l0 is None else l0) * e)
                 if cmg is not None:
                     datos[X_EC_C2[i]] = _sumar(ecostos, l * e * cmg)
             if _col(ecostos, ajustada) is not None:
@@ -244,37 +233,9 @@ def agregados(ecostos, re545, subastas, subastas_sin_reemplazos=None):
             "v": energia.reset_index(drop=True) * 1000,
         })
         datos[X_RE_A] = tabla[tabla["c"] != ""].groupby("c")["v"].sum().to_dict()
-        datos[X_RE_A0] = datos[X_RE_A]
-        sin = subastas_sin_reemplazos
-        if sin is not None and "Configuración" in sin and "Energía SSCC" in sin:
-            tabla = pd.DataFrame({
-                "c": sin["Configuración"].reset_index(drop=True).map(normalizar),
-                "v": pd.to_numeric(sin["Energía SSCC"], errors="coerce")
-                .fillna(0.0).reset_index(drop=True) * 1000,
-            })
-            datos[X_RE_A0] = tabla[tabla["c"] != ""].groupby("c")["v"].sum().to_dict()
 
     datos.update(_grupos(ecostos, re545))
     return datos
-
-
-def _l_sin_reemplazos(ecostos, subastas_sin_reemplazos):
-    """Adj SSCC de cada fila de E Costos contando solo el Cuadro N° 1, o None."""
-
-    if subastas_sin_reemplazos is None or not {"Mes", "Dia", "Hora"} <= set(ecostos.columns):
-        return None
-    from .columnas_compartidas import calcular_l
-
-    central = ecostos["Configuracion"]
-    if isinstance(central, pd.DataFrame):
-        central = central.iloc[:, 0]
-    filas = pd.DataFrame({
-        "clave": central.reset_index(drop=True),
-        "Mes": ecostos["Mes"].reset_index(drop=True),
-        "Dia": ecostos["Dia"].reset_index(drop=True),
-        "Hora": ecostos["Hora"].reset_index(drop=True),
-    })
-    return calcular_l(filas, subastas_sin_reemplazos).astype(float).reset_index(drop=True)
 
 
 def _grupos(ecostos, re545):
@@ -381,7 +342,15 @@ def _repartir(producto_viejo, producto_nuevo, factores_viejos, factores_nuevos, 
         if not _hay(factores_viejos[i]) or not _hay(factores_nuevos[i])
     ]
     if faltan:
-        efectos[etiquetas[faltan[0]]] = nuevo - viejo
+        # Lo que aparece o desaparece: el factor que paso de 0 a algo (o al
+        # reves) es el que lo explica (sept: FD 0 -> C1 = 0 y su precio
+        # 0/0); si ninguno, el primero que falta.
+        a_cero = [
+            i for i in range(len(etiquetas))
+            if _hay(factores_viejos[i]) and _hay(factores_nuevos[i])
+            and (factores_viejos[i] == 0) != (factores_nuevos[i] == 0)
+        ]
+        efectos[etiquetas[(a_cero or faltan)[0]]] = nuevo - viejo
         return efectos
     for etiqueta, efecto in zip(etiquetas, shapley_producto(factores_viejos, factores_nuevos)):
         efectos[etiqueta] = efectos.get(etiqueta, 0.0) + efecto
@@ -431,117 +400,6 @@ def _theta_re(fila):
     return [uno[0], uno[1], uno[2], uno[3], dos[3], uno[4], dos[4]]
 
 
-def _theta_ec_ext(fila):
-    """
-    E Costos con las horas adjudicadas partidas en dos: por signo
-    [E, w, s0, d, F, p1, p2], con s = s0 + d (s0 sin reemplazos).
-    """
-
-    resultado = []
-    for i, theta in enumerate(_theta_ec(fila)):
-        e = fila.get(X_EC_E[i], math.nan)
-        l0 = fila.get(X_EC_L0[i], math.nan)
-        if not _hay(l0):
-            l0 = fila.get(X_EC_L[i], math.nan)
-        s = theta[2]
-        s0 = _razon(l0, e)
-        d = (s - s0) if _hay(s) and _hay(s0) else math.nan
-        resultado.append([theta[0], theta[1], s0, d, theta[3], theta[4], theta[5]])
-    return resultado
-
-
-def _theta_re_ext(fila):
-    """RE545 con lo adjudicado partido en dos: [A0, dA, w, phi, a, b, p1, p2]."""
-
-    theta = _theta_re(fila)
-    adj = fila.get(X_RE_A, math.nan)
-    adj0 = fila.get(X_RE_A0, math.nan)
-    if not _hay(adj0):
-        adj0 = adj
-    d = (adj - adj0) if _hay(adj) and _hay(adj0) else math.nan
-    return [adj0, d, *theta[1:]]
-
-
-def _suma_o_nan(a, b):
-    return a + b if _hay(a) and _hay(b) else math.nan
-
-
-def _comprimir_ec(ext):
-    return [[t[0], t[1], _suma_o_nan(t[2], t[3]), t[4], t[5], t[6]] for t in ext]
-
-
-def _comprimir_re(ext):
-    return [_suma_o_nan(ext[0], ext[1]), *ext[2:]]
-
-
-# Los factores de cada lado (en el theta extendido): a que responsable y a
-# que componente pertenece cada uno. Los responsables son los grupos del
-# valor de Owen.
-_EC_SUB = (
-    ("E", ENERGIA, AMBAS), ("w", OFERTAS, AMBAS), ("s0", HORAS, AMBAS),
-    ("d", REEMPLAZOS, AMBAS), ("F", FD_PRORRATA, C1), ("p1", CMG, C1),
-    ("p2", CMG, C2),
-)
-_RE_SUB = (
-    ("A0", ADJUDICACION, AMBAS), ("dA", REEMPLAZOS, AMBAS), ("w", OFERTAS, AMBAS),
-    ("phi", FD_FMA, AMBAS), ("a", USO, C1), ("b", USO, C2), ("p1", CMG, C1),
-    ("p2", CMG, C2),
-)
-# Los reemplazos van en el mismo grupo que las horas / lo adjudicado: el
-# total de "Horas adjudicadas" + "Reemplazos" es el de antes de separarlos.
-_SUB_REPARTO = ("rep", REPARTO, COMP_REPARTO)
-
-
-def _uniones(subs, grupo_reemplazos):
-    """{grupo: [factores]} en el orden de RESPONSABLES, con el reparto."""
-
-    uniones = {}
-    for nombre, responsable, _ in (*subs, _SUB_REPARTO):
-        grupo = grupo_reemplazos if responsable == REEMPLAZOS else responsable
-        uniones.setdefault(grupo, []).append(nombre)
-    return uniones
-
-
-def owen(uniones, valor):
-    """
-    {factor: efecto} con el valor de Owen: Shapley entre los grupos y,
-    dentro de cada grupo, entre sus factores. La suma de los factores de un
-    grupo es el Shapley del grupo (como si fuera un solo jugador); la suma
-    de todo, valor(todos) - valor(ninguno).
-    valor(conjunto de factores en "nuevo").
-    """
-
-    cache = {}
-
-    def v(conjunto):
-        clave = frozenset(conjunto)
-        if clave not in cache:
-            cache[clave] = valor(clave)
-        return cache[clave]
-
-    grupos = list(uniones)
-    m = len(grupos)
-    efectos = {}
-    for k, grupo in enumerate(grupos):
-        otros = [g for g in grupos if g != grupo]
-        miembros = uniones[grupo]
-        n = len(miembros)
-        for factor in miembros:
-            companeros = [f for f in miembros if f != factor]
-            total = 0.0
-            for t in range(m):
-                peso_t = math.factorial(t) * math.factorial(m - t - 1) / math.factorial(m)
-                for de_otros in itertools.combinations(otros, t):
-                    base = {f for g in de_otros for f in uniones[g]}
-                    for s_ in range(n):
-                        peso_s = math.factorial(s_) * math.factorial(n - s_ - 1) / math.factorial(n)
-                        for sub in itertools.combinations(companeros, s_):
-                            con = base | set(sub)
-                            total += peso_t * peso_s * (v(con | {factor}) - v(con))
-            efectos[factor] = total
-    return efectos
-
-
 # Que factores entran en cada parte (indices en theta).
 _EC_PARTES = ((0, (0, 1, 2, 3, 4)), (0, (0, 1, 2, 5)))      # C1 y C2 (por signo)
 _RE_C1, _RE_C2 = (0, 1, 2, 3, 5), (0, 1, 2, 4, 6)
@@ -586,68 +444,6 @@ def _ingreso_re(theta, theta_base, grupos):
     return sum(max(0.0, c1 * e1 - c2 * e2) for c1, c2, paga in grupos if paga)
 
 
-def _descomponer_lado(ext_a, ext_b, grupos_a, grupos_b, ingreso, subs, comprimir,
-                      ingreso_a, ingreso_b, grupo_reemplazos):
-    """
-    {(responsable, componente): efecto}. Owen entre los factores (cada uno
-    pasa de anterior a actual) y el REPARTO entre ciclos/ventanas (los
-    grupos de un mes o del otro). Cada escenario aplica max(0, C1 - C2)
-    grupo por grupo: no hay "piso". Exacto: con todo en "actual" da lo que
-    recibe ahora; con todo en "anterior", lo de antes.
-    """
-
-    nombres = [nombre for nombre, *_ in subs]
-    indice = {nombre: i for i, nombre in enumerate(nombres)}
-    todos = frozenset(nombres) | {"rep"}
-    base_a, base_b = comprimir(ext_a), comprimir(ext_b)
-
-    def mezclar(nuevos):
-        if isinstance(ext_a[0], list):
-            return [
-                [ext_a[s_][i] if nombre in nuevos else ext_b[s_][i]
-                 for nombre, i in indice.items()]
-                for s_ in range(len(ext_a))
-            ]
-        return [ext_a[i] if nombre in nuevos else ext_b[i] for nombre, i in indice.items()]
-
-    def valor(nuevos):
-        if nuevos == todos:
-            return ingreso_a
-        if not nuevos:
-            return ingreso_b
-        theta = comprimir(mezclar(nuevos))
-        primero, segundo = (
-            ((grupos_a, base_a), (grupos_b, base_b)) if "rep" in nuevos
-            else ((grupos_b, base_b), (grupos_a, base_a))
-        )
-        for grupos, base in (primero, segundo):
-            resultado = ingreso(theta, base, grupos)
-            if resultado is not None:
-                return resultado
-        return None
-
-    # Si algun escenario no se puede armar (un factor que no existe en un
-    # mes), ese lado se reparte con el modelo simple (ver _repartir).
-    uniones = _uniones(subs, grupo_reemplazos)
-    efectos = owen(uniones, lambda c: _o_falla(valor(c)))
-    etiqueta = {nombre: (resp, comp) for nombre, resp, comp in (*subs, _SUB_REPARTO)}
-    detalle = {}
-    for factor, efecto in efectos.items():
-        clave = etiqueta[factor]
-        detalle[clave] = detalle.get(clave, 0.0) + efecto
-    return {k: v for k, v in detalle.items() if abs(v) >= 0.5}
-
-
-class _NoSePuede(Exception):
-    pass
-
-
-def _o_falla(valor):
-    if valor is None:
-        raise _NoSePuede
-    return valor
-
-
 def _completar_theta(theta_a, theta_b):
     """
     Un factor que no existe en un mes (0/0: por ejemplo el precio de C1
@@ -682,38 +478,89 @@ def _sumar_efectos(total, parte, signo=1.0):
         total[etiqueta] = total.get(etiqueta, 0.0) + signo * efecto
 
 
-def _simple(lado, actual, anterior):
+def _cmg_igual(actual, anterior):
+    """El CMg de la central no cambio (mismo promedio en las dos planillas)."""
+
+    from . import reporte as r
+
+    a, b = actual.get(r.C_CMG, math.nan), anterior.get(r.C_CMG, math.nan)
+    return _hay(a) and _hay(b) and abs(a - b) <= 1e-9 * max(1.0, abs(a), abs(b))
+
+
+def _juntar(factores, i, j):
+    """factores con el i-esimo y el j-esimo multiplicados en uno (en la posicion i)."""
+
+    x, y = factores[i], factores[j]
+    junto = x * y if _hay(x) and _hay(y) else math.nan
+    return [junto if k == i else f for k, f in enumerate(factores) if k != j]
+
+
+def _por_componente(lado, actual, anterior):
     """
-    Respaldo, cuando no se pueden armar los escenarios: el cambio de C1 y
-    de C2 por factores (producto) y lo que no se explica (el max por
-    grupo) como REPARTO. {(responsable, componente): efecto}.
+    {(responsable, componente): efecto}: el cambio de C1 repartido entre
+    sus factores (Componente 1) y el de C2, con signo contrario porque resta
+    (Componente 2). Componente 1 da exacto el cambio de "Total C1" y
+    Componente 2 el de "Total C2" (los de la hoja Cambios por central).
+
+    Si el CMg de la central es el mismo en las dos planillas, el precio
+    promedio de la curva (o de las horas adjudicadas) solo cambia porque
+    entran otros bloques u otras horas: va junto con la energia que lo mueve
+    y no sale como "CMg" (ANDES3 oct: se partia en -$21 MM de Edisp y +$9,5
+    MM de "CMg" con el CMg igual).
     """
 
+    igual = _cmg_igual(actual, anterior)
     efectos = {}
     if lado == "E Costos":
         for i in range(2):
             (c1_a, c2_a), (c1_b, c2_b) = _factores_ec(actual, i), _factores_ec(anterior, i)
-            _sumar_efectos(efectos, _repartir(c1_b[0], c1_a[0], c1_b[1], c1_a[1], _ETIQUETAS_EC_C1))
-            _sumar_efectos(efectos, _repartir(c2_b[0], c2_a[0], c2_b[1], c2_a[1], _ETIQUETAS_EC_C2), -1.0)
+            et1, et2 = list(_ETIQUETAS_EC_C1), list(_ETIQUETAS_EC_C2)
+            f1_a, f1_b, f2_a, f2_b = c1_a[1], c1_b[1], c2_a[1], c2_b[1]
+            if igual:
+                # C1: FD x prorrata x precio de la curva; C2: horas x su CMg.
+                f1_a, f1_b, et1 = _juntar(f1_a, 3, 4), _juntar(f1_b, 3, 4), et1[:4]
+                f2_a, f2_b, et2 = _juntar(f2_a, 2, 3), _juntar(f2_b, 2, 3), et2[:3]
+            _sumar_efectos(efectos, _repartir(c1_b[0], c1_a[0], f1_b, f1_a, tuple(et1)))
+            _sumar_efectos(efectos, _repartir(c2_b[0], c2_a[0], f2_b, f2_a, tuple(et2)), -1.0)
     else:
         (c1_a, c2_a), (c1_b, c2_b) = _factores_re(actual), _factores_re(anterior)
-        _sumar_efectos(efectos, _repartir(c1_b[0], c1_a[0], c1_b[1], c1_a[1], _ETIQUETAS_RE_C1))
-        _sumar_efectos(efectos, _repartir(c2_b[0], c2_a[0], c2_b[1], c2_a[1], _ETIQUETAS_RE_C2), -1.0)
+        et1, et2 = list(_ETIQUETAS_RE_C1), list(_ETIQUETAS_RE_C2)
+        f1_a, f1_b, f2_a, f2_b = c1_a[1], c1_b[1], c2_a[1], c2_b[1]
+        if igual:
+            # Energia asignada x su precio = C1 por kWh de reserva (Edisp).
+            f1_a, f1_b, et1 = _juntar(f1_a, 3, 4), _juntar(f1_b, 3, 4), et1[:4]
+            f2_a, f2_b, et2 = _juntar(f2_a, 3, 4), _juntar(f2_b, 3, 4), et2[:4]
+        _sumar_efectos(efectos, _repartir(c1_b[0], c1_a[0], f1_b, f1_a, tuple(et1)))
+        _sumar_efectos(efectos, _repartir(c2_b[0], c2_a[0], f2_b, f2_a, tuple(et2)), -1.0)
     return efectos
+
+
+def _c1_c2(fila, lado):
+    """(Total C1, Total C2) del lado, de las sumas de la descomposicion."""
+
+    if lado == "E Costos":
+        return (sum(_cero(fila.get(k, math.nan)) for k in X_EC_C1),
+                sum(_cero(fila.get(k, math.nan)) for k in X_EC_C2))
+    return _cero(fila.get(X_RE_C1, math.nan)), _cero(fila.get(X_RE_C2, math.nan))
 
 
 def descomponer_detalle(actual, anterior):
     """
     {lado: {(responsable, componente): pesos}} del cambio de lo que recibe
-    la central (actual - anterior), lado "E Costos" y "RE545". Por lado, la
-    suma da exacto el cambio de su ingreso.
+    la central (actual - anterior), lado "E Costos" y "RE545":
+      Componente 1 = cambio de C1 por factor, Componente 2 = - cambio de C2
+      por factor, y el Reparto lo que el max(0, C1 - C2) por ciclo/ventana
+      recorta (o deja de recortar). Por lado, la suma da exacto el cambio de
+      su ingreso.
     """
 
     resultado = {}
     for lado, ingreso in (("E Costos", X_EC_I), ("RE545", X_RE_I)):
         nuevo = _cero(actual.get(ingreso, math.nan)) if actual else 0.0
         viejo = _cero(anterior.get(ingreso, math.nan)) if anterior else 0.0
-        if abs(nuevo - viejo) < 0.5:
+        c1_a, c2_a = _c1_c2(actual, lado) if actual else (0.0, 0.0)
+        c1_b, c2_b = _c1_c2(anterior, lado) if anterior else (0.0, 0.0)
+        if abs(nuevo - viejo) < 0.5 and abs(c1_a - c1_b) < 0.5 and abs(c2_a - c2_b) < 0.5:
             continue
         if not anterior:
             resultado[lado] = {(NUEVA, SIN_COMPONENTE): nuevo - viejo}
@@ -721,28 +568,8 @@ def descomponer_detalle(actual, anterior):
         if not actual:
             resultado[lado] = {(YA_NO, SIN_COMPONENTE): nuevo - viejo}
             continue
-        if lado == "E Costos":
-            grupos_a, grupos_b = actual.get(X_EC_GRUPOS), anterior.get(X_EC_GRUPOS)
-            args = (_theta_ec_ext(actual), _theta_ec_ext(anterior), _ingreso_ec,
-                    _EC_SUB, _comprimir_ec, HORAS)
-        else:
-            grupos_a, grupos_b = actual.get(X_RE_GRUPOS), anterior.get(X_RE_GRUPOS)
-            args = (_theta_re_ext(actual), _theta_re_ext(anterior), _ingreso_re,
-                    _RE_SUB, _comprimir_re, ADJUDICACION)
-        efectos = None
-        if isinstance(grupos_a, list) and isinstance(grupos_b, list):
-            ext_a, ext_b, funcion, subs, comprimir, grupo_reemplazos = args
-            ext_a, ext_b = _completar_theta(ext_a, ext_b)
-            try:
-                efectos = _descomponer_lado(
-                    ext_a, ext_b, grupos_a, grupos_b, funcion, subs, comprimir,
-                    nuevo, viejo, grupo_reemplazos,
-                )
-            except _NoSePuede:
-                efectos = None
-        if efectos is None:
-            efectos = _simple(lado, actual, anterior)
-        # Cierre exacto: lo que falte va al reparto entre ciclos/ventanas.
+        efectos = _por_componente(lado, actual, anterior)
+        # Cierre exacto: lo que falte es el reparto por ciclo/ventana.
         resto = (nuevo - viejo) - sum(efectos.values())
         if abs(resto) >= 0.5:
             clave = (REPARTO, COMP_REPARTO)
@@ -794,20 +621,6 @@ def _texto_reemplazos(lado, actual, anterior):
         viejo, nuevo = _cero(anterior.get(columna, math.nan)), _cero(actual.get(columna, math.nan))
         if viejo or nuevo:
             partes.append(f"{nombre} {r.numero(viejo)} → {r.numero(nuevo)}")
-    if lado == "E Costos":
-        theta = _theta_ec_ext(actual)[0]
-        if _hay(theta[2]) and _hay(theta[3]) and theta[3]:
-            partes.append(
-                f"energía en horas adjudicadas {r.numero(theta[2] * 100)} % sin "
-                f"reemplazos → {r.numero((theta[2] + theta[3]) * 100)} % con reemplazos"
-            )
-    else:
-        theta = _theta_re_ext(actual)
-        if _hay(theta[0]) and _hay(theta[1]) and theta[1]:
-            partes.append(
-                f"adjudicado {r.numero(theta[0] / 1000)} MWh sin reemplazos → "
-                f"{r.numero((theta[0] + theta[1]) / 1000)} MWh con reemplazos"
-            )
     return "; ".join(partes)
 
 
@@ -829,6 +642,10 @@ def _texto_movimiento(responsable, lado, actual, anterior, componente=None):
 
     if responsable in (NUEVA, YA_NO):
         return ""
+    # Con el CMg igual, el precio promedio va junto con la energia (ver
+    # _por_componente): se dice, para que no se lea como cambio de CMg.
+    nota_cmg = " (el CMg no cambió: entran otras horas o bloques)"
+    igual = _cmg_igual(actual, anterior) if actual and anterior else False
     if responsable == REEMPLAZOS:
         return _texto_reemplazos(lado, actual, anterior)
     if lado == "E Costos":
@@ -838,9 +655,15 @@ def _texto_movimiento(responsable, lado, actual, anterior, componente=None):
         if responsable == OFERTAS:
             return "energía que va a E Costos " + flecha(b[1], a[1], pct=True)
         if responsable == HORAS:
-            return "energía en horas adjudicadas " + flecha(b[2], a[2], pct=True)
+            texto = "energía en horas adjudicadas " + flecha(b[2], a[2], pct=True)
+            if igual and componente == C2:
+                texto += "; CMg de esas horas " + flecha(b[5], a[5], 1, "CLP/kWh") + nota_cmg
+            return texto
         if responsable == FD_PRORRATA:
             texto = "factor FD × prorrata " + flecha(b[3], a[3], 2)
+            if igual:
+                texto += ("; precio de la curva C1 " + flecha(b[4], a[4], 1, "CLP/kWh")
+                          + nota_cmg)
             for nombre, columna in (("FD CPF", r.C_FD_CPF), ("FD CSF", r.C_FD_CSF)):
                 viejo, nuevo = anterior.get(columna), actual.get(columna)
                 if _hay(viejo) and _hay(nuevo) and abs(nuevo - viejo) >= 0.05:
@@ -877,7 +700,12 @@ def _texto_movimiento(responsable, lado, actual, anterior, componente=None):
         def los_dos(textos):
             if componente in (C1, C2):
                 nombre, i, decimales, unidad = textos[0 if componente == C1 else 1]
-                return f"{nombre} {flecha(b[i], a[i], decimales, unidad)}"
+                texto = f"{nombre} {flecha(b[i], a[i], decimales, unidad)}"
+                if igual and responsable == USO:
+                    precio = 5 if componente == C1 else 6
+                    texto += (f"; su precio {flecha(b[precio], a[precio], 1, 'CLP/kWh')}"
+                              + nota_cmg)
+                return texto
             cambiaron = [
                 f"{nombre} {flecha(b[i], a[i], decimales, unidad)}"
                 for nombre, i, decimales, unidad in textos
@@ -928,14 +756,22 @@ def _peso(aporte, bruto):
 
 
 def _efecto_reemplazos(fila, fila_sin):
-    """{lado: pesos} que los reemplazos le suman a la central en su planilla."""
+    """
+    {(lado, componente): pesos} que los reemplazos le suman a la central en
+    su planilla: en C1, en C2 (con signo contrario) y lo que mueven en el
+    reparto por ciclo/ventana.
+    """
 
     if not fila or not fila_sin:
         return {}
-    return {
-        lado: _cero(fila.get(col, math.nan)) - _cero(fila_sin.get(col, math.nan))
-        for lado, col in (("E Costos", X_EC_I), ("RE545", X_RE_I))
-    }
+    efectos = {}
+    for lado, col in (("E Costos", X_EC_I), ("RE545", X_RE_I)):
+        monto = _cero(fila.get(col, math.nan)) - _cero(fila_sin.get(col, math.nan))
+        (c1, c2), (c1_s, c2_s) = _c1_c2(fila, lado), _c1_c2(fila_sin, lado)
+        efectos[(lado, C1)] = c1 - c1_s
+        efectos[(lado, C2)] = -(c2 - c2_s)
+        efectos[(lado, COMP_REPARTO)] = monto - (c1 - c1_s) + (c2 - c2_s)
+    return efectos
 
 
 def tablas_responsables(actual, anterior, orden=None, actual_sin=None, anterior_sin=None):
@@ -991,13 +827,12 @@ def tablas_responsables(actual, anterior, orden=None, actual_sin=None, anterior_
             sin_b if sin_b is not None and fila_b else fila_b,
         )
         reemplazos = _efecto_reemplazos(fila_a, sin_a)
-        for lado, valor in _efecto_reemplazos(fila_b, sin_b).items():
-            reemplazos[lado] = reemplazos.get(lado, 0.0) - valor
-        for lado, valor in reemplazos.items():
+        for clave_r, valor in _efecto_reemplazos(fila_b, sin_b).items():
+            reemplazos[clave_r] = reemplazos.get(clave_r, 0.0) - valor
+        for (lado, comp), valor in reemplazos.items():
             if abs(valor) >= 0.5:
                 por = detalle.setdefault(lado, {})
-                clave_r = (REEMPLAZOS, AMBAS)
-                por[clave_r] = por.get(clave_r, 0.0) + valor
+                por[(REEMPLAZOS, comp)] = por.get((REEMPLAZOS, comp), 0.0) + valor
         por_lado = {}
         for lado, por in detalle.items():
             for (resp, comp), aporte in por.items():

@@ -343,8 +343,15 @@ class TestArchivos(unittest.TestCase):
             self.assertEqual(destino, actual.parent / "Log" / "Comparacion_2610_vs_2609.xlsx")
             libro = openpyxl.load_workbook(destino)
             self.assertEqual(
-                libro.sheetnames, ["Comparacion", "Responsables", "Cambios por central"]
+                libro.sheetnames,
+                ["Comparacion", "Resumen por central", "Responsables", "Cambios por central"]
             )
+            resumen = libro["Resumen por central"]
+            encabezados = [c.value for c in resumen[3] if c.value]
+            self.assertIn("Cambio C1 RE545 [CLP]", encabezados)
+            self.assertIn("De eso, reemplazos [CLP]", encabezados)
+            filas = [[c.value for c in f] for f in resumen.iter_rows(min_row=4)]
+            self.assertEqual([v for v in filas[-1] if v][0], "Total")
             responsables = libro["Responsables"]
             # El mes en arbol: lado > componente > responsable (2026-11-20).
             from Script.nucleo import responsables as rs
