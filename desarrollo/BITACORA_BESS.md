@@ -7189,3 +7189,19 @@ errores de siempre por falta de tkinter.
 
 **Verificación:** `test_reporte.py` (encabezados exactos). Suite: 568 OK.
 
+## 2026-11-20 (7) — El "Reparto" dice dónde cambió C1 − C2
+
+- El usuario: "ANDES3 tiene diferencia cero en su total pero C1 − C2 sí
+  tiene diferencia". Es correcto: el pago es, ventana por ventana,
+  max(0, C1 − C2) y solo en las que pagan; si C1 y C2 cambian en ventanas
+  que no pagan (C1 < C2, sin reserva o la última del mes), cambian los
+  totales de la planilla pero no lo que recibe. Verificado con octubre: en
+  las 576 ventanas/ciclos que pagan, el monto es exacto C1 − C2.
+- Nuevos agregados `X_EC_MARGEN` / `X_RE_MARGEN` ({ciclo/ventana: (C1 − C2,
+  monto)}) y `_texto_reparto`: "C1 − C2 cambia X; Y en ventanas que pagan;
+  Z en ventanas que no pagan (...), que no cambia lo que recibe; W en las que
+  empiezan o dejan de pagar". Ej. ARENA: C1 − C2 −$20 MM, +$1 MM en ciclos
+  que pagan y −$21 MM en ciclos que no pagan.
+
+**Verificación:** prueba nueva en `test_responsables.py`. Suite: 569 OK.
+
