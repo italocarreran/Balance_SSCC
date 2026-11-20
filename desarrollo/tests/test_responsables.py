@@ -192,3 +192,78 @@ class TestTextoSoloCambiaC2(unittest.TestCase):
             cmg = resp._texto_movimiento(resp.CMG, "RE545", {"cual": "ahora"}, {"cual": "antes"})
         self.assertEqual(uso, "energía contada en C2 / reserva con FD y FMA 0,30 → 0,15")
         self.assertEqual(cmg, "precio de lo contado en C2 18,0 → 21,5 CLP/kWh")
+
+
+class TestComponentesYReemplazos(unittest.TestCase):
+    """
+    Pedido del usuario (2026-11-20): los reemplazos del 7_Reasignaciones
+    como responsable, y cada aporte con su lado y componente (para filtrar
+    E Costos > Componente 1 > FD, CMg). Los totales por responsable no
+    cambian: dentro de cada responsable se reparte con Owen.
+    """
+
+    def test_owen_con_grupos_de_uno_es_shapley_y_cierra(self):
+        valor = lambda c: (2 if "x" in c else 1) * (3 if "y" in c else 1) * (5 if "z" in c else 1)  # noqa: E731
+        e = rs.owen({"X": ["x"], "Y": ["y"], "Z": ["z"]}, valor)
+        self.assertAlmostEqual(sum(e.values()), 30 - 1)
+        # Mismo grupo: el grupo se lleva lo mismo que si fuera un jugador.
+        g = rs.owen({"X": ["x"], "YZ": ["y", "z"]}, valor)
+        solo = rs.owen({"X": ["x"], "YZ": ["yz"]},
+                       lambda c: valor({"x"} & c | ({"y", "z"} if "yz" in c else set())))
+        self.assertAlmostEqual(g["y"] + g["z"], solo["yz"])
+        self.assertAlmostEqual(g["x"], solo["x"])
+
+    def test_el_cmg_de_c2_va_al_componente_2(self):
+        anterior = fila_ec([(100.0, 120.0)])
+        actual = fila_ec([(100.0, 60.0)])
+        detalle = rs.descomponer_detalle(actual, anterior)["E Costos"]
+        self.assertEqual(set(detalle), {(rs.CMG, rs.C2)})
+        self.assertAlmostEqual(detalle[(rs.CMG, rs.C2)], 40.0)
+
+    def test_reemplazos_aproximado_sale_de_las_horas(self):
+        # Mismas horas en el mes anterior; ahora 800 kWh en horas Adj SSCC,
+        # de los que 200 son por reemplazos (sin ellos, 600).
+        anterior = fila_ec([(75.0, 30.0)], l=600.0, q=450.0)
+        sin_l0 = fila_ec([(100.0, 40.0)])
+        con_l0 = fila_ec([(100.0, 40.0)], **{rs.X_EC_L0[0]: 600.0})
+        antes = rs.descomponer(sin_l0, anterior)["E Costos"]
+        ahora = rs.descomponer(con_l0, anterior)["E Costos"]
+        self.assertNotIn(rs.REEMPLAZOS, antes)
+        self.assertGreater(ahora[rs.REEMPLAZOS], 0)
+        # s0 es igual al mes anterior: todo lo de las horas es de los reemplazos.
+        self.assertAlmostEqual(ahora.get(rs.HORAS, 0.0) + ahora[rs.REEMPLAZOS], antes[rs.HORAS])
+        self.assertAlmostEqual(sum(ahora.values()), sum(antes.values()))
+
+    def test_reemplazos_exacto_con_la_planilla_sin_reemplazos(self):
+        anterior = pd.DataFrame([fila_ec([(100.0, 80.0)], nombre="A")])        # 20
+        actual = pd.DataFrame([fila_ec([(130.0, 80.0)], nombre="A")])          # 50
+        actual_sin = pd.DataFrame([fila_ec([(110.0, 80.0)], nombre="A")])      # 30
+        mes, por_central, _ = rs.tablas_responsables(actual, anterior, actual_sin=actual_sin)
+        total = mes.set_index("Responsable")["Aporte [CLP]"]
+        self.assertAlmostEqual(total[rs.REEMPLAZOS], 20.0)
+        self.assertAlmostEqual(total["Total (= diferencia del mes)"], 30.0)
+        fila = por_central[por_central["Responsable"] == rs.REEMPLAZOS].iloc[0]
+        self.assertEqual((fila["Lado"], fila["Componente"]), ("E Costos", rs.AMBAS))
+        detalle = rs.mes_por_componente(por_central)
+        self.assertEqual(list(detalle.columns[:3]), ["Lado", "Componente", "Responsable"])
+        self.assertAlmostEqual(detalle["Aporte [CLP]"].sum(), 30.0)
+
+    def test_la_hoja_responsables_trae_tablas_con_filtro(self):
+        import openpyxl
+
+        anterior = pd.DataFrame([fila_ec([(100.0, 120.0)], nombre="A")])
+        actual = pd.DataFrame([fila_ec([(100.0, 60.0)], nombre="A")])
+        _, por_central, _ = rs.tablas_responsables(actual, anterior)
+        with tempfile.TemporaryDirectory() as carpeta:
+            destino = Path(carpeta) / "c.xlsx"
+            r.escribir_reporte(destino, [
+                ("Responsables", rs.mes_por_componente(por_central), por_central, "Mes"),
+            ])
+            ws = openpyxl.load_workbook(destino)["Responsables"]
+            tablas = list(ws.tables.values())
+            self.assertEqual(len(tablas), 2)
+            self.assertTrue(all(t.autoFilter is not None for t in tablas))
+            self.assertIsNone(ws.auto_filter.ref)
+            formulas = [c.value for fila in ws.iter_rows() for c in fila
+                        if isinstance(c.value, str) and c.value.startswith("=SUBTOTAL")]
+            self.assertEqual(len(formulas), 2)

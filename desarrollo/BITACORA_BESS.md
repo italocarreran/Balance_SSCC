@@ -7062,3 +7062,45 @@ octubre repetida.
 **Verificación:** prueba nueva en `test_vigencia.py`. Suite: 560, los 2
 errores de siempre por falta de tkinter.
 
+## 2026-11-20 (1) — Comparador: reemplazos como responsable y Lado > Componente > Responsable
+
+- Pedido del usuario, con la comparación 2610 Definitivo vs Preliminar:
+  "agrega el tema de los reemplazos a ver si cuadra con los montos de
+  diferencia" y "listas desplegables en los responsables, tipo E Costos >
+  Componente 1 > FD, CMg".
+- **Reemplazos, exacto:** si una planilla trae reemplazos (columna
+  "Reemplazado" o Cuadro N° 2 en Subastas), `reporte.resumen_sin_reemplazos`
+  la recalcula (E Costos y RE545) en una carpeta temporal con
+  `QUITAR_REEMPLAZADAS` y `SUMAR_REEMPLAZANTES` en False. El cambio se arma en
+  dos partes: lo de siempre entre las dos planillas sin reemplazos, y
+  "Reemplazos (7_Reasignaciones)" = lo que suman en la actual menos lo que
+  sumaban en la anterior, por lado. La suma sigue dando exacto la diferencia.
+  Si no se puede recalcular, queda el aproximado (abajo) y se avisa.
+  Cuesta ~70 s más por planilla con reemplazos.
+- **Aproximado (respaldo):** `responsables` separa en E Costos s = s0 + d
+  (s0 horas adjudicadas solo con el Cuadro N° 1, `X_EC_L0`) y en RE545
+  A = A0 + dA (`X_RE_A0`); d y dA van a "Reemplazos".
+- **Componentes:** cada responsable es un grupo de factores y adentro se
+  reparte con el valor de Owen (`responsables.owen`): el total de cada
+  responsable es el de siempre y además se ve de qué componente sale (CMg de
+  C1 = precio de la curva, CMg de C2 = CMg en horas adjudicadas; Edisp C1 /
+  C2 en RE545; FD y prorrata en C1; los demás "C1 y C2"; el reparto aparte).
+  `descomponer_detalle` → {lado: {(responsable, componente): $}};
+  `descomponer` suma los componentes (igual que antes).
+- **Hoja Responsables:** Cuadro N° 1 = el mes por Lado, Componente y
+  Responsable (`mes_por_componente`); Cuadro N° 2 = por central con la misma
+  columna Componente. Los dos son Tablas de Excel con filtro en cada
+  encabezado (las listas desplegables) y debajo "Total de lo filtrado"
+  (SUBTOTAL, cambia con el filtro).
+- **Comparación / Cambios por central:** línea "Reemplazos de SSCC" con el
+  aporte del mes y las horas reemplazadas / como reemplazante; aviso si una
+  de las planillas no trae reemplazos. Conceptos nuevos: horas adjudicadas
+  reemplazadas, horas como reemplazante y MW como reemplazante.
+- Prueba con octubre (el 11_ con reemplazos contra el mismo sin): diferencia
+  −$3,8 MM, toda en "Reemplazos" (E Costos +$0,56 MM, RE545 −$4,36 MM).
+  ANDES2B +$3,8 MM: le sacaron 12 horas CPF reemplazadas con FD CPF 0 y la
+  prorrata de esas horas pasó entera al CSF (FD ~1).
+
+**Verificación:** `test_responsables.py` (+5) y `test_reporte.py`. Suite:
+565 OK (56 salteadas sin pantalla).
+

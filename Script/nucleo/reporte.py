@@ -91,6 +91,12 @@ C_RE_C1 = "RE545 Total C1 [CLP]"
 C_RE_C2 = "RE545 Total C2 [CLP]"
 C_RE_VENTANAS = "Ventanas con monto"
 C_RE_VENTANAS_MES = "Ventanas del mes"
+# Reemplazos de SSCC (7_Reasignaciones, columna "Reemplazado" y Cuadro N° 2
+# de Subastas): horas-servicio adjudicadas que se reemplazaron (no se pagan)
+# y las que la central presto como reemplazante, con su MW.
+C_H_REEMPLAZADA = "Horas adjudicadas reemplazadas"
+C_H_REEMPLAZANTE = "Horas como reemplazante"
+C_MW_REEMPLAZANTE = "Como reemplazante [MW]"
 
 COLUMNAS_RESUMEN = (
     C_CENTRAL, C_EMPRESA, C_ECOSTOS, C_RE545, C_TOTAL, C_DIAS, C_DESCARGA,
@@ -99,6 +105,7 @@ COLUMNAS_RESUMEN = (
     C_NPA_CPF, C_NPA_CSF, C_HA_CPF, C_HA_CSF, C_OFERTA_DIAS,
     C_EC_C1, C_EC_C2, C_EC_AJUSTADA, C_EC_CICLOS, C_EC_CICLOS_MES,
     C_RE_C1, C_RE_C2, C_RE_VENTANAS, C_RE_VENTANAS_MES,
+    C_H_REEMPLAZADA, C_H_REEMPLAZANTE, C_MW_REEMPLAZANTE,
 )
 
 # Un cambio menor a esto (en % y en plata) no se comenta.
@@ -220,7 +227,10 @@ def resumen_por_central(ruta_planilla, registrar=print):
     )
     from .ofertas_sscc import leer_ofertas_sscc_consolidado
     from .subastas_accdb import construir_mapa_propietario
-    from .reasignaciones import leer_subastas_consolidado, subastas_para_calculo
+    from .reasignaciones import (
+        COLUMNA_REEMPLAZADO as REEMPLAZADO, COLUMNA_ROL_BESS, ROL_AMBAS,
+        ROL_REEMPLAZANTE, leer_subastas_consolidado, subastas_para_calculo,
+    )
 
     ruta_planilla = Path(ruta_planilla)
     if not ruta_planilla.is_file():
@@ -237,11 +247,14 @@ def resumen_por_central(ruta_planilla, registrar=print):
         # Lo mismo con que calculo E Costos / RE545: lo adjudicado sin lo
         # reemplazado mas lo que una BESS presto como reemplazante
         # (reasignaciones.py). Hoja de antes: igual que siempre.
-        subastas = _leer(libro, HOJA_SUBASTAS,
-                         lambda: subastas_para_calculo(
-                             *leer_subastas_consolidado(libro, HOJA_SUBASTAS),
-                             registrar=callado),
-                         registrar)
+        cuadros = _leer(libro, HOJA_SUBASTAS,
+                        lambda: leer_subastas_consolidado(libro, HOJA_SUBASTAS),
+                        registrar)
+        cuadro_1, cuadro_2 = cuadros if cuadros is not None else (None, None)
+        subastas = (
+            subastas_para_calculo(cuadro_1, cuadro_2, registrar=callado)
+            if cuadro_1 is not None else None
+        )
         fd = _leer(libro, HOJA_FD, lambda: leer_fd_consolidado(
             ruta_planilla, registrar=callado, libro=libro), registrar)
         ofertas = _leer(libro, HOJA_OFERTAS_SSCC, lambda: leer_ofertas_sscc_consolidado(
@@ -493,12 +506,41 @@ def resumen_por_central(ruta_planilla, registrar=print):
         if nombre_col is not None:
             anotar(resumen_bess, nombre_col)
 
+    # --- reemplazos (7_Reasignaciones) ---------------------------------------
+    sin_reemplazos = None
+    hay_reemplazos = cuadro_1 is not None and (
+        REEMPLAZADO in cuadro_1 or (cuadro_2 is not None and len(cuadro_2))
+    )
+    if hay_reemplazos:
+        from .hojas_entrada import reponer_auxiliares_subastas
+
+        sin_reemplazos = reponer_auxiliares_subastas(
+            subastas_con_nombre_balance_bess(cuadro_1, diccionario, registrar=callado)
+        )
+        if REEMPLAZADO in sin_reemplazos:
+            marca = _num(sin_reemplazos[REEMPLAZADO]).fillna(0) > 0
+            datos[C_H_REEMPLAZADA] = (
+                sin_reemplazos[marca.to_numpy()]["Configuración"].map(normalizar)
+                .value_counts().astype(float).to_dict()
+            )
+        if cuadro_2 is not None and len(cuadro_2):
+            propias = subastas_con_nombre_balance_bess(
+                cuadro_2[cuadro_2[COLUMNA_ROL_BESS].isin([ROL_REEMPLAZANTE, ROL_AMBAS])],
+                diccionario, registrar=callado,
+            )
+            anotar(propias, "Configuración")
+            datos[C_H_REEMPLAZANTE] = (
+                propias["Configuración"].map(normalizar).value_counts().astype(float).to_dict()
+            )
+            datos[C_MW_REEMPLAZANTE] = _por_central(propias, "Configuración", "Energía SSCC")
+
     # Las sumas para la descomposicion en pesos (responsables.py).
     from .responsables import AGREGADOS, agregados
 
     datos.update(agregados(
         ecostos, re545,
         subastas if subastas is not None and _col(subastas, "Configuración") is not None else None,
+        subastas_sin_reemplazos=sin_reemplazos,
     ))
 
     centrales_norm = sorted(nombres, key=lambda c: nombres[c].upper())
@@ -519,6 +561,7 @@ def resumen_por_central(ruta_planilla, registrar=print):
     resultado = pd.DataFrame(filas, columns=[*COLUMNAS_RESUMEN, *AGREGADOS])
     # Ver comparar_planillas: avisa si una planilla se calculo con la regla.
     resultado.attrs["no_participo_en_cero"] = no_participo_en_cero
+    resultado.attrs["con_reemplazos"] = bool(hay_reemplazos)
     return resultado
 
 
@@ -1016,10 +1059,11 @@ def _frase_lado(lado, nuevo, viejo, actual, anterior, motores, generales=None):
     return texto + ".", entradas
 
 
-def comparar_resumenes(actual, anterior):
+def comparar_resumenes(actual, anterior, actual_sin=None, anterior_sin=None):
     """
     (lineas de arriba, tabla por central con los dos meses y la
-    explicacion). actual/anterior: resumen_por_central() de cada planilla.
+    explicacion). actual/anterior: resumen_por_central() de cada planilla;
+    *_sin: el de la misma planilla sin reemplazos (resumen_sin_reemplazos).
     """
 
     a = actual.set_index(actual[C_CENTRAL].map(normalizar))
@@ -1088,7 +1132,9 @@ def comparar_resumenes(actual, anterior):
     # desglose, en vez de solo lo que se movio.
     from .responsables import tablas_responsables
 
-    responsables_mes, _, textos = tablas_responsables(actual, anterior)
+    responsables_mes, _, textos = tablas_responsables(
+        actual, anterior, actual_sin=actual_sin, anterior_sin=anterior_sin
+    )
     if len(tabla):
         tabla.insert(
             tabla.columns.get_loc("Qué pasó"), "Principal responsable",
@@ -1123,10 +1169,31 @@ def comparar_resumenes(actual, anterior):
         principales = [
             f"{'+' if fila['Aporte [CLP]'] >= 0 else '-'}{plata_corta(abs(fila['Aporte [CLP]']))} "
             f"{fila['Responsable']}"
-            for _, fila in responsables_mes.head(4).iterrows()
+            for _, fila in responsables_mes[
+                responsables_mes["Responsable"] != "Total (= diferencia del mes)"
+            ].head(4).iterrows()
         ]
         lineas.append("Responsables del cambio del mes: " + ", ".join(principales)
                       + " (detalle en la hoja 'Responsables').")
+        from .responsables import REEMPLAZOS
+
+        por_resp = responsables_mes.set_index("Responsable")["Aporte [CLP]"]
+        hubo = any(
+            col in df and _hay(df[col].sum(min_count=1)) and df[col].sum() > 0
+            for df in (actual, anterior) for col in (C_H_REEMPLAZADA, C_H_REEMPLAZANTE)
+        )
+        if REEMPLAZOS in por_resp.index or hubo:
+            aporte = por_resp.get(REEMPLAZOS, 0.0)
+            def cuantas(df, col):
+                valor = df[col].sum(min_count=1) if col in df else math.nan
+                return numero(valor) if _hay(valor) else "0"
+            lineas.append(
+                f"Reemplazos de SSCC (7_Reasignaciones): {'+' if aporte >= 0 else '-'}"
+                f"{plata_corta(abs(aporte))} del cambio del mes. Horas adjudicadas "
+                f"reemplazadas (no se pagan) {cuantas(anterior, C_H_REEMPLAZADA)} → "
+                f"{cuantas(actual, C_H_REEMPLAZADA)}; horas como reemplazante "
+                f"{cuantas(anterior, C_H_REEMPLAZANTE)} → {cuantas(actual, C_H_REEMPLAZANTE)}."
+            )
 
     if len(tabla):
         cambio = tabla[tabla["Diferencia [CLP]"].abs() >= CAMBIO_MINIMO_CLP]
@@ -1152,7 +1219,15 @@ def comparar_planillas(ruta_actual, ruta_anterior, registrar=print):
     ruta_actual, ruta_anterior = Path(ruta_actual), Path(ruta_anterior)
     actual = resumen_por_central(ruta_actual, registrar)
     anterior = resumen_por_central(ruta_anterior, registrar)
-    lineas, tabla = comparar_resumenes(actual, anterior)
+    # Si una trae reemplazos, se recalcula sin ellos para separar su
+    # efecto exacto (ver responsables.tablas_responsables).
+    sin = {}
+    for clave, ruta, resumen in (("actual", ruta_actual, actual),
+                                 ("anterior", ruta_anterior, anterior)):
+        if resumen.attrs.get("con_reemplazos"):
+            sin[clave] = resumen_sin_reemplazos(ruta, registrar)
+    actual_sin, anterior_sin = sin.get("actual"), sin.get("anterior")
+    lineas, tabla = comparar_resumenes(actual, anterior, actual_sin, anterior_sin)
     # Una planilla calculada con la regla "No participó" -> FD = 0
     # (2026-11-11, devuelta el 2026-11-18) no paga esas horas: la diferencia
     # saldria como un cambio de FD de las centrales, cuando es del calculo.
@@ -1174,19 +1249,77 @@ def comparar_planillas(ruta_actual, ruta_anterior, registrar=print):
         f"Comparacion_{_periodo(ruta_actual)}_vs_{_periodo(ruta_anterior)}.xlsx"
     )
     cambios = cambios_por_central(actual, anterior, list(tabla[C_CENTRAL]))
-    from .responsables import tablas_responsables
+    from .responsables import mes_por_componente, tablas_responsables
 
-    mes, por_central, _ = tablas_responsables(actual, anterior, list(tabla[C_CENTRAL]))
+    _, por_central, _ = tablas_responsables(
+        actual, anterior, list(tabla[C_CENTRAL]),
+        actual_sin=actual_sin, anterior_sin=anterior_sin,
+    )
+    for nombre, clave, resumen in ((ruta_actual.name, "actual", actual),
+                                   (ruta_anterior.name, "anterior", anterior)):
+        if resumen.attrs.get("con_reemplazos") and sin.get(clave) is None:
+            lineas.append(
+                f"No se pudo recalcular {nombre} sin reemplazos: 'Reemplazos' es "
+                f"aproximado (solo lo que mueven en las horas adjudicadas / lo adjudicado)."
+            )
+    for nombre, resumen in ((ruta_actual.name, actual), (ruta_anterior.name, anterior)):
+        if not resumen.attrs.get("con_reemplazos"):
+            lineas.append(
+                f"{nombre} no trae reemplazos (sin columna 'Reemplazado' ni Cuadro N° 2 "
+                f"en Subastas): si la otra sí, la diferencia de los reemplazos sale en "
+                f"'Reemplazos (7_Reasignaciones)'."
+            )
     escribir_reporte(destino, [
         ("Comparacion", lineas, tabla,
          f"{ruta_actual.name} contra {ruta_anterior.name}"),
-        ("Responsables", mes, por_central,
-         "De dónde sale la diferencia del mes (la suma da la diferencia)"),
+        ("Responsables", mes_por_componente(por_central), por_central,
+         "De dónde sale la diferencia del mes, por lado y componente (la suma da la diferencia)"),
         ("Cambios por central", [], cambios,
          "Cada concepto de cada central: anterior, actual y si cambió"),
     ])
     registrar(f"Reporte: {destino}")
     return destino, lineas, tabla
+
+
+def resumen_sin_reemplazos(ruta_planilla, registrar=print):
+    """
+    resumen_por_central de la planilla recalculada (E Costos y RE545) sin
+    los reemplazos: con QUITAR_REEMPLAZADAS y SUMAR_REEMPLAZANTES en False,
+    en una copia en una carpeta temporal (la planilla no se toca). None si
+    no se puede.
+    """
+
+    import shutil
+    import tempfile
+    from unittest import mock
+
+    from . import reasignaciones
+    from .proceso import generar_pagos_bess
+    from .rutas import nombre_salida
+
+    ruta_planilla = Path(ruta_planilla)
+    import re
+
+    hallado = re.search(r"_(\d{4})(?:_|$)", ruta_planilla.stem)
+    if not hallado:
+        registrar(f"  [AVISO] {ruta_planilla.name}: no se encontró el AAMM en el nombre.")
+        return None
+    aamm = hallado.group(1)
+    registrar(f"Recalculando {ruta_planilla.name} sin reemplazos (E Costos y RE545)...")
+    callado = lambda *_: None  # noqa: E731
+    try:
+        with tempfile.TemporaryDirectory() as carpeta, \
+                mock.patch.object(reasignaciones, "QUITAR_REEMPLAZADAS", False), \
+                mock.patch.object(reasignaciones, "SUMAR_REEMPLAZANTES", False):
+            base = Path(carpeta)
+            (base / "BESS").mkdir()
+            copia = base / "BESS" / nombre_salida(aamm)
+            shutil.copy2(ruta_planilla, copia)
+            generar_pagos_bess(base, {"ecostos", "re545"}, registrar=callado, aamm=aamm)
+            return resumen_por_central(copia, callado)
+    except Exception as error:  # noqa: BLE001 - se sigue con el aproximado
+        registrar(f"  [AVISO] no se pudo recalcular sin reemplazos: {error}")
+        return None
 
 
 def _periodo(ruta):
@@ -1222,6 +1355,9 @@ CONCEPTOS_CAMBIO = (
     (C_ADJ_CPF, "Adjudicado CPF", "MW", False),
     (C_ADJ_CSF, "Adjudicado CSF", "MW", False),
     (C_OFERTA_DIAS, "Días con oferta completa", "días", False),
+    (C_H_REEMPLAZADA, "Horas adjudicadas reemplazadas (no se pagan)", "h", False),
+    (C_H_REEMPLAZANTE, "Horas como reemplazante (se pagan)", "h", False),
+    (C_MW_REEMPLAZANTE, "MW como reemplazante", "MW", False),
     # Es lo mismo que "Horas adjudicadas" cuando el nombre de la central
     # cruza bien entre Subastas y Medidores: va solo si no coincide.
     (C_HORAS_ADJ, "Horas con Adj SSCC (no coincide con las adjudicadas)", "h", False),
@@ -1507,7 +1643,58 @@ def escribir_reporte(destino, hojas):
         for nombre in nombres:
             dar_formato_reporte(writer.sheets[nombre])
             formato_cambios(writer.sheets[nombre])
+        if HOJA_RESPONSABLES in writer.sheets:
+            tablas_con_filtro(writer.sheets[HOJA_RESPONSABLES])
     return destino
+
+
+HOJA_RESPONSABLES = "Responsables"
+
+
+def tablas_con_filtro(ws):
+    """
+    Cada cuadro de la hoja como Tabla de Excel: cada encabezado trae su lista
+    desplegable para filtrar (Lado > Componente > Responsable, o una
+    central), y debajo de cada tabla el total de lo que queda a la vista
+    (SUBTOTAL, cambia con el filtro). Pedido del usuario (2026-11-20):
+    "listas desplegables en los responsables, tipo E Costos > Componente 1 >
+    FD, CMg".
+    """
+
+    from openpyxl.styles import Font
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.filters import AutoFilter
+    from openpyxl.worksheet.table import Table, TableColumn
+
+    # Un filtro de hoja y una Tabla no pueden pisarse.
+    ws.auto_filter.ref = None
+    bloques = getattr(ws, "_balance_bloques", [])
+    for numero, (fila_datos, columna, df) in enumerate(bloques, 1):
+        if df is None or not len(df) or len(df.columns) < 2:
+            continue
+        fila_enc = fila_datos - 1
+        ultima_fila = fila_datos + len(df) - 1
+        ultima_col = columna + len(df.columns) - 1
+        nombres = [str(ws.cell(fila_enc, c).value) for c in range(columna, ultima_col + 1)]
+        if len(set(nombres)) != len(nombres) or "None" in nombres:
+            continue
+        ref = f"{get_column_letter(columna)}{fila_enc}:{get_column_letter(ultima_col)}{ultima_fila}"
+        tabla = Table(displayName=f"Responsables_{numero}", ref=ref)
+        # Sin esto la tabla no trae los botones de filtro en el encabezado.
+        tabla.autoFilter = AutoFilter(ref=ref)
+        tabla.tableColumns = [TableColumn(id=i + 1, name=n) for i, n in enumerate(nombres)]
+        ws.add_table(tabla)
+        # La fila de total de lo filtrado, debajo.
+        if "Aporte [CLP]" in nombres:
+            col_aporte = columna + nombres.index("Aporte [CLP]")
+            letra = get_column_letter(col_aporte)
+            ws.cell(ultima_fila + 1, columna, "Total de lo filtrado").font = Font(bold=True)
+            celda = ws.cell(
+                ultima_fila + 1, col_aporte,
+                f"=SUBTOTAL(109,{letra}{fila_datos}:{letra}{ultima_fila})",
+            )
+            celda.font = Font(bold=True)
+            celda.number_format = "#,##0"
 
 
 # ------------------------------------------------------------
