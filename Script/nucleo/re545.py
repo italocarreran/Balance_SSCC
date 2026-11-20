@@ -392,7 +392,7 @@ CLAVES_RESUMEN_RE545 = {
 # Comentarios de la tabla resumen (cuadro 5), por nombre de columna.
 ORIGEN_RESUMEN_RE545 = {
     "Oferta Completa": (
-        "Hoja origen: Ofertas SSCC, Cuadro 2 Resumen ventana oferta "
+        "Hoja origen: Ofertas SSCC, Cuadro 3 Resumen ventana oferta "
         "(Completa), por central + ventana."
     ),
     "EiniT": "El EiniT de la primera fila de la central + ventana (cuadro 1).",
