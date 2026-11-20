@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-Detalle horario de la hoja Ofertas SSCC. Pedido del usuario (2026-11-20):
-"1 y cero no mas, todas las horas del mes de cada central, en la primera
-tabla, para que los coordinados vean el detalle".
+Listado horario de la hoja Ofertas SSCC (Cuadro N° 1). Pedido del usuario
+(2026-11-20): "solo el listado horario por central": Central, Dia, Ventana,
+Hora y Oferta completa, para que los coordinados vean el detalle.
 """
 
 import unittest
 
 import pandas as pd
 
-from Script.nucleo.ofertas_sscc import agregar_horas, columna_hora
+from Script.nucleo.ofertas_sscc import COLUMNAS_POR_HORA, listado_horario
 
 
-class TestDetalleHorario(unittest.TestCase):
+class TestListadoHorario(unittest.TestCase):
 
     def _resumen(self, filas, faltantes):
         df = pd.DataFrame(filas, columns=["Nombre", "Año", "Mes", "Día", "Oferta completa"])
@@ -28,25 +28,26 @@ class TestDetalleHorario(unittest.TestCase):
             [["BAT_X", 2026, 10, 15, 1], ["BAT_X", 2026, 10, 16, 0]],
             [{"Nombre": "BAT_X", "Dia": 16, "Servicio": "CSF(+)_RS", "Horas": [15]}],
         )
-        df = agregar_horas(wxy, resumen, 2026, 10)
-        horas = [columna_hora(h) for h in range(1, 25)]
-        self.assertEqual(list(df.columns), ["Nombre", "Central", "Dia", *horas, "Oferta completa"])
-        self.assertEqual(df.loc[0, horas].sum(), 24)                 # dia 15 completo
-        self.assertEqual(df.loc[1, "H15"], 0)                         # la hora que falta
-        self.assertEqual(df.loc[1, horas].sum(), 23)
-        self.assertEqual(df.loc[2, horas].sum(), 0)                   # no esta en el archivo
+        df = listado_horario(wxy, resumen, 2026, 10)
+        self.assertEqual(list(df.columns), list(COLUMNAS_POR_HORA))
+        self.assertEqual(len(df), 3 * 24)
+        por = df.set_index(["Dia", "Hora"])
+        self.assertEqual(por.loc[(16, 15), "Oferta completa"], 0)
+        self.assertEqual(por.loc[(16, 14), "Oferta completa"], 1)
+        self.assertEqual(df[df["Dia"] == 17]["Oferta completa"].sum(), 0)   # no esta en el archivo
+        # Ventana: la del dia desde el periodo 10, la del dia anterior antes.
+        self.assertEqual(por.loc[(16, 9), "Ventana"], 15)
+        self.assertEqual(por.loc[(16, 10), "Ventana"], 16)
+        self.assertEqual(df["Central"].unique().tolist(), ["SAE-X"])
 
-    def test_el_dia_del_cambio_de_hora_deja_vacia_la_que_no_existe(self):
+    def test_el_dia_del_cambio_de_hora_no_trae_la_hora_que_no_existe(self):
         from Script.nucleo.cambio_hora import horas_del_dia
 
-        # Septiembre 2026: un dia de 23 horas.
         dia = next(d for d in range(1, 31) if len(horas_del_dia(2026, 9, d)) == 23)
-        falta = (set(range(1, 25)) - set(horas_del_dia(2026, 9, dia))).pop()
         wxy = pd.DataFrame({"Nombre": ["BAT_X"], "Central": ["SAE-X"], "Dia": [dia],
                             "Oferta completa": [1]})
-        resumen = self._resumen([["BAT_X", 2026, 9, dia, 1]], [])
-        df = agregar_horas(wxy, resumen, 2026, 9)
-        self.assertTrue(pd.isna(df.loc[0, columna_hora(falta)]))
+        df = listado_horario(wxy, self._resumen([["BAT_X", 2026, 9, dia, 1]], []), 2026, 9)
+        self.assertEqual(len(df), 23)
 
 
 if __name__ == "__main__":

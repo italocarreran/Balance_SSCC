@@ -50,7 +50,8 @@ from .lectura import (
     TITULO_CENTRALES_DICCIONARIO, TITULO_CENTRALES_RESUMEN, titulo_de_cuadro,
 )
 from .ofertas_sscc import (
-    HOJA_OFERTAS_SSCC, TITULO_OFERTAS_POR_DIA, TITULO_RESUMEN_VENTANA,
+    HOJA_OFERTAS_SSCC, TITULO_OFERTAS_POR_DIA, TITULO_OFERTAS_POR_HORA,
+    TITULO_RESUMEN_VENTANA,
 )
 from .parametros import (
     HOJA_ALERTAS, HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545, HOJA_CENTRALES,
@@ -1725,6 +1726,19 @@ def escribir_salida(
         if HOJA_OFERTAS_SSCC in regenerar:
 
             columna = COLUMNA_MARGEN
+
+            # Cuadro N° 1: el listado horario por central (ver
+            # ofertas_sscc.listado_horario). Solo informa.
+            por_hora = df_wxy.attrs.get("por_hora") if df_wxy is not None else None
+            if por_hora is not None and len(por_hora):
+                _, columna = _escribir_tabla_con_titulo(
+                    writer,
+                    HOJA_OFERTAS_SSCC,
+                    por_hora,
+                    TITULO_OFERTAS_POR_HORA,
+                    fila_inicio=1,
+                    columna_inicio=columna,
+                )
 
             if df_wxy is not None:
                 _, columna = _escribir_tabla_con_titulo(

@@ -259,7 +259,7 @@ def construir_resumen_ofertas_sscc(ruta_ofertas, registrar=print):
 
     filas_salida = []
     # Las horas que le faltan a cada servicio incompleto (para el detalle
-    # horario de la hoja, ver agregar_horas).
+    # horario de la hoja, ver listado_horario).
     faltantes = []
 
     for clave_grupo, servicios_grupo in grupos.items():
@@ -991,16 +991,23 @@ def calcular_t(clave, ventana, resumen_ventana_oferta):
 # si alguien cambia uno, las dos puntas se mueven juntas. El nombre
 # de la hoja sale de parametros.py (ORDEN_HOJAS_SALIDA), y se
 # reexporta aca porque medio modulo la busca por este nombre.
-TITULO_OFERTAS_POR_DIA = "Cuadro N° 1 — Ofertas SSCC por dia"
-TITULO_RESUMEN_VENTANA = "Cuadro N° 2 — Resumen ventana oferta"
+# Desde 2026-11-20 el Cuadro N° 1 es el listado horario (lo pidio el
+# usuario primero); los otros dos se corrieron un numero.
+TITULO_OFERTAS_POR_HORA = "Cuadro N° 1 — Ofertas SSCC por hora"
+TITULO_OFERTAS_POR_DIA = "Cuadro N° 2 — Ofertas SSCC por dia"
+TITULO_RESUMEN_VENTANA = "Cuadro N° 3 — Resumen ventana oferta"
 
 # Los de antes (en la fila 1, con el parentesis): un libro viejo se
 # sigue leyendo.
 _TITULOS_ANTERIORES = {
-    TITULO_OFERTAS_POR_DIA:
+    TITULO_OFERTAS_POR_DIA: (
         "Ofertas SSCC por dia (equivalente a Medidores!W:Y)",
-    TITULO_RESUMEN_VENTANA:
+        "Cuadro N° 1 — Ofertas SSCC por dia",
+    ),
+    TITULO_RESUMEN_VENTANA: (
         "Resumen ventana oferta (equivalente a Medidores!AB:AE)",
+        "Cuadro N° 2 — Resumen ventana oferta",
+    ),
 }
 
 
@@ -1048,7 +1055,7 @@ def leer_ofertas_sscc_consolidado(ruta_consolidado, registrar=print, libro=None)
     def _tabla(titulo):
 
         columna = None
-        buscados = (titulo, _TITULOS_ANTERIORES[titulo])
+        buscados = (titulo, *_TITULOS_ANTERIORES[titulo])
 
         for col in range(crudo.shape[1]):
             if _texto_seguro(crudo.iloc[fila, col]) in buscados:
@@ -1116,26 +1123,24 @@ def leer_ofertas_sscc_consolidado(ruta_consolidado, registrar=print, libro=None)
 
 
 # ============================================================
-# DETALLE HORARIO (en el Cuadro N° 1 de la hoja)
+# LISTADO HORARIO (Cuadro N° 1 de la hoja)
 # ============================================================
 
-def columna_hora(periodo):
-    """1 -> 'H01'."""
-
-    return f"H{int(periodo):02d}"
+COLUMNAS_POR_HORA = (COLUMNA_CENTRAL, "Dia", "Ventana", "Hora", "Oferta completa")
 
 
-def agregar_horas(df_wxy, df_resumen_ofertas, anio, mes):
+def listado_horario(df_wxy, df_resumen_ofertas, anio, mes, inicio_ventana=INICIO_VENTANA):
     """
-    df_wxy (Cuadro N° 1: una fila por central y dia) con una columna por
-    hora del dia, H01..H24 (H25 si algun dia la tiene), entre 'Dia' y
-    'Oferta completa': 1 si esa hora tiene ofertados TODOS los servicios _RS,
-    0 si a alguno le falta; vacia si la hora no existe ese dia (cambio de
-    hora). Pedido del usuario (2026-11-20): "1 y cero no mas, todas las
-    horas del mes de cada central, en la primera tabla, para que los
-    coordinados vean el detalle". La oferta completa del dia es 1 solo si
-    todas sus horas son 1; y como cada ventana usa dos dias, un 0 en una
-    hora deja incompletas las dos ventanas que tocan ese dia.
+    Una fila por central, dia y hora del mes: Central, Dia, Ventana, Hora
+    (periodo 1..24) y Oferta completa (1 si esa hora tiene ofertados TODOS
+    los servicios _RS, 0 si a alguno le falta o la central no esta en el
+    archivo ese dia). Pedido del usuario (2026-11-20): "solo el listado
+    horario por central, para que los coordinados vean el detalle".
+
+    La ventana de la hora: la del dia si el periodo es >= INICIO_VENTANA, la
+    del dia anterior si no. Se ve asi que la oferta completa del dia (que
+    pide todas sus horas en 1) afecta a las dos ventanas que usan ese dia.
+    Solo informa: el calculo no lo lee.
     """
 
     faltan = {}
@@ -1146,23 +1151,21 @@ def agregar_horas(df_wxy, df_resumen_ofertas, anio, mes):
         for n, d in zip(df_resumen_ofertas["Nombre"], df_resumen_ofertas["Día"])
         if _es_numero(d)
     }
-    exigidas = {}
+    centrales = (
+        df_wxy[COLUMNA_CENTRAL] if COLUMNA_CENTRAL in df_wxy else df_wxy["Nombre"]
+    )
     filas = []
-    for nombre, dia in zip(df_wxy["Nombre"], df_wxy["Dia"]):
-        clave = (_normalizar_nombre_clave(nombre), int(dia) if pd.notna(dia) else None)
-        horas = exigidas.setdefault(clave[1], _horas_exigidas(anio, mes, clave[1]))
-        if clave not in en_archivo:
-            filas.append({h: 0 for h in horas})
-        else:
-            sin = faltan.get(clave, set())
-            filas.append({h: 0 if h in sin else 1 for h in horas})
-    todas = sorted({h for horas in exigidas.values() for h in horas} | set(range(1, 25)))
-    horario = pd.DataFrame(
-        [[fila.get(h, pd.NA) for h in todas] for fila in filas],
-        columns=[columna_hora(h) for h in todas], index=df_wxy.index, dtype="Int64",
-    )
-    posicion = list(df_wxy.columns).index("Oferta completa")
-    return pd.concat(
-        [df_wxy.iloc[:, :posicion], horario, df_wxy.iloc[:, posicion:]], axis=1
-    )
-
+    for nombre, central, dia in zip(df_wxy["Nombre"], centrales, df_wxy["Dia"]):
+        if pd.isna(dia):
+            continue
+        dia = int(dia)
+        clave = (_normalizar_nombre_clave(nombre), dia)
+        sin = faltan.get(clave, set())
+        esta = clave in en_archivo
+        for hora in sorted(_horas_exigidas(anio, mes, dia)):
+            filas.append((
+                _texto_seguro(central) or _texto_seguro(nombre), dia,
+                dia if hora >= inicio_ventana else dia - 1, hora,
+                1 if esta and hora not in sin else 0,
+            ))
+    return pd.DataFrame(filas, columns=list(COLUMNAS_POR_HORA))

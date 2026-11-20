@@ -7271,3 +7271,21 @@ ventana no se pudo ver acá (sin tkinter).
 **Verificación:** `test_detalle_horario_ofertas.py` reescrito (2). Suite:
 573 OK. Falta verlo con un OfertasSSCC real.
 
+## 2026-11-20 (11) — Ofertas SSCC: listado horario por central (sin matriz)
+
+- El usuario (con un dibujo: SAE | Día | Ventana | Hora | Oferta completa):
+  "lo de las ofertas quedó mal, no es necesaria una matriz, déjame solo el
+  listado horario por central". Fuera las columnas H01..H24 de 2026-11-20 (10).
+- `ofertas_sscc.listado_horario`: una fila por central, día y hora del mes
+  (Central, Dia, Ventana, Hora, Oferta completa = 1 si esa hora tiene todos
+  los servicios _RS). La ventana de la hora es la del día desde el periodo
+  INICIO_VENTANA y la del día anterior antes. La hora que no existe (cambio
+  de hora) no va.
+- Es el Cuadro N° 1 de la hoja; "Ofertas SSCC por dia" pasa a N° 2 y
+  "Resumen ventana oferta" a N° 3 (`TITULO_OFERTAS_POR_HORA`; la lectura
+  acepta también los títulos de antes, así un 11_ ya armado se sigue
+  leyendo). Solo informa: el cálculo no lo lee.
+
+**Verificación:** `test_detalle_horario_ofertas.py` reescrito (2), y una
+hoja escrita y vuelta a leer. Suite: 573 OK. Falta un OfertasSSCC real.
+
