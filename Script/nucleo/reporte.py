@@ -1249,7 +1249,7 @@ def comparar_planillas(ruta_actual, ruta_anterior, registrar=print):
         f"Comparacion_{_periodo(ruta_actual)}_vs_{_periodo(ruta_anterior)}.xlsx"
     )
     cambios = cambios_por_central(actual, anterior, list(tabla[C_CENTRAL]))
-    from .responsables import mes_por_componente, tablas_responsables
+    from .responsables import arbol_mes, arbol_por_central, tablas_responsables
 
     _, por_central, _ = tablas_responsables(
         actual, anterior, list(tabla[C_CENTRAL]),
@@ -1272,8 +1272,8 @@ def comparar_planillas(ruta_actual, ruta_anterior, registrar=print):
     escribir_reporte(destino, [
         ("Comparacion", lineas, tabla,
          f"{ruta_actual.name} contra {ruta_anterior.name}"),
-        ("Responsables", mes_por_componente(por_central), por_central,
-         "De dónde sale la diferencia del mes, por lado y componente (la suma da la diferencia)"),
+        ("Responsables", arbol_mes(por_central), arbol_por_central(por_central),
+         "De dónde sale la diferencia del mes: lado > componente > responsable (la suma da la diferencia)"),
         ("Cambios por central", [], cambios,
          "Cada concepto de cada central: anterior, actual y si cambió"),
     ])
@@ -1643,58 +1643,46 @@ def escribir_reporte(destino, hojas):
         for nombre in nombres:
             dar_formato_reporte(writer.sheets[nombre])
             formato_cambios(writer.sheets[nombre])
-        if HOJA_RESPONSABLES in writer.sheets:
-            tablas_con_filtro(writer.sheets[HOJA_RESPONSABLES])
+        for nombre in nombres:
+            formato_arbol(writer.sheets[nombre])
     return destino
 
 
-HOJA_RESPONSABLES = "Responsables"
-
-
-def tablas_con_filtro(ws):
+def formato_arbol(ws):
     """
-    Cada cuadro de la hoja como Tabla de Excel: cada encabezado trae su lista
-    desplegable para filtrar (Lado > Componente > Responsable, o una
-    central), y debajo de cada tabla el total de lo que queda a la vista
-    (SUBTOTAL, cambia con el filtro). Pedido del usuario (2026-11-20):
-    "listas desplegables en los responsables, tipo E Costos > Componente 1 >
-    FD, CMg".
+    Las tablas en arbol (responsables.arbol_mes / arbol_por_central, que
+    traen el nivel de cada fila en df.attrs["niveles"]): cada nivel mas
+    adentro, los de arriba en negrita y con fondo, el total al final. Pedido
+    del usuario (2026-11-20): "que no sea desplegable, que sea jerarquico".
     """
 
-    from openpyxl.styles import Font
-    from openpyxl.utils import get_column_letter
-    from openpyxl.worksheet.filters import AutoFilter
-    from openpyxl.worksheet.table import Table, TableColumn
+    from openpyxl.styles import Alignment, Font, PatternFill
 
-    # Un filtro de hoja y una Tabla no pueden pisarse.
-    ws.auto_filter.ref = None
-    bloques = getattr(ws, "_balance_bloques", [])
-    for numero, (fila_datos, columna, df) in enumerate(bloques, 1):
-        if df is None or not len(df) or len(df.columns) < 2:
+    fondos = {
+        -1: "D9D9D9", 0: "BDD7EE", 1: "DDEBF7", 2: "F2F2F2",
+    }
+    for fila_datos, columna, df in getattr(ws, "_balance_bloques", []):
+        niveles = df.attrs.get("niveles") if df is not None else None
+        if not niveles:
             continue
-        fila_enc = fila_datos - 1
-        ultima_fila = fila_datos + len(df) - 1
-        ultima_col = columna + len(df.columns) - 1
-        nombres = [str(ws.cell(fila_enc, c).value) for c in range(columna, ultima_col + 1)]
-        if len(set(nombres)) != len(nombres) or "None" in nombres:
-            continue
-        ref = f"{get_column_letter(columna)}{fila_enc}:{get_column_letter(ultima_col)}{ultima_fila}"
-        tabla = Table(displayName=f"Responsables_{numero}", ref=ref)
-        # Sin esto la tabla no trae los botones de filtro en el encabezado.
-        tabla.autoFilter = AutoFilter(ref=ref)
-        tabla.tableColumns = [TableColumn(id=i + 1, name=n) for i, n in enumerate(nombres)]
-        ws.add_table(tabla)
-        # La fila de total de lo filtrado, debajo.
-        if "Aporte [CLP]" in nombres:
-            col_aporte = columna + nombres.index("Aporte [CLP]")
-            letra = get_column_letter(col_aporte)
-            ws.cell(ultima_fila + 1, columna, "Total de lo filtrado").font = Font(bold=True)
-            celda = ws.cell(
-                ultima_fila + 1, col_aporte,
-                f"=SUBTOTAL(109,{letra}{fila_datos}:{letra}{ultima_fila})",
+        hondo = max(niveles)
+        letra = ws.cell(fila_datos, columna).column_letter
+        ws.column_dimensions[letra].width = 50
+        for i, nivel in enumerate(niveles):
+            fila = fila_datos + i
+            relleno = fondos.get(nivel) if nivel < hondo else None
+            for c in range(columna, columna + len(df.columns)):
+                celda = ws.cell(fila, c)
+                if nivel < hondo:
+                    celda.font = Font(bold=True, color=celda.font.color)
+                if relleno:
+                    celda.fill = PatternFill(fill_type="solid", start_color=relleno,
+                                             end_color=relleno)
+            etiqueta = ws.cell(fila, columna)
+            etiqueta.alignment = Alignment(
+                indent=max(0, nivel - (min(niveles) if min(niveles) >= 0 else 0)) * 2,
+                vertical="top", wrap_text=True,
             )
-            celda.font = Font(bold=True)
-            celda.number_format = "#,##0"
 
 
 # ------------------------------------------------------------

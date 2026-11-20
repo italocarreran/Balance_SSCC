@@ -244,26 +244,35 @@ class TestComponentesYReemplazos(unittest.TestCase):
         self.assertAlmostEqual(total["Total (= diferencia del mes)"], 30.0)
         fila = por_central[por_central["Responsable"] == rs.REEMPLAZOS].iloc[0]
         self.assertEqual((fila["Lado"], fila["Componente"]), ("E Costos", rs.AMBAS))
-        detalle = rs.mes_por_componente(por_central)
-        self.assertEqual(list(detalle.columns[:3]), ["Lado", "Componente", "Responsable"])
-        self.assertAlmostEqual(detalle["Aporte [CLP]"].sum(), 30.0)
+        arbol = rs.arbol_mes(por_central)
+        self.assertEqual(arbol[rs.COLUMNA_ARBOL_MES].iloc[-1], rs.TOTAL_MES)
+        self.assertAlmostEqual(arbol["Aporte [CLP]"].iloc[-1], 30.0)
+        self.assertIn(rs.REEMPLAZOS, list(arbol[rs.COLUMNA_ARBOL_MES]))
 
-    def test_la_hoja_responsables_trae_tablas_con_filtro(self):
+    def test_la_hoja_responsables_es_un_arbol(self):
+        """2026-11-20: "que no sea desplegable, que sea jerarquico"."""
         import openpyxl
 
         anterior = pd.DataFrame([fila_ec([(100.0, 120.0)], nombre="A")])
         actual = pd.DataFrame([fila_ec([(100.0, 60.0)], nombre="A")])
         _, por_central, _ = rs.tablas_responsables(actual, anterior)
+        mes = rs.arbol_mes(por_central)
+        self.assertEqual(list(mes[rs.COLUMNA_ARBOL_MES]),
+                         ["E Costos", rs.C2, rs.CMG, rs.TOTAL_MES])
+        self.assertEqual(mes.attrs["niveles"], [0, 1, 2, -1])
+        for valor in mes["Aporte [CLP]"]:
+            self.assertAlmostEqual(valor, 40.0)
+        central = rs.arbol_por_central(por_central)
+        self.assertEqual(list(central[rs.COLUMNA_ARBOL_CENTRAL]),
+                         ["A", "E Costos", rs.C2, rs.CMG])
+        self.assertEqual(central.attrs["niveles"], [0, 1, 2, 3])
         with tempfile.TemporaryDirectory() as carpeta:
             destino = Path(carpeta) / "c.xlsx"
-            r.escribir_reporte(destino, [
-                ("Responsables", rs.mes_por_componente(por_central), por_central, "Mes"),
-            ])
+            r.escribir_reporte(destino, [("Responsables", mes, central, "Mes")])
             ws = openpyxl.load_workbook(destino)["Responsables"]
-            tablas = list(ws.tables.values())
-            self.assertEqual(len(tablas), 2)
-            self.assertTrue(all(t.autoFilter is not None for t in tablas))
-            self.assertIsNone(ws.auto_filter.ref)
-            formulas = [c.value for fila in ws.iter_rows() for c in fila
-                        if isinstance(c.value, str) and c.value.startswith("=SUBTOTAL")]
-            self.assertEqual(len(formulas), 2)
+            self.assertEqual(len(ws.tables), 0)
+            self.assertEqual(ws["B4"].value, "E Costos")
+            self.assertTrue(ws["B4"].font.bold)
+            self.assertEqual(ws["B5"].alignment.indent, 2)
+            self.assertEqual(ws["B6"].alignment.indent, 4)
+            self.assertFalse(ws["B6"].font.bold)

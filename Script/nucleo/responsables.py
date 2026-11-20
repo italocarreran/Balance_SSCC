@@ -1020,31 +1020,88 @@ def tablas_responsables(actual, anterior, orden=None, actual_sin=None, anterior_
     return mes, pd.DataFrame(filas, columns=columnas), textos
 
 
-def mes_por_componente(por_central):
+# Las hojas en arbol (pedido del usuario 2026-11-20: "que no sea desplegable,
+# que sea jerarquico"): cada fila con su nivel (df.attrs["niveles"]), los
+# niveles de arriba con el subtotal de lo que tienen abajo.
+COLUMNA_ARBOL_MES = "Lado / componente / responsable"
+COLUMNA_ARBOL_CENTRAL = "Central / lado / componente / responsable"
+TOTAL_MES = "Total (= diferencia del mes)"
+
+
+def _orden(valor, lista):
+    return lista.index(valor) if valor in lista else len(lista)
+
+
+def _ramas(clave, delta, texto=False):
     """
-    El mes por lado, componente y responsable (la suma de la tabla por
-    central), en el orden de los lados y componentes. Para la hoja
-    Responsables, con listas desplegables.
+    El arbol Lado > Componente > Responsable de 'clave' (filas de
+    por_central de una central o del mes): [(nombre, aporte, peso sobre
+    delta, que se movio, nivel 1..3)].
     """
 
-    columnas = ["Lado", "Componente", "Responsable", "Aporte [CLP]", "Peso en el cambio [%]"]
+    filas = []
+
+    def peso(aporte):
+        return aporte / abs(delta) * 100 if delta else math.nan
+
+    for lado in sorted(clave["Lado"].unique(), key=lambda v: _orden(v, LADOS)):
+        del_lado = clave[clave["Lado"] == lado]
+        filas.append((lado, del_lado["Aporte [CLP]"].sum(), "", 1))
+        for comp in sorted(del_lado["Componente"].unique(), key=lambda v: _orden(v, COMPONENTES)):
+            del_comp = del_lado[del_lado["Componente"] == comp]
+            filas.append((comp, del_comp["Aporte [CLP]"].sum(), "", 2))
+            juntos = del_comp.groupby("Responsable", sort=False).agg(
+                aporte=("Aporte [CLP]", "sum"),
+                texto=("Qué se movió", lambda t: "; ".join(x for x in dict.fromkeys(t) if x)),
+            )
+            for resp, fila in juntos.sort_values("aporte", key=abs, ascending=False).iterrows():
+                filas.append((resp, fila["aporte"], fila["texto"] if texto else "", 3))
+    return [(n, a, peso(a), t, nivel) for n, a, t, nivel in filas]
+
+
+def _a_tabla(filas, columnas, con_texto):
+    datos = [
+        dict(zip(columnas, (n, a, p, t) if con_texto else (n, a, p)))
+        for n, a, p, t, _ in filas
+    ]
+    tabla = pd.DataFrame(datos, columns=columnas)
+    tabla.attrs["niveles"] = [nivel for *_, nivel in filas]
+    return tabla
+
+
+def arbol_mes(por_central):
+    """
+    El mes en arbol: Lado > Componente > Responsable, cada nivel con el
+    subtotal de abajo, y al final el total (= diferencia del mes).
+    """
+
+    columnas = [COLUMNA_ARBOL_MES, "Aporte [CLP]", "Peso en el cambio [%]"]
     if por_central is None or not len(por_central):
-        return pd.DataFrame(columns=columnas)
-    tabla = (
-        por_central.groupby(["Lado", "Componente", "Responsable"], sort=False)["Aporte [CLP]"]
-        .sum().reset_index()
-    )
-    delta = tabla["Aporte [CLP]"].sum()
-    tabla["Peso en el cambio [%]"] = (
-        tabla["Aporte [CLP]"] / abs(delta) * 100 if delta else math.nan
-    )
-    tabla["_l"] = tabla["Lado"].map(lambda v: LADOS.index(v) if v in LADOS else 9)
-    tabla["_c"] = tabla["Componente"].map(
-        lambda v: COMPONENTES.index(v) if v in COMPONENTES else 9
-    )
-    tabla["_a"] = -tabla["Aporte [CLP]"].abs()
-    tabla = tabla.sort_values(["_l", "_c", "_a"], kind="stable")[columnas]
-    return tabla[tabla["Aporte [CLP]"].abs() >= 0.5].reset_index(drop=True)
+        return _a_tabla([], columnas, False)
+    delta = por_central["Aporte [CLP]"].sum()
+    filas = [(n, a, p, t, nivel - 1) for n, a, p, t, nivel in
+             _ramas(por_central, delta)]
+    filas.append((TOTAL_MES, delta, math.copysign(100.0, delta) if delta else math.nan, "", -1))
+    return _a_tabla(filas, columnas, False)
+
+
+def arbol_por_central(por_central):
+    """
+    Cada central en arbol: Central (su cambio) > Lado > Componente >
+    Responsable (con lo que se movio), cada nivel con su subtotal y el peso
+    sobre el cambio de la central.
+    """
+
+    columnas = [COLUMNA_ARBOL_CENTRAL, "Aporte [CLP]", "Peso en el cambio [%]", "Qué se movió"]
+    if por_central is None or not len(por_central):
+        return _a_tabla([], columnas, True)
+    filas = []
+    for central in dict.fromkeys(por_central["Central"]):
+        de_central = por_central[por_central["Central"] == central]
+        delta = de_central["Aporte [CLP]"].sum()
+        filas.append((central, delta, math.copysign(100.0, delta) if delta else math.nan, "", 0))
+        filas.extend(_ramas(de_central, delta, texto=True))
+    return _a_tabla(filas, columnas, True)
 
 
 # Un responsable que explica menos que esto del cambio de la central (y
