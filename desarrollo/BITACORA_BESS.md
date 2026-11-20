@@ -7256,23 +7256,3 @@ ventana no se pudo ver acá (sin tkinter).
 
 **Verificación:** `test_detalle_horario_ofertas.py` (2). Suite: 573 OK.
 
-## 2026-11-20 — El nombre de la empresa sale literal de la prorrata
-
-- Pedido del usuario: "como se hace el tema de la prorrata para sacar el
-  nombre de las empresas, debe salir literal el mismo nombre que viene en la
-  prorrata".
-- `prorrata_retiros.leer_prorrata_retiros`: el Suministrador ya no pasa por
-  `.str.strip()`; se guarda tal cual (`_nombre_literal`: celda vacía → '',
-  un entero leído como 123.0 → '123'). Una celda solo con espacios sigue
-  contando como sin suministrador.
-- `compensacion.construir_resumen`: el cruce sigue por nombre normalizado,
-  pero el NOMBRE visible es el de la prorrata cuando la empresa paga; si solo
-  recibe, el Propietario de 'Resumen BESS' (antes era al revés).
-- Ojo: si el Propietario de Centrales y el Suministrador de la prorrata no
-  normalizan igual (p. ej. "EGP_CHILE" vs. "Enel Green Power Chile S.A."),
-  siguen saliendo como dos filas en el Resumen: eso no cambió.
-
-**Verificación:** 2 pruebas nuevas en `test_prorrata_retiros.py`;
-`test_compensacion_central` espera el nombre de la prorrata. Suite completa
-575 OK (sin tkinter).
-

@@ -135,8 +135,7 @@ class TestResumen(unittest.TestCase):
         resumen = nucleo.construir_resumen(compensacion, pagos)
 
         self.assertEqual(len(resumen), 2)  # no se parte Colbun en dos filas
-        # Se muestra el nombre literal de la prorrata (2026-11-20).
-        colbun = resumen.set_index("NOMBRE").loc["colbun  s.a."]
+        colbun = resumen.set_index("NOMBRE").loc["COLBUN S.A."]
         self.assertAlmostEqual(colbun["RECIBE"], 150.0)
         self.assertAlmostEqual(colbun["PAGA"], 200.0)
         self.assertAlmostEqual(colbun["NETO"], -50.0)
