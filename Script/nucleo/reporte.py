@@ -1273,7 +1273,7 @@ def comparar_planillas(ruta_actual, ruta_anterior, registrar=print):
         ("Comparacion", lineas, tabla,
          f"{ruta_actual.name} contra {ruta_anterior.name}"),
         ("Responsables", arbol_mes(por_central), arbol_por_central(por_central),
-         "De dónde sale la diferencia del mes: lado > componente > responsable (la suma da la diferencia)"),
+         "De dónde sale la diferencia del mes: lado > componente > responsable (la suma da la diferencia; el % es sobre todo lo que se movió, sin signo)"),
         ("Cambios por central", [], cambios,
          "Cada concepto de cada central: anterior, actual y si cambió"),
     ])
