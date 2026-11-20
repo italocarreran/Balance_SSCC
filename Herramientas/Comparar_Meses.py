@@ -187,6 +187,13 @@ def main():
         font=("Segoe UI", 9, "bold"),
     )
     boton_comparar.pack(side="left")
+    # El lento (pedido del usuario 2026-11-20): por que cambio, por causa,
+    # recalculando (nucleo/puente.py). Aparte del rapido.
+    boton_causas = tk.Button(
+        abajo, text="Explicar por causas (lento)", width=24,
+        font=("Segoe UI", 9),
+    )
+    boton_causas.pack(side="left", padx=(8, 0))
     boton_abrir = tk.Button(abajo, text="Abrir reporte", width=14, state="disabled")
     boton_abrir.pack(side="left", padx=8)
     tk.Label(abajo, textvariable=var_info, anchor="w", fg="#444444").pack(
@@ -205,18 +212,66 @@ def main():
         caja.insert("end", texto + "\n")
         caja.see("end")
 
-    def comparar():
+    def elegidas():
         actual, anterior = var_actual.get().strip(), var_anterior.get().strip()
         if not actual or not anterior:
             var_info.set("Faltan las dos planillas.")
-            return
+            return None
         if Path(actual).resolve() == Path(anterior).resolve():
             var_info.set("Elegiste la misma planilla dos veces.")
-            return
+            return None
         guardar_recordadas(actual, anterior)
         caja.delete("1.0", "end")
-        for boton in (*botones, boton_comparar):
+        for boton in (*botones, boton_comparar, boton_causas):
             boton.config(state="disabled")
+        return actual, anterior
+
+    def explicar():
+        par = elegidas()
+        if par is None:
+            return
+        actual, anterior = par
+        var_info.set("Explicando por causas (recalcula varias veces: puede tardar varios minutos)...")
+
+        def registrar(texto):
+            root.after(0, lambda: escribir(texto))
+
+        def trabajo():
+            from Script.nucleo import puente
+
+            try:
+                destino, lineas = puente.explicar_planillas(
+                    actual, anterior, registrar=registrar
+                )
+                error = None
+            except Exception as exc:  # noqa: BLE001 - se muestra al usuario
+                destino = lineas = None
+                error = exc
+            root.after(0, lambda: terminado_causas(destino, lineas, error))
+
+        threading.Thread(target=trabajo, daemon=True).start()
+
+    def terminado_causas(destino, lineas, error):
+        for boton in (*botones, boton_comparar, boton_causas):
+            boton.config(state="normal")
+        if error is not None:
+            var_info.set("No se pudo explicar.")
+            mostrar_error("No se pudo explicar por causas", str(error))
+            return
+        escribir("")
+        for linea in lineas:
+            escribir(linea)
+        escribir("")
+        escribir(f"Reporte guardado en: {destino}")
+        estado["reporte"] = destino
+        boton_abrir.config(state="normal")
+        var_info.set(f"Listo: {destino.name}")
+
+    def comparar():
+        par = elegidas()
+        if par is None:
+            return
+        actual, anterior = par
         var_info.set("Comparando...")
 
         def trabajo():
@@ -236,7 +291,7 @@ def main():
         threading.Thread(target=trabajo, daemon=True).start()
 
     def terminado(destino, lineas, tabla, avisos, error):
-        for boton in (*botones, boton_comparar):
+        for boton in (*botones, boton_comparar, boton_causas):
             boton.config(state="normal")
         if error is not None:
             var_info.set("No se pudo comparar.")
@@ -277,6 +332,7 @@ def main():
             mostrar_error("No se pudo abrir el reporte", str(exc))
 
     boton_comparar.config(command=comparar)
+    boton_causas.config(command=explicar)
     boton_abrir.config(command=abrir)
     root.mainloop()
 

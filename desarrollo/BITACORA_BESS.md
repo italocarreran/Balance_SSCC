@@ -7205,3 +7205,31 @@ errores de siempre por falta de tkinter.
 
 **Verificación:** prueba nueva en `test_responsables.py`. Suite: 569 OK.
 
+## 2026-11-20 (8) — Comparador lento: "Explicar por causas"
+
+- El usuario: la idea es responder por qué cambió entre el pre y el def, "como
+  el precio de una cuerda: la bencina 200 más cara, el hilo 100 más caro, la
+  luz 100 más barata [...] en total 1000". La hoja Responsables descompone
+  fórmulas y mete ruido. Decisión: dejar el comparador rápido como está y
+  agregar uno lento, aparte.
+- Nuevo `Script/nucleo/puente.py` (`explicar_planillas`): copia la anterior a
+  una carpeta temporal, la recalcula con el programa de hoy ("Cambios en el
+  cálculo"), le pasa de a una las hojas de la actual (Medidores, Ofertas SSCC,
+  CMg, FD+FMA, Subastas, Centrales; `xlsx_rapido.pegar_hojas`) recalculando
+  E Costos y RE545 cada vez, y mide los reemplazos aparte (los pasos van sin
+  reemplazos y al final se encienden). Si la actual guardada no da lo del
+  último paso, la diferencia va como "se guardó con otra versión". La suma
+  da exacto la diferencia de cada central. Se salta lo que no cambia (hojas
+  byte a byte iguales, planilla sin reemplazos): aporta $0 sin recalcular.
+- Reporte aparte: `Log/Causas_<actual>_vs_<anterior>.xlsx`, hojas "Por causa"
+  (el mes por causa y, por central, "SAE-X · recibe A → B (±d)" con sus
+  causas) y "Matriz" (central × causa).
+- `Herramientas/Comparar_Meses.py`: botón "Explicar por causas (lento)" al
+  lado de "Comparar".
+- Octubre (con vs sin reemplazos): todo a "Reemplazos", −$3,8 MM; 3
+  recálculos, 234 s (sin saltar pasos fueron 9 y 591 s).
+- También va el cambio del "Reparto" de 2026-11-20 (7) en el rápido.
+
+**Verificación:** `test_puente.py` (2). Suite: 571 OK (56 salteadas). La
+ventana no se pudo ver acá (sin tkinter).
+
