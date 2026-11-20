@@ -50,7 +50,8 @@ from .lectura import (
     TITULO_CENTRALES_DICCIONARIO, TITULO_CENTRALES_RESUMEN, titulo_de_cuadro,
 )
 from .ofertas_sscc import (
-    HOJA_OFERTAS_SSCC, TITULO_OFERTAS_POR_DIA, TITULO_RESUMEN_VENTANA,
+    HOJA_OFERTAS_SSCC, TITULO_DETALLE_HORARIO, TITULO_OFERTAS_POR_DIA,
+    TITULO_RESUMEN_VENTANA,
 )
 from .parametros import (
     HOJA_ALERTAS, HOJA_CALCULO_ECOSTOS, HOJA_CALCULO_RE545, HOJA_CENTRALES,
@@ -1737,11 +1738,26 @@ def escribir_salida(
                 )
 
             if df_resumen_ventana is not None:
-                _escribir_tabla_con_titulo(
+                _, columna = _escribir_tabla_con_titulo(
                     writer,
                     HOJA_OFERTAS_SSCC,
                     df_resumen_ventana,
                     TITULO_RESUMEN_VENTANA,
+                    fila_inicio=1,
+                    columna_inicio=columna,
+                )
+
+            # Cuadro N° 3: el detalle horario en arbol (ver
+            # ofertas_sscc.construir_detalle_horario). Solo informa.
+            detalle = (
+                df_wxy.attrs.get("detalle_horario") if df_wxy is not None else None
+            )
+            if detalle is not None and len(detalle):
+                _escribir_tabla_con_titulo(
+                    writer,
+                    HOJA_OFERTAS_SSCC,
+                    detalle,
+                    TITULO_DETALLE_HORARIO,
                     fila_inicio=1,
                     columna_inicio=columna,
                 )

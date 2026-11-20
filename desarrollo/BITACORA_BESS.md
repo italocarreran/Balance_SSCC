@@ -7233,3 +7233,26 @@ errores de siempre por falta de tkinter.
 **Verificación:** `test_puente.py` (2). Suite: 571 OK (56 salteadas). La
 ventana no se pudo ver acá (sin tkinter).
 
+## 2026-11-20 (9) — Ofertas SSCC: detalle horario jerárquico (Cuadro N° 3)
+
+- Pedido del usuario: "agregar en la hoja de ofertas SSCC un detalle horario
+  de las ofertas, de forma jerárquica y mostrando cómo un cero en una hora
+  puede tocar dos ventanas, por la condición ventana ^ día".
+- La regla de siempre: la oferta completa es por DÍA (todos los servicios
+  _RS en todas las horas) y la ventana T usa el día T desde el periodo
+  INICIO_VENTANA (09:00) y el día T+1 hasta las 09:00. Un día incompleto,
+  aunque sea por una hora, deja incompletas las ventanas T−1 y T.
+- `construir_resumen_ofertas_sscc` guarda en `attrs["faltantes"]` las horas
+  que le faltan a cada servicio incompleto (por nombre y día);
+  `ofertas_sscc.construir_detalle_horario` arma el árbol por columnas
+  Central > Ventana > Día > Horas (periodo 1–24): la ventana completa en una
+  fila; la incompleta con sus dos días; el día sin oferta completa dice qué
+  ventanas deja incompletas, y debajo cada servicio con las horas que faltan
+  (en rangos) y de qué ventana son esas horas. Va en `df_wxy.attrs` y lo
+  escribe `escribir_salida` como Cuadro N° 3 a la derecha (solo informa, no
+  se lee para el cálculo).
+- Falta: probar con un OfertasSSCC real (regenerar "Medidores + Ofertas
+  SSCC" en Windows).
+
+**Verificación:** `test_detalle_horario_ofertas.py` (2). Suite: 573 OK.
+
