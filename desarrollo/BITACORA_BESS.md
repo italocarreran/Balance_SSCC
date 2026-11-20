@@ -7104,3 +7104,20 @@ errores de siempre por falta de tkinter.
 **Verificación:** `test_responsables.py` (+5) y `test_reporte.py`. Suite:
 565 OK (56 salteadas sin pantalla).
 
+## 2026-11-20 (2) — Hoja Responsables en árbol (sin listas desplegables)
+
+- El usuario: "da igual que no sea desplegable, que sea jerárquico, porque
+  desplegable es difícil en Excel". Fuera las Tablas con filtro y el "Total
+  de lo filtrado".
+- `responsables.arbol_mes`: Lado > Componente > Responsable, cada nivel con
+  el subtotal de lo de abajo y al final el total (= diferencia del mes).
+  `arbol_por_central`: Central (su cambio) > Lado > Componente > Responsable
+  (con "Qué se movió"), peso sobre el cambio de la central. El nivel de cada
+  fila va en `df.attrs["niveles"]`; `reporte.formato_arbol` indenta, pone en
+  negrita y con fondo los niveles de arriba.
+- `tablas_responsables` sigue igual (lo usan los textos de la hoja
+  Comparacion).
+
+**Verificación:** `test_responsables.py` (árbol y formato) y
+`test_reporte.py`. Suite: 565 OK (56 salteadas sin pantalla).
+

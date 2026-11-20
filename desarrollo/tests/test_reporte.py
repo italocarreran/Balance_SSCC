@@ -346,12 +346,10 @@ class TestArchivos(unittest.TestCase):
                 libro.sheetnames, ["Comparacion", "Responsables", "Cambios por central"]
             )
             responsables = libro["Responsables"]
-            # El mes por lado y componente, como tabla con filtro (2026-11-20).
-            self.assertEqual(
-                [responsables[c].value for c in ("B3", "C3", "D3")],
-                ["Lado", "Componente", "Responsable"],
-            )
-            self.assertEqual(len(responsables.tables), 2)
+            # El mes en arbol: lado > componente > responsable (2026-11-20).
+            from Script.nucleo import responsables as rs
+
+            self.assertEqual(responsables["B3"].value, rs.COLUMNA_ARBOL_MES)
             nombres = [c.value for c in libro["Comparacion"][3] if c.value]
             self.assertIn("Principal responsable", nombres)
             self.assertIn("Desglose en $", nombres)
