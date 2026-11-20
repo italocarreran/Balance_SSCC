@@ -7179,3 +7179,13 @@ errores de siempre por falta de tkinter.
 
 **Verificación:** prueba nueva en `test_responsables.py`. Suite: 568 OK.
 
+## 2026-11-20 (6) — "Resumen por central" más simple
+
+- El usuario: "el resumen más resumen, más simple: totales y diferencia
+  general, y totales y diferencia por E Costos y RE545". La hoja queda con
+  Central y, para Total, E Costos y RE545: anterior, actual y diferencia; al
+  final "Total del mes". Fuera C1/C2, reemplazos y "lo que más movió" (eso
+  sigue en Responsables y Cambios por central).
+
+**Verificación:** `test_reporte.py` (encabezados exactos). Suite: 568 OK.
+

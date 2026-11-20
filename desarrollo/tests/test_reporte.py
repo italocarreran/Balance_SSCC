@@ -348,10 +348,14 @@ class TestArchivos(unittest.TestCase):
             )
             resumen = libro["Resumen por central"]
             encabezados = [c.value for c in resumen[3] if c.value]
-            self.assertIn("Cambio C1 RE545 [CLP]", encabezados)
-            self.assertIn("De eso, reemplazos [CLP]", encabezados)
+            self.assertEqual(encabezados, [
+                "Central",
+                "Total anterior [CLP]", "Total actual [CLP]", "Diferencia Total [CLP]",
+                "E Costos anterior [CLP]", "E Costos actual [CLP]", "Diferencia E Costos [CLP]",
+                "RE545 anterior [CLP]", "RE545 actual [CLP]", "Diferencia RE545 [CLP]",
+            ])
             filas = [[c.value for c in f] for f in resumen.iter_rows(min_row=4)]
-            self.assertEqual([v for v in filas[-1] if v][0], "Total")
+            self.assertEqual([v for v in filas[-1] if v][0], "Total del mes")
             responsables = libro["Responsables"]
             # El mes en arbol: lado > componente > responsable (2026-11-20).
             from Script.nucleo import responsables as rs
