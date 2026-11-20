@@ -86,11 +86,15 @@ X_RE_I = "x:re_ingreso"
 # para aplicar el max(0, C1 - C2) grupo por grupo.
 X_EC_GRUPOS = "x:ec_grupos"    # [(C1d, C1c, C2d, C2c), ...]
 X_RE_GRUPOS = "x:re_grupos"    # [(C1, C2, con reserva), ...]
+# Por ciclo / ventana: {grupo: (C1 - C2, monto)}, para explicar el reparto
+# (cuanto del cambio de C1 - C2 cayo en ciclos/ventanas que no pagan).
+X_EC_MARGEN = "x:ec_margen"
+X_RE_MARGEN = "x:re_margen"
 
 AGREGADOS = (
     *X_EC_E_TOT, *X_EC_E, *X_EC_L, *X_EC_Q, *X_EC_C1, *X_EC_C2, X_EC_I,
     *X_EC_QP, X_RE_A, X_RE_R0, X_RE_R, X_RE_RFMA, X_RE_EA, X_RE_EB, X_RE_C1, X_RE_C2, X_RE_I,
-    X_EC_GRUPOS, X_RE_GRUPOS,
+    X_EC_GRUPOS, X_RE_GRUPOS, X_EC_MARGEN, X_RE_MARGEN,
 )
 
 # --- Los responsables, como se muestran (en este orden si empatan).
@@ -256,6 +260,12 @@ def _grupos(ecostos, re545):
                 ecostos, "Ciclo de Carga del mes",
                 {k: v.fillna(0.0) for k, v in partes.items()}, ("c1d", "c1c", "c2d", "c2c"),
             )
+            monto = _col(ecostos, "Monto a compensar")
+            if monto is not None:
+                margen = (partes["c1d"].fillna(0.0) + partes["c1c"].fillna(0.0)
+                          - partes["c2d"].fillna(0.0) - partes["c2c"].fillna(0.0))
+                datos[X_EC_MARGEN] = _margen_por_grupo(
+                    ecostos, "Ciclo de Carga del mes", margen, monto.fillna(0.0))
     if re545 is not None and "Configuracion" in re545 and "Ventana de valorizacion" in re545:
         c1, c2, au = _col(re545, "Total C1"), _col(re545, "Total C2"), _col(re545, "Reserva con FD y FMA")
         if c1 is not None and c2 is not None and au is not None:
@@ -264,12 +274,45 @@ def _grupos(ecostos, re545):
                 {"c1": c1.fillna(0.0), "c2": c2.fillna(0.0), "au": au.fillna(0.0)},
                 ("c1", "c2", "au"),
             )
+            monto = _col(re545, "Monto a compensar")
+            if monto is not None:
+                datos[X_RE_MARGEN] = _margen_por_grupo(
+                    re545, "Ventana de valorizacion",
+                    c1.fillna(0.0) - c2.fillna(0.0), monto.fillna(0.0))
             # La ventana paga solo si tiene reserva (SUMIFS(AU) > 0).
             datos[X_RE_GRUPOS] = {
                 c: [(a, b, r > 0) for a, b, r in grupos]
                 for c, grupos in datos[X_RE_GRUPOS].items()
             }
     return datos
+
+
+def _margen_por_grupo(df, columna_grupo, margen, monto):
+    """{central: {grupo: (C1 - C2, monto)}}."""
+
+    resultado = {}
+    for (c, g), (m, p) in _por_grupo_con_clave(
+        df, columna_grupo, {"m": margen, "p": monto}, ("m", "p")
+    ).items():
+        resultado.setdefault(c, {})[g] = (m, p)
+    return resultado
+
+
+def _por_grupo_con_clave(df, columna_grupo, partes, orden):
+    central = df["Configuracion"]
+    if isinstance(central, pd.DataFrame):
+        central = central.iloc[:, 0]
+    grupo = df[columna_grupo]
+    if isinstance(grupo, pd.DataFrame):
+        grupo = grupo.iloc[:, 0]
+    tabla = pd.DataFrame({
+        "c": central.reset_index(drop=True).map(normalizar),
+        "g": grupo.reset_index(drop=True),
+        **{k: v.reset_index(drop=True) for k, v in partes.items()},
+    })
+    tabla = tabla[(tabla["c"] != "") & tabla["g"].notna()]
+    sumas = tabla.groupby(["c", "g"])[list(orden)].sum()
+    return {clave: tuple(float(fila[k]) for k in orden) for clave, fila in sumas.iterrows()}
 
 
 def _por_grupo(df, columna_grupo, partes, orden):
@@ -624,6 +667,52 @@ def _texto_reemplazos(lado, actual, anterior):
     return "; ".join(partes)
 
 
+def _texto_reparto(lado, actual, anterior):
+    """
+    Cuanto del cambio de C1 - C2 cayo en ciclos/ventanas que pagan y cuanto
+    en los que no (monto 0), que no mueve lo que recibe. ANDES3 oct: C1 y C2
+    cambian, C1 - C2 sube $0,24 MM y lo que recibe queda igual porque todo
+    eso fue en ventanas que no pagan.
+    """
+
+    from . import reporte as r
+
+    clave = X_EC_MARGEN if lado == "E Costos" else X_RE_MARGEN
+    a, b = actual.get(clave), anterior.get(clave)
+    if not isinstance(a, dict) or not isinstance(b, dict):
+        return ""
+    que = "ciclos" if lado == "E Costos" else "ventanas"
+    pagan = no_pagan = cambia = 0.0
+    for grupo in set(a) | set(b):
+        m_a, p_a = a.get(grupo, (0.0, 0.0))
+        m_b, p_b = b.get(grupo, (0.0, 0.0))
+        delta = m_a - m_b
+        if p_a > 0 and p_b > 0:
+            pagan += delta
+        elif p_a <= 0 and p_b <= 0:
+            no_pagan += delta
+        else:
+            cambia += delta
+    total = pagan + no_pagan + cambia
+    if abs(total) < 0.5:
+        return ""
+
+    def plata(v):
+        return f"{'+' if v >= 0 else '-'}{r.plata_corta(abs(v))}"
+
+    partes = [f"C1 − C2 cambia {plata(total)}"]
+    if abs(pagan) >= 0.5:
+        partes.append(f"{plata(pagan)} en {que} que pagan")
+    if abs(no_pagan) >= 0.5:
+        partes.append(
+            f"{plata(no_pagan)} en {que} que no pagan (monto 0: C1 < C2, sin reserva "
+            f"o la última del mes), que no cambia lo que recibe"
+        )
+    if abs(cambia) >= 0.5:
+        partes.append(f"{plata(cambia)} en {que} que empiezan o dejan de pagar")
+    return "; ".join(partes)
+
+
 def _texto_movimiento(responsable, lado, actual, anterior, componente=None):
     """
     'factor FD y prorrata 0,36 → 0,81' (anterior → actual), o ''. Con el
@@ -727,6 +816,9 @@ def _texto_movimiento(responsable, lado, actual, anterior, componente=None):
                 ("precio de lo contado en C2", 6, 1, "CLP/kWh"),
             ))
     if responsable == REPARTO:
+        texto = _texto_reparto(lado, actual, anterior)
+        if texto:
+            return texto
         con, total = (
             (r.C_EC_CICLOS, r.C_EC_CICLOS_MES) if lado == "E Costos"
             else (r.C_RE_VENTANAS, r.C_RE_VENTANAS_MES)

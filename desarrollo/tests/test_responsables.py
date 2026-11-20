@@ -326,3 +326,19 @@ class TestTotalesAlLadoDelNombre(unittest.TestCase):
         self.assertTrue(mes[rs.COLUMNA_ARBOL_MES].iloc[-1].startswith(rs.TOTAL_MES + "  ·  recibe"))
         # Sin totales, el nombre solo (como antes).
         self.assertEqual(rs.arbol_por_central(por_central)[rs.COLUMNA_ARBOL_CENTRAL].iloc[0], "A")
+
+
+class TestTextoReparto(unittest.TestCase):
+    """
+    2026-11-20 (ANDES3): C1 y C2 cambian pero lo que recibe no. El texto del
+    reparto dice cuanto de C1 - C2 cambio en ventanas que pagan y cuanto en
+    las que no.
+    """
+
+    def test_lo_que_cambia_en_ventanas_que_no_pagan(self):
+        anterior = {rs.X_RE_MARGEN: {1: (100.0, 100.0), 2: (-50.0, 0.0)}}
+        actual = {rs.X_RE_MARGEN: {1: (100.0, 100.0), 2: (-20.0, 0.0)}}
+        texto = rs._texto_reparto("RE545", actual, anterior)
+        self.assertIn("C1 − C2 cambia +", texto)
+        self.assertIn("en ventanas que no pagan", texto)
+        self.assertNotIn("que pagan;", texto)
