@@ -7121,3 +7121,21 @@ errores de siempre por falta de tkinter.
 **Verificación:** `test_responsables.py` (árbol y formato) y
 `test_reporte.py`. Suite: 565 OK (56 salteadas sin pantalla).
 
+## 2026-11-20 (3) — Comparador: el % de los responsables sobre lo movido
+
+- El usuario, con la comparación 2610 Definitivo vs Preliminar: "cuando la
+  variación es muy baja pone números enormes". El "Peso en el cambio [%]"
+  era aporte / |diferencia neta|: con efectos que se compensan la diferencia
+  es chica y salían miles de % (GABRIELA: +$1,2 MM netos, CMg +$43,8 MM =
+  3.601 %, energía −$42,1 MM = −3.466 %; ESTEPA y DEL-DESIERTO igual). Los
+  montos estaban bien; la base del % no.
+- Ahora `PESO = "Peso sobre lo movido [%]"` = aporte / suma de los aportes
+  sin signo (por central, o del mes): cada uno entre −100 % y 100 % y, sin
+  signo, suman 100 %. La fila de la central (y el total del mes) muestra la
+  diferencia neta sobre lo movido. Lo mismo en el "Principal responsable" y
+  el "Desglose en $" de la hoja Comparacion (GABRIELA: CMg 48 %, energía
+  −46 %), que además agrega "(Se compensan: ...)" cuando la diferencia neta
+  es menos del 25 % de lo movido.
+
+**Verificación:** `test_responsables.py` (+2). Suite: 567 OK (56 salteadas).
+

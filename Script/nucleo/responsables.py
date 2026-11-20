@@ -911,6 +911,22 @@ def _texto_movimiento(responsable, lado, actual, anterior, componente=None):
     return ""
 
 
+# El peso de cada aporte es sobre TODO lo que se movio (la suma de los aportes
+# sin signo), no sobre la diferencia neta: cuando lo que sube y lo que baja
+# casi se compensan, la diferencia es chica y los pesos salian en miles de %
+# (GABRIELA oct: +$1,2 MM netos con +$44 MM de CMg y -$42 MM de energia
+# daba 3.603 %). Asi cada uno queda entre -100 % y 100 % y, sin signo,
+# suman 100 %. Pedido del usuario (2026-11-20).
+PESO = "Peso sobre lo movido [%]"
+# Si la diferencia neta es menos que esto de lo movido, se avisa que se
+# compensan.
+_COMPENSAN = 0.25
+
+
+def _peso(aporte, bruto):
+    return aporte / bruto * 100 if bruto else math.nan
+
+
 def _efecto_reemplazos(fila, fila_sin):
     """{lado: pesos} que los reemplazos le suman a la central en su planilla."""
 
@@ -992,8 +1008,9 @@ def tablas_responsables(actual, anterior, orden=None, actual_sin=None, anterior_
              if abs(aporte) >= 0.5),
             key=lambda x: -abs(x[2]),
         )
-        # Una fila por lado, componente y responsable: se filtra con las
-        # listas desplegables de la hoja (Lado > Componente > Responsable).
+        # Una fila por lado, componente y responsable (la hoja la muestra en
+        # arbol: Lado > Componente > Responsable).
+        bruto = sum(abs(v) for por in detalle.values() for v in por.values() if abs(v) >= 0.5)
         for lado in LADOS:
             por = detalle.get(lado, {})
             for (resp, comp), aporte in sorted(
@@ -1003,20 +1020,20 @@ def tablas_responsables(actual, anterior, orden=None, actual_sin=None, anterior_
                 filas.append({
                     r.C_CENTRAL: nombre, "Lado": lado, "Componente": comp,
                     "Responsable": resp, "Aporte [CLP]": aporte,
-                    "Peso en el cambio [%]": (aporte / abs(delta) * 100) if delta else math.nan,
+                    PESO: _peso(aporte, bruto),
                     "Qué se movió": _texto_movimiento(resp, lado, fila_a, fila_b, comp),
                 })
         textos[nombre] = _textos_central(lista, delta, fila_a, fila_b)
     columnas = [r.C_CENTRAL, "Lado", "Componente", "Responsable", "Aporte [CLP]",
-                "Peso en el cambio [%]", "Qué se movió"]
+                PESO, "Qué se movió"]
     delta_mes = sum(del_mes.values())
+    bruto_mes = sum(abs(v) for v in del_mes.values())
     mes = pd.DataFrame([
-        {"Responsable": resp, "Aporte [CLP]": aporte,
-         "Peso en el cambio [%]": (aporte / abs(delta_mes) * 100) if delta_mes else math.nan}
+        {"Responsable": resp, "Aporte [CLP]": aporte, PESO: _peso(aporte, bruto_mes)}
         for resp, aporte in sorted(del_mes.items(), key=lambda kv: -abs(kv[1]))
-    ], columns=["Responsable", "Aporte [CLP]", "Peso en el cambio [%]"])
+    ], columns=["Responsable", "Aporte [CLP]", PESO])
     if len(mes):
-        mes.loc[len(mes)] = ["Total (= diferencia del mes)", delta_mes, 100.0 if delta_mes else math.nan]
+        mes.loc[len(mes)] = ["Total (= diferencia del mes)", delta_mes, _peso(delta_mes, bruto_mes)]
     return mes, pd.DataFrame(filas, columns=columnas), textos
 
 
@@ -1032,17 +1049,17 @@ def _orden(valor, lista):
     return lista.index(valor) if valor in lista else len(lista)
 
 
-def _ramas(clave, delta, texto=False):
+def _ramas(clave, bruto, texto=False):
     """
     El arbol Lado > Componente > Responsable de 'clave' (filas de
     por_central de una central o del mes): [(nombre, aporte, peso sobre
-    delta, que se movio, nivel 1..3)].
+    lo movido 'bruto', que se movio, nivel 1..3)].
     """
 
     filas = []
 
     def peso(aporte):
-        return aporte / abs(delta) * 100 if delta else math.nan
+        return _peso(aporte, bruto)
 
     for lado in sorted(clave["Lado"].unique(), key=lambda v: _orden(v, LADOS)):
         del_lado = clave[clave["Lado"] == lado]
@@ -1075,13 +1092,14 @@ def arbol_mes(por_central):
     subtotal de abajo, y al final el total (= diferencia del mes).
     """
 
-    columnas = [COLUMNA_ARBOL_MES, "Aporte [CLP]", "Peso en el cambio [%]"]
+    columnas = [COLUMNA_ARBOL_MES, "Aporte [CLP]", PESO]
     if por_central is None or not len(por_central):
         return _a_tabla([], columnas, False)
     delta = por_central["Aporte [CLP]"].sum()
+    bruto = por_central["Aporte [CLP]"].abs().sum()
     filas = [(n, a, p, t, nivel - 1) for n, a, p, t, nivel in
-             _ramas(por_central, delta)]
-    filas.append((TOTAL_MES, delta, math.copysign(100.0, delta) if delta else math.nan, "", -1))
+             _ramas(por_central, bruto)]
+    filas.append((TOTAL_MES, delta, _peso(delta, bruto), "", -1))
     return _a_tabla(filas, columnas, False)
 
 
@@ -1092,20 +1110,21 @@ def arbol_por_central(por_central):
     sobre el cambio de la central.
     """
 
-    columnas = [COLUMNA_ARBOL_CENTRAL, "Aporte [CLP]", "Peso en el cambio [%]", "Qué se movió"]
+    columnas = [COLUMNA_ARBOL_CENTRAL, "Aporte [CLP]", PESO, "Qué se movió"]
     if por_central is None or not len(por_central):
         return _a_tabla([], columnas, True)
     filas = []
     for central in dict.fromkeys(por_central["Central"]):
         de_central = por_central[por_central["Central"] == central]
         delta = de_central["Aporte [CLP]"].sum()
-        filas.append((central, delta, math.copysign(100.0, delta) if delta else math.nan, "", 0))
-        filas.extend(_ramas(de_central, delta, texto=True))
+        bruto = de_central["Aporte [CLP]"].abs().sum()
+        filas.append((central, delta, _peso(delta, bruto), "", 0))
+        filas.extend(_ramas(de_central, bruto, texto=True))
     return _a_tabla(filas, columnas, True)
 
 
-# Un responsable que explica menos que esto del cambio de la central (y
-# menos de $1 MM) no se nombra en el desglose: va en "otros".
+# Un responsable que explica menos que esto de lo que se movio en la central
+# (y menos de $1 MM) no se nombra en el desglose: va en "otros".
 _MINIMO_PCT_DESGLOSE = 5.0
 _MINIMO_CLP_DESGLOSE = 1e6
 
@@ -1135,10 +1154,11 @@ def _textos_central(lista, delta, actual, anterior):
         ((resp, total, lado) for resp, (total, lado, _) in juntos.items()),
         key=lambda x: -abs(x[1]),
     )
+    bruto = sum(abs(total) for _, total, _ in ordenados)
 
     def linea(resp, aporte, lado):
         signo = "+" if aporte >= 0 else "-"
-        peso = abs(aporte) / abs(delta) * 100
+        peso = abs(_peso(aporte, bruto))
         movimiento = _texto_movimiento(resp, lado, actual, anterior)
         return (f"{signo}{r.plata_corta(abs(aporte))} ({r.numero(peso)} %) {resp}"
                 + (f": {movimiento}" if movimiento else ""))
@@ -1148,13 +1168,19 @@ def _textos_central(lista, delta, actual, anterior):
     desglose, otros = [], 0.0
     for i, (resp, aporte, lado) in enumerate(ordenados):
         importa = (abs(aporte) >= _MINIMO_CLP_DESGLOSE
-                   or abs(aporte) / abs(delta) * 100 >= _MINIMO_PCT_DESGLOSE)
+                   or abs(_peso(aporte, bruto)) >= _MINIMO_PCT_DESGLOSE)
         if importa and len(desglose) < _MAXIMO_DESGLOSE:
             desglose.append("• " + linea(resp, aporte, lado))
         else:
             otros += aporte
     if abs(otros) >= 0.5:
         desglose.append(f"• {'+' if otros >= 0 else '-'}{r.plata_corta(abs(otros))} otros")
+    if bruto and abs(delta) < _COMPENSAN * bruto:
+        desglose.append(
+            f"(Se compensan: se movieron {r.plata_corta(bruto)} entre lo que sube y "
+            f"lo que baja, y la diferencia neta es {'+' if delta >= 0 else '-'}"
+            f"{r.plata_corta(abs(delta))}. El % es sobre lo movido.)"
+        )
     return principal, "\n".join(desglose)
 
 

@@ -276,3 +276,33 @@ class TestComponentesYReemplazos(unittest.TestCase):
             self.assertEqual(ws["B5"].alignment.indent, 2)
             self.assertEqual(ws["B6"].alignment.indent, 4)
             self.assertFalse(ws["B6"].font.bold)
+
+
+class TestPesoSobreLoMovido(unittest.TestCase):
+    """
+    2026-11-20: "cuando la variacion es muy baja pone numeros enormes". El %
+    era sobre la diferencia neta: con +44 y -42 que se compensan (neto +2)
+    salia 2.200 %. Ahora es sobre lo movido (la suma sin signo).
+    """
+
+    def _por_central(self):
+        return pd.DataFrame([
+            {"Central": "G", "Lado": "E Costos", "Componente": rs.C1, "Responsable": rs.CMG,
+             "Aporte [CLP]": 44e6, "Qué se movió": ""},
+            {"Central": "G", "Lado": "E Costos", "Componente": rs.AMBAS, "Responsable": rs.ENERGIA,
+             "Aporte [CLP]": -42e6, "Qué se movió": ""},
+        ])
+
+    def test_los_pesos_quedan_entre_menos_100_y_100(self):
+        arbol = rs.arbol_por_central(self._por_central())
+        pesos = arbol[rs.PESO].tolist()
+        self.assertTrue(all(abs(p) <= 100.0 + 1e-9 for p in pesos))
+        fila = arbol.set_index(rs.COLUMNA_ARBOL_CENTRAL)
+        self.assertAlmostEqual(fila.loc[rs.CMG, rs.PESO], 44 / 86 * 100)
+        self.assertAlmostEqual(fila.loc["G", rs.PESO], 2 / 86 * 100)
+
+    def test_el_texto_avisa_que_se_compensan(self):
+        lista = [("E Costos", rs.CMG, 44e6), ("E Costos", rs.ENERGIA, -42e6)]
+        principal, desglose = rs._textos_central(lista, 2e6, {}, {})
+        self.assertIn("(51 %)", principal)
+        self.assertIn("Se compensan", desglose)
