@@ -7289,3 +7289,19 @@ ventana no se pudo ver acá (sin tkinter).
 **Verificación:** `test_detalle_horario_ofertas.py` reescrito (2), y una
 hoja escrita y vuelta a leer. Suite: 573 OK. Falta un OfertasSSCC real.
 
+## 2026-11-23 (1) — El recalculador entregable ya no hace el SAE_AAMM.csv
+
+- El usuario: "del py de recálculo quita el cálculo de SAE_AAMM, ese es
+  interno". `recalculo.recalcular(ruta, secciones)` ya no tiene `con_csv` y
+  devuelve solo el 11_ recalculado; la ventana (`ventana_recalculo.py`) ya no
+  muestra la casilla del CSV.
+- El código que va en "03 Antecedentes SAE" ya no lleva `csv_sae.py`:
+  `antecedentes._NO_VA`, y `orquestador` lo importa adentro de
+  `_correr_csv_sae` (antes, al importarse arriba, el rastro de imports lo
+  metía igual por estructura → vigencia → orquestador).
+- No se tocó: `generar_antecedentes(..., incluir_csv=True)` sigue copiando el
+  SAE_AAMM.csv a la carpeta de antecedentes si se tilda (por defecto sí).
+
+**Verificación:** `test_antecedentes_sae.py` (el código no trae csv_sae y el
+recálculo de punta a punta termina sin error). Suite: 573 OK.
+

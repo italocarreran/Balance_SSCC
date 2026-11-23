@@ -36,7 +36,12 @@ _SCRIPT = Path(__file__).resolve().parent.parent      # .../Script
 _NUCLEO = _SCRIPT / "nucleo"
 
 # Desde donde se sigue el rastro de imports dentro de nucleo/.
-_ENTRADAS_NUCLEO = ("recalculo", "proceso", "csv_sae")
+# El SAE_AAMM.csv no va en el recalculo: es interno (2026-11-23).
+_ENTRADAS_NUCLEO = ("recalculo", "proceso")
+# Lo que no va aunque algun modulo lo importe: solo se importa adentro de
+# la funcion que lo usa (orquestador._correr_csv_sae), que el recalculo no
+# llama nunca.
+_NO_VA = ("csv_sae",)
 
 # Lo de fuera de nucleo/ que el calculo usa (comprobado corriendo el
 # calculo con un externos recortado: no toca nada mas).
@@ -51,8 +56,7 @@ _OTROS = (
 _PRIMERO = (
     "ecostos", "ecostos_columnas", "ecostos_prorratas", "ecostos_valorizacion",
     "columnas_compartidas", "re545", "re545_componentes", "re545_reservas",
-    "re545_resumen", "compensacion", "prorrata_retiros", "csv_sae",
-    "recalculo",
+    "re545_resumen", "compensacion", "prorrata_retiros", "recalculo",
 )
 
 _INIT_NUCLEO = '''# -*- coding: utf-8 -*-
@@ -186,7 +190,7 @@ def modulos_del_calculo():
     vistos, pendientes = set(), list(_ENTRADAS_NUCLEO)
     while pendientes:
         modulo = pendientes.pop()
-        if modulo in vistos or modulo in ("__init__", "externos"):
+        if modulo in vistos or modulo in ("__init__", "externos", *_NO_VA):
             continue
         vistos.add(modulo)
         pendientes.extend(_imports_nucleo(modulo) - vistos)
@@ -238,8 +242,8 @@ def texto_recalculador(aamm=None):
         f"Recalcular 11_PAGOS_BESS_AAMM.xlsx{periodo} (antecedentes SAE).",
         "",
         "Recalcula las hojas de calculo (Calculo E Costos, Calculo RE545,",
-        "COMPENSACION_CENTRAL, PRORRATA_RETIROS, Resumen) y el SAE_AAMM.csv",
-        "con los datos del propio archivo 11_, en una copia",
+        "COMPENSACION_CENTRAL, PRORRATA_RETIROS, Resumen) con los datos",
+        "del propio archivo 11_, en una copia",
         "(..._recalculado.xlsx). El archivo original no se modifica.",
         "",
         "Uso: doble clic, o 'python Recalcular_11_PAGOS_BESS_AAMM.py'. Si este",

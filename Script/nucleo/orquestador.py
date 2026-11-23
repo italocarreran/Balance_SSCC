@@ -46,7 +46,6 @@ from .parametros import (
     FMA_CON_CTF,
     HOJA_COMPENSACION_CENTRAL, HOJA_DICCIONARIO, HOJA_RESUMEN_BESS,
 )
-from .csv_sae import generar_csv_sae
 from .parametros import ARCHIVO_CSV_SAE
 from .proceso import generar_consolidado, generar_pagos_bess
 from .medidas_sae import generar_medidas_sae
@@ -140,6 +139,10 @@ def _correr_pagos(carpeta_base, aamm, secciones, registrar, progreso):
 
 
 def _correr_csv_sae(carpeta_base, aamm, secciones, registrar, progreso):
+    # Import aca adentro: asi el recalculo que se entrega (antecedentes.py)
+    # no arrastra el CSV, que es interno.
+    from .csv_sae import generar_csv_sae
+
     return generar_csv_sae(
         carpeta_base, aamm, registrar=registrar, progreso=progreso
     )
