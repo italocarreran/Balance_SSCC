@@ -65,9 +65,7 @@ class TestRecalculador(unittest.TestCase):
     def test_de_punta_a_punta_solo_con_el_11(self):
         with tempfile.TemporaryDirectory() as carpeta:
             base = caso_completo(carpeta)
-            # (este caso chico no tiene pagos: va sin CSV)
-            ant = nucleo.generar_antecedentes(base, "2607", incluir_csv=False,
-                                              registrar=lambda *_: None)
+            ant = nucleo.generar_antecedentes(base, "2607", registrar=lambda *_: None)
             self.assertEqual(ant.name, "03 Antecedentes SAE")
             codigo = ant / "Recalcular_11_PAGOS_BESS_2607.py"
             self.assertTrue(codigo.is_file())

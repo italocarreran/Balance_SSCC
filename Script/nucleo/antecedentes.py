@@ -17,8 +17,9 @@ adelante (sin APIs, descargas, Access ni reportes del DCO). Como sale del
 mismo codigo del programa al momento de generarlo, recalcula igual que el
 calculo con que se hizo el 11_.
 
-generar_antecedentes() crea la carpeta al lado del 11_ con ese codigo,
-el SAE_AAMM.csv (por defecto) y los demas archivos del caso que se elijan.
+generar_antecedentes() crea la carpeta al lado del 11_ con ese codigo y
+los demas archivos del caso que se elijan. El SAE_AAMM.csv no va: es
+interno (pedido del usuario 2026-11-23).
 """
 
 import ast
@@ -295,13 +296,11 @@ def escribir_recalculador(destino, aamm=None):
 
 
 def generar_antecedentes(carpeta_base, aamm, incluir_codigo=True,
-                         incluir_csv=True, otros=(), registrar=print,
-                         progreso=None):
+                         otros=(), registrar=print, progreso=None):
     """
-    Crea '03 Antecedentes SAE' al lado del 11_ con el recalculador, el
-    SAE_AAMM.csv y los archivos de 'otros' (rutas del caso; se copian
-    con su carpeta relativa al caso, para que no choquen nombres).
-    Devuelve la carpeta.
+    Crea '03 Antecedentes SAE' al lado del 11_ con el recalculador y los
+    archivos de 'otros' (rutas del caso; se copian con su carpeta
+    relativa al caso, para que no choquen nombres). Devuelve la carpeta.
     """
 
     aamm = validar_aamm(aamm)
@@ -315,14 +314,6 @@ def generar_antecedentes(carpeta_base, aamm, incluir_codigo=True,
     if incluir_codigo:
         ruta = escribir_recalculador(carpeta / nombre_recalculador(aamm), aamm)
         registrar(f"  codigo de recalculo: {ruta.name} ({ruta.stat().st_size // 1024:,} KB)")
-
-    if incluir_csv:
-        csv = rutas["csv_sae"]
-        if csv.is_file():
-            shutil.copy2(csv, carpeta / csv.name)
-            registrar(f"  {csv.name}")
-        else:
-            registrar(f"  [AVISO] no esta {csv.name}: generalo con su boton y vuelve a generar los antecedentes.")
 
     base = Path(rutas["base"]).resolve()
     for otro in otros:

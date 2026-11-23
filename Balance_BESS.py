@@ -2768,15 +2768,11 @@ def main():
             marco, variable=var_codigo, anchor="w",
             text=f"Código de recálculo ({nucleo.nombre_recalculador(aamm)})",
         ).pack(fill="x")
+        # El SAE_AAMM.csv no va en los antecedentes: es interno (2026-11-23).
         csv = rutas["csv_sae"]
-        var_csv = tk.BooleanVar(value=csv.is_file())
-        tk.Checkbutton(
-            marco, variable=var_csv, anchor="w",
-            text=csv.name + ("" if csv.is_file() else "   (todavía no generado)"),
-            state="normal" if csv.is_file() else "disabled",
-        ).pack(fill="x")
 
-        # Los archivos del caso, para sumar los que se quieran.
+        # Los archivos del caso, para sumar los que se quieran (sin el
+        # 11_, que va aparte, ni el SAE_AAMM.csv).
         excluir = {Path(rutas["salida"]), Path(csv)}
         archivos = [
             fila for fila in filas
@@ -2817,14 +2813,14 @@ def main():
 
         def generar():
             seleccion = [r for var, r in vars_otros if var.get()]
-            if not (var_codigo.get() or var_csv.get() or seleccion):
+            if not (var_codigo.get() or seleccion):
                 messagebox.showwarning("Nada seleccionado", "Tilda al menos un archivo.", parent=top)
                 return
             top.destroy()
             lanzar(
                 nucleo.generar_antecedentes,
                 dict(carpeta_base=ruta, aamm=aamm, incluir_codigo=var_codigo.get(),
-                     incluir_csv=var_csv.get(), otros=seleccion),
+                     otros=seleccion),
                 nucleo.CARPETA_ANTECEDENTES,
             )
 

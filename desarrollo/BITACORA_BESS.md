@@ -7299,8 +7299,10 @@ hoja escrita y vuelta a leer. Suite: 573 OK. Falta un OfertasSSCC real.
   `antecedentes._NO_VA`, y `orquestador` lo importa adentro de
   `_correr_csv_sae` (antes, al importarse arriba, el rastro de imports lo
   metía igual por estructura → vigencia → orquestador).
-- No se tocó: `generar_antecedentes(..., incluir_csv=True)` sigue copiando el
-  SAE_AAMM.csv a la carpeta de antecedentes si se tilda (por defecto sí).
+- Después, el usuario confirmó: tampoco va en los antecedentes.
+  `generar_antecedentes` ya no tiene `incluir_csv` y la ventana "Generar
+  antecedentes SAE" ya no muestra la casilla del SAE_AAMM.csv (ni lo ofrece
+  en "Otros archivos del caso").
 
 **Verificación:** `test_antecedentes_sae.py` (el código no trae csv_sae y el
 recálculo de punta a punta termina sin error). Suite: 573 OK.
