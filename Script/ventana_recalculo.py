@@ -80,12 +80,6 @@ def main(ruta_inicial=None):
             seleccion, text=f"{rama} hoja '{hoja}'", variable=var,
             font=("Consolas", 9), anchor="w",
         ).pack(fill="x")
-    var_csv = tk.BooleanVar(value=True)
-    var_nombre_csv = tk.StringVar(value="SAE_AAMM_recalculado.csv")
-    tk.Checkbutton(
-        seleccion, textvariable=var_nombre_csv, variable=var_csv,
-        font=("Consolas", 9, "bold"), anchor="w",
-    ).pack(fill="x", pady=(4, 0))
 
     def pintar_nombres():
         try:
@@ -93,7 +87,6 @@ def main(ruta_inicial=None):
         except ErrorEntrada:
             aamm = "AAMM"
         var_libro.set(f"11_PAGOS_BESS_{aamm}_recalculado.xlsx")
-        var_nombre_csv.set(f"SAE_{aamm}_recalculado.csv")
 
     pintar_nombres()
 
@@ -140,9 +133,7 @@ def main(ruta_inicial=None):
             escribir(f"ERROR: {error}")
             mostrar_error("No se pudo recalcular", str(error), parent=root)
             return
-        salida, csv = resultado
-        listos = "\n".join(str(r) for r in (salida, csv) if r)
-        messagebox.showinfo("Listo", f"Se genero:\n{listos}", parent=root)
+        messagebox.showinfo("Listo", f"Se genero:\n{resultado}", parent=root)
 
     def ejecutar():
         ruta = var_ruta.get().strip()
@@ -150,8 +141,8 @@ def main(ruta_inicial=None):
             messagebox.showwarning("Falta el archivo", "Elige el archivo 11_ con Examinar.")
             return
         secciones = [s for s, v in vars_hojas.items() if v.get()]
-        if not secciones and not var_csv.get():
-            messagebox.showwarning("Nada seleccionado", "Tilda al menos una hoja o el CSV.")
+        if not secciones:
+            messagebox.showwarning("Nada seleccionado", "Tilda al menos una hoja.")
             return
         estado.update(corriendo=True, inicio=time.time())
         boton.config(state="disabled")
@@ -160,8 +151,7 @@ def main(ruta_inicial=None):
         def trabajo():
             try:
                 resultado = recalcular(
-                    ruta, secciones, con_csv=var_csv.get(),
-                    registrar=lambda m: cola.put(("log", m)),
+                    ruta, secciones, registrar=lambda m: cola.put(("log", m)),
                 )
                 cola.put(("fin", (resultado, None)))
             except Exception as error:  # noqa: BLE001 - se muestra
@@ -193,7 +183,7 @@ def ejecutar_desde(carpeta_del_codigo, argumentos=None):
         ruta = Path(argumentos[0]) if argumentos else buscar_11([carpeta.parent, carpeta])
         if ruta is None:
             raise SystemExit("Indica el archivo 11_PAGOS_BESS_AAMM.xlsx.")
-        recalcular(ruta, [s for s, _ in SECCIONES_RECALCULO], con_csv=True)
+        recalcular(ruta, [s for s, _ in SECCIONES_RECALCULO])
         return
     main(Path(argumentos[0]) if argumentos else buscar_11([carpeta.parent, carpeta]))
 

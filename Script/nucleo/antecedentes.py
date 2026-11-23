@@ -17,8 +17,9 @@ adelante (sin APIs, descargas, Access ni reportes del DCO). Como sale del
 mismo codigo del programa al momento de generarlo, recalcula igual que el
 calculo con que se hizo el 11_.
 
-generar_antecedentes() crea la carpeta al lado del 11_ con ese codigo,
-el SAE_AAMM.csv (por defecto) y los demas archivos del caso que se elijan.
+generar_antecedentes() crea la carpeta al lado del 11_ con ese codigo y
+los demas archivos del caso que se elijan. El SAE_AAMM.csv no va: es
+interno (pedido del usuario 2026-11-23).
 """
 
 import ast
@@ -36,7 +37,12 @@ _SCRIPT = Path(__file__).resolve().parent.parent      # .../Script
 _NUCLEO = _SCRIPT / "nucleo"
 
 # Desde donde se sigue el rastro de imports dentro de nucleo/.
-_ENTRADAS_NUCLEO = ("recalculo", "proceso", "csv_sae")
+# El SAE_AAMM.csv no va en el recalculo: es interno (2026-11-23).
+_ENTRADAS_NUCLEO = ("recalculo", "proceso")
+# Lo que no va aunque algun modulo lo importe: solo se importa adentro de
+# la funcion que lo usa (orquestador._correr_csv_sae), que el recalculo no
+# llama nunca.
+_NO_VA = ("csv_sae",)
 
 # Lo de fuera de nucleo/ que el calculo usa (comprobado corriendo el
 # calculo con un externos recortado: no toca nada mas).
@@ -51,8 +57,7 @@ _OTROS = (
 _PRIMERO = (
     "ecostos", "ecostos_columnas", "ecostos_prorratas", "ecostos_valorizacion",
     "columnas_compartidas", "re545", "re545_componentes", "re545_reservas",
-    "re545_resumen", "compensacion", "prorrata_retiros", "csv_sae",
-    "recalculo",
+    "re545_resumen", "compensacion", "prorrata_retiros", "recalculo",
 )
 
 _INIT_NUCLEO = '''# -*- coding: utf-8 -*-
@@ -186,7 +191,7 @@ def modulos_del_calculo():
     vistos, pendientes = set(), list(_ENTRADAS_NUCLEO)
     while pendientes:
         modulo = pendientes.pop()
-        if modulo in vistos or modulo in ("__init__", "externos"):
+        if modulo in vistos or modulo in ("__init__", "externos", *_NO_VA):
             continue
         vistos.add(modulo)
         pendientes.extend(_imports_nucleo(modulo) - vistos)
@@ -238,8 +243,8 @@ def texto_recalculador(aamm=None):
         f"Recalcular 11_PAGOS_BESS_AAMM.xlsx{periodo} (antecedentes SAE).",
         "",
         "Recalcula las hojas de calculo (Calculo E Costos, Calculo RE545,",
-        "COMPENSACION_CENTRAL, PRORRATA_RETIROS, Resumen) y el SAE_AAMM.csv",
-        "con los datos del propio archivo 11_, en una copia",
+        "COMPENSACION_CENTRAL, PRORRATA_RETIROS, Resumen) con los datos",
+        "del propio archivo 11_, en una copia",
         "(..._recalculado.xlsx). El archivo original no se modifica.",
         "",
         "Uso: doble clic, o 'python Recalcular_11_PAGOS_BESS_AAMM.py'. Si este",
@@ -291,13 +296,11 @@ def escribir_recalculador(destino, aamm=None):
 
 
 def generar_antecedentes(carpeta_base, aamm, incluir_codigo=True,
-                         incluir_csv=True, otros=(), registrar=print,
-                         progreso=None):
+                         otros=(), registrar=print, progreso=None):
     """
-    Crea '03 Antecedentes SAE' al lado del 11_ con el recalculador, el
-    SAE_AAMM.csv y los archivos de 'otros' (rutas del caso; se copian
-    con su carpeta relativa al caso, para que no choquen nombres).
-    Devuelve la carpeta.
+    Crea '03 Antecedentes SAE' al lado del 11_ con el recalculador y los
+    archivos de 'otros' (rutas del caso; se copian con su carpeta
+    relativa al caso, para que no choquen nombres). Devuelve la carpeta.
     """
 
     aamm = validar_aamm(aamm)
@@ -311,14 +314,6 @@ def generar_antecedentes(carpeta_base, aamm, incluir_codigo=True,
     if incluir_codigo:
         ruta = escribir_recalculador(carpeta / nombre_recalculador(aamm), aamm)
         registrar(f"  codigo de recalculo: {ruta.name} ({ruta.stat().st_size // 1024:,} KB)")
-
-    if incluir_csv:
-        csv = rutas["csv_sae"]
-        if csv.is_file():
-            shutil.copy2(csv, carpeta / csv.name)
-            registrar(f"  {csv.name}")
-        else:
-            registrar(f"  [AVISO] no esta {csv.name}: generalo con su boton y vuelve a generar los antecedentes.")
 
     base = Path(rutas["base"]).resolve()
     for otro in otros:

@@ -48,9 +48,12 @@ class TestRecalculador(unittest.TestCase):
                             "Indices_FMA", "Indicadores_DCO", "Claves_Balance"):
             self.assertNotIn(f"FUENTES['Medidas/{de_descarga}.py']", texto)
             self.assertNotIn(f"/{de_descarga}.py'] = r", texto)
-        for calculo in ("nucleo/ecostos.py", "nucleo/re545.py", "nucleo/csv_sae.py",
+        for calculo in ("nucleo/ecostos.py", "nucleo/re545.py",
                         "nucleo/recalculo.py", "ventana_recalculo.py"):
             self.assertIn(f"FUENTES[{calculo!r}]", texto)
+        # El SAE_AAMM.csv es interno: no va en el recalculo (2026-11-23).
+        self.assertNotIn("FUENTES['nucleo/csv_sae.py']", texto)
+        self.assertNotIn("SAE_AAMM.csv", texto.split('"""')[1])
 
     def test_prorrata_desde_la_hoja(self):
         with tempfile.TemporaryDirectory() as carpeta:
@@ -62,9 +65,7 @@ class TestRecalculador(unittest.TestCase):
     def test_de_punta_a_punta_solo_con_el_11(self):
         with tempfile.TemporaryDirectory() as carpeta:
             base = caso_completo(carpeta)
-            # (este caso chico no tiene pagos: va sin CSV)
-            ant = nucleo.generar_antecedentes(base, "2607", incluir_csv=False,
-                                              registrar=lambda *_: None)
+            ant = nucleo.generar_antecedentes(base, "2607", registrar=lambda *_: None)
             self.assertEqual(ant.name, "03 Antecedentes SAE")
             codigo = ant / "Recalcular_11_PAGOS_BESS_2607.py"
             self.assertTrue(codigo.is_file())
@@ -81,9 +82,8 @@ class TestRecalculador(unittest.TestCase):
                 cwd=tempfile.gettempdir(), env=entorno, capture_output=True, text=True,
                 timeout=600,
             )
-            # El caso chico no tiene pagos: el CSV falla al final, pero el
-            # libro recalculado ya quedo escrito.
             recalculado = entrega / "11_PAGOS_BESS_2607_recalculado.xlsx"
+            self.assertEqual(proceso.returncode, 0, proceso.stderr[-2000:])
             self.assertTrue(recalculado.is_file(), proceso.stderr[-2000:])
             original = hojas(entrega / nucleo.nombre_salida("2607"))
             nuevo = hojas(recalculado)

@@ -5,11 +5,12 @@ archivo como UNICO dato.
 
 Pedido del usuario (2026-11-10): junto con el 11_ se entrega a los
 coordinados un codigo que "al darle play se recalculen las hojas de
-calculo". Es el mismo calculo del programa (generar_pagos_bess y
-generar_csv_sae), corrido sobre una COPIA del archivo:
+calculo". Es el mismo calculo del programa (generar_pagos_bess), corrido
+sobre una COPIA del archivo:
 
   - el 11_ entregado no se toca: el resultado queda al lado, como
-    11_PAGOS_BESS_AAMM_recalculado.xlsx (y SAE_AAMM_recalculado.csv);
+    11_PAGOS_BESS_AAMM_recalculado.xlsx. El SAE_AAMM.csv no va: es interno
+    (pedido del usuario 2026-11-23);
   - todo lo que el calculo necesita sale del propio 11_: las hojas de
     entrada (Centrales, Medidores, Ofertas SSCC, CMg, FD, FMA, Subastas)
     y, para PRORRATA_RETIROS y el Resumen, la prorrata de retiros, que
@@ -36,11 +37,11 @@ from .parametros import (
 from .prorrata_retiros import (
     COL_CUARTO, COL_PRORRATA, COL_SUMINISTRADOR, HOJA_ORIGEN,
 )
-from .rutas import nombre_csv_sae, nombre_salida
+from .rutas import nombre_salida
 from .utiles import ErrorEntrada
 
 # Lo que se puede recalcular, en el orden del calculo: (id de seccion de
-# generar_pagos_bess, hoja). El CSV va aparte (con_csv).
+# generar_pagos_bess, hoja).
 SECCIONES_RECALCULO = (
     ("ecostos", HOJA_CALCULO_ECOSTOS),
     ("re545", HOJA_CALCULO_RE545),
@@ -115,14 +116,12 @@ def prorrata_desde_hoja(ruta_11):
     )
 
 
-def recalcular(ruta_11, secciones, con_csv=True, registrar=print):
+def recalcular(ruta_11, secciones, registrar=print):
     """
     Recalcula las secciones pedidas (ids de SECCIONES_RECALCULO) sobre una
-    copia del 11_ y, si con_csv, el SAE_AAMM.csv. Devuelve
-    (ruta de la copia recalculada o None, ruta del CSV o None).
+    copia del 11_. Devuelve la ruta de la copia recalculada.
     """
 
-    from .csv_sae import generar_csv_sae
     from .proceso import generar_pagos_bess
 
     ruta_11 = Path(ruta_11)
@@ -130,7 +129,7 @@ def recalcular(ruta_11, secciones, con_csv=True, registrar=print):
         raise ErrorEntrada(f"No se encontro {ruta_11}")
     aamm = aamm_del_archivo(ruta_11)
     secciones = [s for s, _ in SECCIONES_RECALCULO if s in set(secciones)]
-    if not secciones and not con_csv:
+    if not secciones:
         raise ErrorEntrada("No hay nada seleccionado para recalcular.")
 
     with abrir_excel(ruta_11) as libro:
@@ -161,22 +160,9 @@ def recalcular(ruta_11, secciones, con_csv=True, registrar=print):
                 sheet_name=HOJA_ORIGEN, index=False,
             )
 
-        salida = None
-        if secciones:
-            generar_pagos_bess(
-                caso, set(secciones), registrar=registrar, aamm=aamm
-            )
-            salida = ruta_11.with_name(f"{ruta_11.stem}{SUFIJO_RECALCULADO}.xlsx")
-            shutil.copyfile(copia_caso, salida)
-            registrar(f"Listo: {salida}")
+        generar_pagos_bess(caso, set(secciones), registrar=registrar, aamm=aamm)
+        salida = ruta_11.with_name(f"{ruta_11.stem}{SUFIJO_RECALCULADO}.xlsx")
+        shutil.copyfile(copia_caso, salida)
+        registrar(f"Listo: {salida}")
 
-        csv = None
-        if con_csv:
-            generado = generar_csv_sae(caso, aamm, registrar=registrar)
-            csv = ruta_11.with_name(
-                f"{Path(nombre_csv_sae(aamm)).stem}{SUFIJO_RECALCULADO}.csv"
-            )
-            shutil.copyfile(generado, csv)
-            registrar(f"Listo: {csv}")
-
-    return salida, csv
+    return salida
