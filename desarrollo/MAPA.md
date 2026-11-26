@@ -81,6 +81,7 @@ Script/
         hojas_entrada.py       <- ENERGIA, FP, CO, SC y CO
         fuentes_bess.py        <- FD_CPF/CSF/CTF y matriz de PRORRATA_RETIROS
         politicas.py           <- botones Generar de fp_ y cvar_cra_
+        medidas_cra.py         <- Medidas_CRA.xlsx desde PRMTE (boton Generar del Formato_Solicitud)
         maestros.py            <- Auxiliares/centrales_cra.xlsx (3 hojas)
         escritura.py           <- 5_REMUNERACION_CRA_AAMM.xlsx: cuadros y escritura rapida del BESS (conserva lo que no toca)
         proceso.py             <- SECCIONES y generar_balance_cra()
@@ -1209,6 +1210,19 @@ importable como cualquier módulo.
   del CRA se buscan por prefijo normalizado y si hay dos del mismo tipo se
   para; los de fuente BESS usan el buscador del BESS (el
   `SSCC_Desempeño_*` más reciente, como la macro original).
+- **`Medidas_CRA.xlsx`** (`medidas_cra.py`, 2026-11-26): botón **Generar**
+  en la fila del `Formato_Solicitud_SSAA_*`. Mismos pasos que
+  `nucleo.generar_medidas_sae` con las mismas piezas de `Script/Medidas`
+  (homologación de `CRA/Auxiliares/*homologacion*` con la hoja `homol`, la
+  `clave` es la Unidad; `Descarga_PRMTE` con lotes en `CRA/Energia/_trabajo/`;
+  limpieza de fechas, hora inexistente y huecos de `Claves_Balance`;
+  `Puntos_fallidos.xlsx` al lado). La salida, por ahora, tiene la forma del
+  Formato_Solicitud para compararlos: `Unidad, Punto De Medida, Año, Mes,
+  DIA, FECHA_HORA, kWhD, kWhR`, una fila por unidad + punto + cuarto de
+  hora; kWhD/kWhR según el `Canal` de la homologación (termina en D / R),
+  tal como los da la API (sin `Flujo`). `FECHA_HORA` es el inicio del cuarto
+  de hora local. La hoja `Gen real` todavía no se usa (se avisa). La hoja
+  `ENERGIA` sigue leyendo el Formato_Solicitud.
 - **Planilla:** mismas convenciones que la del BESS (fila 1 vacía,
   `Cuadro N° 1 — <TITULOS_HOJAS>` en la 2, encabezados en la 3, columna A
   de margen) y su escritura rápida (`nucleo.escritura._volcar` +

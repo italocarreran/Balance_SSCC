@@ -28,6 +28,13 @@ HOJAS_PENDIENTES = [
 ]
 
 
+# Entradas que no se dejan a mano sino que las arma un boton: sin el
+# archivo quedan PENDIENTE (no FALTA), con este detalle.
+GENERADAS = {
+    "medidas_cra": "se genera con 'Generar' en la fila de arriba (desde PRMTE)",
+}
+
+
 def _fila(nivel, id_, texto, estado, detalle="", ruta=None, es_carpeta=False):
     return {
         "nivel": nivel,
@@ -75,7 +82,12 @@ def revisar_estructura(carpeta_base, aamm):
                 ))
                 continue
 
-            if ruta is None:
+            if ruta is None and id_ in GENERADAS:
+                # Lo arma un boton: todavia no se genero, no "falta".
+                filas.append(_fila(
+                    1, id_, patron, "pendiente", GENERADAS[id_], ruta=ruta_carpeta,
+                ))
+            elif ruta is None:
                 # Sin detalle: "FALTA" ya lo dice (como en el BESS).
                 filas.append(_fila(1, id_, patron, "falta", ruta=ruta_carpeta))
             else:

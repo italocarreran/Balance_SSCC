@@ -67,6 +67,11 @@ se adivinó: lo que depende de una respuesta quedó como constante en
   xvfb, pero no en Windows): el formato nuevo, "Ir a este mes", el cambio
   de mes que va solo a la carpeta del BESS, y que el registro quede en
   `CRA/Log/`.
+- **Medidas_CRA (2026-11-26):** comparar un mes real contra el
+  `Formato_Solicitud_SSAA_SSCC_Hidro_*` (¿`FECHA_HORA` es el inicio o el fin
+  del cuarto?, ¿kWhD/kWhR van sin el signo del `Flujo` como quedó?, ¿el canal
+  1 de la API es kWhD?). Después decidir si la hoja `ENERGIA` pasa a leer
+  `Medidas_CRA` y si hace falta la hoja `Gen real` de la homologación.
 - **Carpeta del mes compartida (2026-11-16):** a decidir con el usuario:
   - Probar `Herramientas/Reorganizar_Carpetas.py` en Windows con un mes
     real de antes (y con algo abierto en Excel, para ver que se para bien).
@@ -494,4 +499,36 @@ ventana del BESS elige el caso como balance (año _ mes _ proceso) con
 - Pruebas: `tests/test_ventana_cra.py` (arriba/abajo como el BESS,
   bloqueo solo del CRA, carpeta del balance desde el BESS). 576 pruebas con
   pantalla (xvfb), 59 salteadas sin tkinter.
+
+## 2026-11-26 (2) — Medidas_CRA.xlsx desde PRMTE
+
+Pedido del usuario: "el archivo Formato_Solicitud_SSAA tenga un botón para
+generarlo, la info viene de PRMTE así que tenemos que replicar el archivo de
+los SAE, que genere una salida que se llame Medidas_CRA. Misma idea, y la
+salida en este formato por ahora, para comparar: Unidad, Punto De Medida,
+Año, Mes, DIA, FECHA_HORA, kWhD, kWhR. En auxiliares del CRA va a haber un
+homologacion también igual que el de SAE".
+
+- `Script/cra/medidas_cra.py`: `generar_medidas_cra(base, aamm)` y
+  `construir_medidas_cra(df_crudo, df_homol)`. Reusa tal cual
+  `Homologacion` (buscar/leer la hoja `homol` de `CRA/Auxiliares/`),
+  `Descarga_PRMTE.descargar` (lotes reanudables en `CRA/Energia/_trabajo/`),
+  `Claves_Balance` (fechas, hora inexistente, incompletos, huecos,
+  calendario) y `armar/escribir_puntos_fallidos` y `escribir_tabla_rapida`
+  del núcleo.
+- Diferencia con el SAE: no suma por clave con el `Flujo`; deja una fila por
+  Unidad (`clave`) + Punto de Medida + cuarto de hora con kWhD y kWhR en
+  columnas, según el `Canal` de la homologación (termina en D / R; otro
+  canal se avisa y queda fuera), con el valor tal como lo da la API.
+  `FECHA_HORA` = inicio del cuarto de hora local; Año/Mes/DIA de ahí.
+- Salida en `CRA/Energia/Medidas_CRA.xlsx` (hoja `Medidas`) y
+  `Puntos_fallidos.xlsx` al lado. La hoja `ENERGIA` no cambia (sigue con el
+  Formato_Solicitud) hasta comparar.
+- Árbol: fila de la homologación en `CRA/Auxiliares/` y de `Medidas_CRA.xlsx`
+  en `CRA/Energia/` (PENDIENTE hasta generarla); **Generar** en la fila del
+  Formato_Solicitud.
+- La hoja `Gen real` de la homologación todavía no se usa: si trae centrales,
+  se avisa.
+- `tests/test_cra_medidas.py` (5). 581 pruebas (59 salteadas sin tkinter;
+  todas con xvfb).
 
