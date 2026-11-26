@@ -469,3 +469,29 @@ Pedido del usuario: "la ventana del CRA déjala en el formato del BESS".
   discover`: 520 pruebas, 0 salteadas. Con las capturas se comparó el CRA
   contra el BESS.
 
+## 2026-11-26 — La ventana del CRA con la parte de arriba y de abajo del BESS
+
+Pedido del usuario: "copia el formato de los bess para la primera parte
+de la ventana [...] o la ventana en general". Desde el 2026-11-18 la
+ventana del BESS elige el caso como balance (año _ mes _ proceso) con
+"Ir a este balance", "Examinar" y "Bloquear caso", y abajo deja solo
+"Actualizar estado" y "Salir"; el CRA había quedado con la versión de antes.
+
+- `Script/balance_caso.py` (nuevo): las funciones puras del balance
+  (`MESES`, `aamm_de`, `ano_mes_de`, `nombre_balance`, `clave_balance`,
+  `limpiar_proceso`, `proceso_en_el_nombre`, `nombre_de_clave`, ...) salen de
+  `Balance_BESS.py`, que las importa con los mismos nombres.
+- `Balance_CRA.py`: el marco "Balance del caso" igual al del BESS; fuera
+  "Carpeta del mes", "Ir a este mes", el diálogo de la carpeta del periodo,
+  "Crear carpeta del caso" y "Abrir carpeta del caso"; abajo "Actualizar
+  estado" y "Salir". Carpetas por balance (`"AAMM_Proceso"`); "Ir a este
+  balance" busca la del CRA y, si no, la que anotó el BESS para ese balance.
+  Los procesos agregados ("+") se juntan con los del BESS.
+- **Bloquear caso** en el CRA: `nucleo.bloqueo` acepta `raiz=`; el CRA deja
+  su `CASO_BLOQUEADO.txt` en `<mes>/CRA/`. **Bloquear el CRA no bloquea el
+  BESS** (ni al revés): a confirmar con el usuario si prefiere un solo
+  bloqueo para el mes.
+- Pruebas: `tests/test_ventana_cra.py` (arriba/abajo como el BESS,
+  bloqueo solo del CRA, carpeta del balance desde el BESS). 576 pruebas con
+  pantalla (xvfb), 59 salteadas sin tkinter.
+

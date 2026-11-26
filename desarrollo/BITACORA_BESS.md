@@ -7307,3 +7307,15 @@ hoja escrita y vuelta a leer. Suite: 573 OK. Falta un OfertasSSCC real.
 **Verificación:** `test_antecedentes_sae.py` (el código no trae csv_sae y el
 recálculo de punta a punta termina sin error). Suite: 573 OK.
 
+## 2026-11-26 — Funciones del balance en `Script/balance_caso.py`; bloqueo con `raiz=`
+
+- Para que la ventana del CRA tenga el mismo "Balance del caso", las
+  funciones puras del balance (meses, `aamm_de`, `ano_mes_de`,
+  `nombre_balance`, `clave_balance`, `limpiar_proceso`,
+  `proceso_en_el_nombre`, `nombre_de_clave`, `anos_disponibles` y las
+  constantes) pasaron tal cual a `Script/balance_caso.py`; `Balance_BESS.py`
+  las importa con los mismos nombres (no cambia nada de lo que se ve).
+- `nucleo/bloqueo.py`: cada función acepta `raiz=` (por defecto la del
+  BESS, como antes) y `bloquear(..., herramienta=)`; el CRA usa
+  `<mes>/CRA/`. El bloqueo del BESS sigue igual. 576 pruebas.
+
