@@ -4,7 +4,10 @@
     "Carpeta del mes" arriba;
   - un boton por fila que se puede generar, del color de los del BESS;
   - "Actualizar" de una hoja corre el proceso, escribe el registro con
-    encabezado y cierre, y lo guarda en <mes>/CRA/Log/.
+    encabezado y cierre, y lo guarda en <mes>/CRA/Log/;
+  - arriba el "Balance del caso" del BESS (año _ mes _ proceso, Ir a este
+    balance, Examinar, Bloquear caso) y abajo Actualizar estado y Salir;
+  - "Bloquear caso" bloquea solo el CRA.
 
 Necesita tkinter Y un display (en Linux: `xvfb-run -a python -m
 unittest discover`); sin ellos se saltea.
@@ -16,6 +19,30 @@ from pathlib import Path
 from unittest import mock
 
 from desarrollo.tests.test_ventana_rueda import _hay_ventana, tk
+
+
+class TestCarpetaDelBalance(unittest.TestCase):
+    """Sin pantalla: de donde saca el CRA la carpeta de un balance."""
+
+    def test_usa_la_del_cra_y_si_no_la_del_bess(self):
+        try:
+            import Balance_CRA as app
+        except ImportError:          # sin tkinter
+            self.skipTest("sin tkinter")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            propia, del_bess = Path(tmp) / "cra", Path(tmp) / "bess 2610 Definitivo"
+            propia.mkdir()
+            del_bess.mkdir()
+            cra_cfg = {app.CLAVE_CARPETAS_PERIODO: {"2609_Definitivo": str(propia)}}
+            bess = {"2610_Definitivo": str(del_bess)}
+            with mock.patch.object(app, "leer_config", lambda: cra_cfg), \
+                    mock.patch.object(app, "carpetas_del_bess_por_balance", lambda: bess):
+                self.assertEqual(app.carpeta_del_balance("2609", "Definitivo"), str(propia))
+                self.assertEqual(app.carpeta_del_balance("2610", "Definitivo"), str(del_bess))
+                self.assertEqual(app.carpeta_del_balance("2610", "Preliminar"), "")
+                # El CRA solo se adueña de las suyas.
+                self.assertEqual(app.balance_de_la_carpeta(str(del_bess)), "")
 
 
 @unittest.skipUnless(_hay_ventana(), "sin tkinter o sin display")
@@ -32,14 +59,15 @@ class TestVentanaCra(unittest.TestCase):
         cls.mes = Path(cls.tmp.name) / "Balance 2608"
         cra.crear_carpetas_caso(cls.mes)
 
-        cfg = {
-            "carpeta_base": str(cls.mes), "aamm": "2608",
-            app.CLAVE_CARPETAS_PERIODO: {"2608": str(cls.mes)},
+        cls.cfg = cfg = {
+            "carpeta_base": str(cls.mes), "aamm": "2608", "proceso": "Definitivo",
+            app.CLAVE_CARPETAS_PERIODO: {"2608_Definitivo": str(cls.mes)},
         }
         cls.parches = [
             mock.patch.object(app, "leer_config", lambda: dict(cfg)),
-            mock.patch.object(app, "guardar_config", lambda data: None),
-            mock.patch.object(app, "carpetas_del_bess", lambda: {}),
+            mock.patch.object(app, "guardar_config", lambda data: cfg.update(data)),
+            mock.patch.object(app, "carpetas_del_bess_por_balance", lambda: {}),
+            mock.patch.object(app.config, "seccion", lambda nombre: {}),
             mock.patch.object(app.messagebox, "showinfo", lambda *a, **k: None),
         ]
         for parche in cls.parches:
@@ -74,6 +102,43 @@ class TestVentanaCra(unittest.TestCase):
             if w.winfo_class() == clase
         ]
 
+    def test_arriba_y_abajo_como_el_bess(self):
+        botones = self._textos("Button")
+        for texto in ("Ir a este balance", "Examinar", "Bloquear caso",
+                      "Actualizar estado", "Salir"):
+            self.assertIn(texto, botones)
+        # Lo de antes ya no esta.
+        for texto in ("Ir a este mes", "Crear carpeta del caso",
+                      "Abrir carpeta del caso"):
+            self.assertNotIn(texto, botones)
+        etiquetas = self._textos("Label")
+        self.assertIn("2026_Agosto_Definitivo", etiquetas)
+        self.assertTrue(any("(abierto)" in t for t in etiquetas))
+        self.assertIn("Balance del caso", self._textos("Labelframe"))
+
+    def test_bloquear_el_cra_apaga_sus_botones_y_no_toca_el_bess(self):
+        from Script.nucleo import bloqueo
+
+        boton = next(
+            w for w in self._todos(self.root)
+            if w.winfo_class() == "Button" and w.cget("text") == "Bloquear caso"
+        )
+        with mock.patch.object(self.app.messagebox, "askyesno", return_value=True):
+            boton.invoke()
+        self.root.update()
+        try:
+            raiz = self.cra.raiz_cra(self.mes)
+            self.assertTrue(bloqueo.esta_bloqueado(self.mes, raiz=raiz))
+            self.assertFalse(bloqueo.esta_bloqueado(self.mes))   # el del BESS
+            self.assertEqual(boton.cget("text"), "Desbloquear caso")
+            self.assertEqual(str(self._boton_hoja("FP").cget("state")), "disabled")
+        finally:
+            with mock.patch.object(self.app.messagebox, "askyesno", return_value=True):
+                boton.invoke()
+            self.root.update()
+        self.assertFalse(bloqueo.esta_bloqueado(self.mes, raiz=raiz))
+        self.assertEqual(str(self._boton_hoja("FP").cget("state")), "normal")
+
     def test_columnas_y_filas_como_el_bess(self):
         etiquetas = self._textos("Label")
         for titulo in ("Estructura", "Estado", "Accion", "Carpeta del mes",
@@ -88,7 +153,7 @@ class TestVentanaCra(unittest.TestCase):
         ]
         # La planilla + una por hoja.
         self.assertEqual(len(botones), 1 + len(self.cra.SECCIONES))
-        self.assertIn("Ir a este mes", self._textos("Button"))
+        self.assertIn("Ir a este balance", self._textos("Button"))
 
     def test_actualizar_una_hoja_corre_y_guarda_el_registro(self):
         llamadas = []
