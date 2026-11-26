@@ -225,6 +225,14 @@ nombre exacto; si hay varios, el más reciente.
 El cruce contra la descarga es por `idPuntoMedida` + `slugCanal`, y el `Flujo` multiplica el valor
 absoluto medido.
 
+**Varios paños en una línea** (2026-11-26): el punto de medida tiene la forma
+`NOMBRE_TENSIÓN_paño_algomás`, y después de cada `+` va otro paño que comparte el
+`NOMBRE_TENSIÓN` y el `algomás`: `ALFALFAL_220_J1_AES+J2` = `ALFALFAL_220_J1_AES` +
+`ALFALFAL_220_J2_AES`; `CQLTHUES_012_CG1_AES+G2+G3` = `..._CG1_AES`, `..._G2_AES`, `..._G3_AES`
+(el paño va tal como está escrito). Cada uno se descarga por separado con el mismo `Canal`,
+`clave` y `Flujo`, y se suman en la clave (`Homologacion.expandir_punto`). Sirve igual para la
+homologación del BESS (`BESS/Auxiliares/`) y la del CRA (`CRA/Auxiliares/`, mismo formato).
+
 **Hoja `Gen real`** (opcional) — las centrales cuya medida NO sale de la API por punto de medida
 sino de la API de operación real. Mismas cuatro columnas que `homol`, con una lectura propia:
 
