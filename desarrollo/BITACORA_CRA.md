@@ -67,10 +67,11 @@ se adivinó: lo que depende de una respuesta quedó como constante en
   xvfb, pero no en Windows): el formato nuevo, "Ir a este mes", el cambio
   de mes que va solo a la carpeta del BESS, y que el registro quede en
   `CRA/Log/`.
-- **Medidas_CRA (2026-11-26):** correrlo con un mes real (homologación del
-  CRA en `CRA/Auxiliares/`) y decidir si la hoja `ENERGIA` pasa a leer
-  `Medidas_CRA` (hoy tiene el formato de `Medidas_SAE`: suma por clave con
-  el Flujo, no kWhD/kWhR por punto).
+- **ENERGIA desde Medidas_CRA (2026-11-26):** correr un mes real y revisar
+  la hoja contra el Excel original. El Formato_Solicitud traía kWhD/kWhR y el
+  libro armaba el Neto con K/L/M; Medidas_CRA ya trae el neto con el signo
+  del Flujo: confirmar que el Neto da lo mismo y que CÁLCULO_CRA no necesita
+  kWhD/kWhR por separado ni el Punto De Medida.
 - **Carpeta del mes compartida (2026-11-16):** a decidir con el usuario:
   - Probar `Herramientas/Reorganizar_Carpetas.py` en Windows con un mes
     real de antes (y con algo abierto en Excel, para ver que se para bien).
@@ -558,3 +559,25 @@ BESS) y "que la salida de CRA tenga el mismo formato que [...] los SAE".
 - `tests/test_cra_medidas.py` (6): los ejemplos del usuario, mal escritos,
   la hoja expandida, Medidas_SAE sumando los dos paños y Medidas_CRA con el
   formato del SAE. 582 pruebas.
+
+## 2026-11-26 (4) — Fuera el Formato_Solicitud: ENERGIA sale de Medidas_CRA
+
+Pedido del usuario: "Formato solicitud sácalo, ya no se necesita. Solo deja
+Medidas_CRA".
+
+- Fuera la entrada `energia` (`Formato_Solicitud_*Hidro_<Mes><AAAA>.xlsx`):
+  `PREFIJO_ENERGIA`, `MESES`, `prefijos_energia`, `_buscar_energia`, el
+  mapeo por letra (`COPIA_ENERGIA`, filas, `HOJA_ORIGEN_ENERGIA`) y
+  `corregir_energia` (K/L/M). La carpeta `CRA/Energia/` queda, con
+  `Medidas_CRA.xlsx` y su botón **Generar**.
+- `construir_energia(ruta, anio, mes)` lee `Medidas_CRA.xlsx` (hoja
+  `Medidas`): `Unidad Generadora/Central` = clave, `Año`/`Mes`/`DIA` de
+  `intervalo`, `HORADIA` = Hora − 1, `PERIODO DE CALCULO` =
+  (Hora − 1)·4 + Minutos/15 + 1 (lo mismo que J·4 + (MINUTO+15)/15), `Cuarto
+  de Hora` y `Neto` = `Gen_Unidad`. Sigue validando que el mes sea el del
+  período. Ya no tiene `Punto De Medida`, `kWhD`, `kWhR` ni `kWhD/kWhR
+  corregido`: Medidas_CRA trae el neto por clave.
+- Diferencia con la trazabilidad anotada en la tabla de `MAPA.md`.
+- Pruebas de ENERGIA rehechas sobre un Medidas_CRA (y una de que el árbol ya
+  no muestra el Formato_Solicitud). 581 pruebas.
+

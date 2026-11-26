@@ -154,7 +154,7 @@ class TestVentanaCra(unittest.TestCase):
         # La planilla + una por hoja.
         self.assertEqual(len(botones), 1 + len(self.cra.SECCIONES))
         self.assertIn("Ir a este balance", self._textos("Button"))
-        # "Generar" en el Formato_Solicitud (Medidas_CRA), en FP/ y en CO/.
+        # "Generar" en Medidas_CRA.xlsx, en FP/ y en CO/.
         self.assertEqual(self._textos("Button").count("Generar"), 3)
 
     def test_actualizar_una_hoja_corre_y_guarda_el_registro(self):

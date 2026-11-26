@@ -31,7 +31,7 @@ HOJAS_PENDIENTES = [
 # Entradas que no se dejan a mano sino que las arma un boton: sin el
 # archivo quedan PENDIENTE (no FALTA), con este detalle.
 GENERADAS = {
-    "medidas_cra": "se genera con 'Generar' en la fila de arriba (desde PRMTE)",
+    "medidas_cra": "se genera con 'Generar' (desde PRMTE)",
 }
 
 

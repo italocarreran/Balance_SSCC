@@ -139,23 +139,6 @@ def resolver_rutas(carpeta_base, aamm=None):
 # encuentra: buscar(carpeta, aamm) -> ruta o None.
 # ============================================================
 
-def prefijos_energia(aamm):
-    """'2608' -> ('formato_solicitud_ssaa_sscc_hidro_agosto2026',)"""
-
-    anio, mes = validar_aamm(aamm)
-    meses = (p.MESES[mes - 1],) + p.MESES_ALTERNATIVOS.get(mes, ())
-
-    return tuple(
-        p.PREFIJO_ENERGIA.format(mes=nombre, anio=anio) for nombre in meses
-    )
-
-
-def _buscar_energia(carpeta, aamm):
-    return buscar_por_prefijo(
-        carpeta, prefijos_energia(aamm), "energia (Formato_Solicitud_*)"
-    )
-
-
 def _buscar_fp(carpeta, aamm):
     return buscar_por_prefijo(
         carpeta, p.PREFIJO_FP.format(aamm=aamm), "factores de penalizacion"
@@ -214,9 +197,8 @@ ENTRADAS = [
      _buscar_centrales_cra),
     ("homologacion", "auxiliares", "*Homologacion*.xlsx",
      _buscar_homologacion),
-    ("energia", "energia",
-     "Formato_Solicitud_*Hidro_<Mes><AAAA>.xlsx", _buscar_energia),
-    # La genera el boton "Generar" de la fila de arriba (desde PRMTE).
+    # La genera el boton "Generar" de su fila (desde PRMTE); de aca sale
+    # la hoja ENERGIA. Reemplaza al Formato_Solicitud_SSAA_* (2026-11-26).
     ("medidas_cra", "energia", p.ARCHIVO_MEDIDAS_CRA, _buscar_medidas_cra),
     ("fp", "fp", "fp_<AAMM>*.xlsx", _buscar_fp),
     ("co", "co", "cvar_cra_<AAMM>_*.xlsx", _buscar_co),
