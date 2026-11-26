@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Hojas de entrada del CRA (Script/cra): ENERGIA, FP, CO y SC y CO, con
+Hojas de entrada del CRA (Script/cra): ENERGIA (desde Medidas_CRA), FP, CO y SC y CO, con
 archivos sinteticos armados con la forma que describe la trazabilidad
 (docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md, 6.1, 6.4 y 6.6).
 """
@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pandas as pd
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils import column_index_from_string
 
@@ -34,19 +35,22 @@ def _libro(ruta, filas_por_celda, hojas_extra=(), hoja="Hoja1"):
 
 
 def _energia(ruta, anio=2026, mes=8):
-    celdas = {(1, "B"): "titulo", (2, "B"): "Central"}
-    datos = [
-        ("PEHUENCHE_U1", "PM1", dt.datetime(anio, mes, 1, 0, 0), 0, 100, 5),
-        ("PEHUENCHE_U1", "PM1", dt.datetime(anio, mes, 1, 0, 45), 0, 110, 0),
-        ("RALCO_U1", "PM2", dt.datetime(anio, mes, 2, 23, 30), 23, 90, 1),
+    """Un Medidas_CRA.xlsx chico, con las columnas de Medidas_SAE."""
+
+    filas = [
+        # clave, intervalo, Hora (periodo de la hora local), Minutos, Cuarto, Gen
+        ("PEHUENCHE_U1", dt.datetime(anio, mes, 1, 0, 0), 1, 0, 1, 95.0),
+        ("PEHUENCHE_U1", dt.datetime(anio, mes, 1, 0, 45), 1, 45, 4, 110.0),
+        ("RALCO_U1", dt.datetime(anio, mes, 2, 23, 30), 24, 30, 191, -1.5),
     ]
-    for i, (u, pm, fecha, hora, d, r) in enumerate(datos, start=3):
-        celdas.update({
-            (i, "B"): u, (i, "C"): pm, (i, "D"): fecha.year,
-            (i, "E"): fecha.month, (i, "F"): fecha.day, (i, "G"): fecha,
-            (i, "H"): d, (i, "I"): r, (i, "J"): hora,
-        })
-    return _libro(ruta, celdas)
+    df = pd.DataFrame(
+        [{"Mes": f.month, "Dia": f.day, "Hora": h, "Minutos": m,
+          "Hora Mes": (c - 1) // 4 + 1, "Cuarto de Hora": c, "clave": k,
+          "intervalo": f, "Gen_Unidad": g} for k, f, h, m, c, g in filas]
+    )
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    df.to_excel(ruta, sheet_name=p.HOJA_MEDIDAS_CRA, index=False)
+    return ruta
 
 
 def _reporte_cra(ruta):
@@ -124,46 +128,21 @@ class PruebaCargaEntradas(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def test_energia_calcula_horadia_y_periodo(self):
-        ruta = _energia(self.base / "e.xlsx")
-
-        df = cra.construir_energia(ruta, 2026, 8)
+    def test_energia_sale_de_medidas_cra(self):
+        df = cra.construir_energia(_energia(self.base / "Medidas_CRA.xlsx"), 2026, 8)
 
         self.assertEqual(list(df.columns), p.COLUMNAS_ENERGIA)
-        self.assertEqual(len(df), 3)       # el titulo y el encabezado no entran
+        self.assertEqual(df[p.CAMPO_UNIDAD].tolist(),
+                         ["PEHUENCHE_U1", "PEHUENCHE_U1", "RALCO_U1"])
+        self.assertEqual(df[p.CAMPO_DIA].tolist(), [1, 1, 2])
+        # HORADIA = HORA() de Excel; PERIODO = HORADIA*4 + (MINUTO+15)/15.
         self.assertEqual(df[p.CAMPO_HORADIA].tolist(), [0, 0, 23])
-        # J*4 + (MINUTO+15)/15
         self.assertEqual(df[p.CAMPO_PERIODO].tolist(), [1, 4, 95])
-        self.assertEqual(df[p.CAMPO_KWHD].tolist(), [100, 110, 90])
-        self.assertEqual(df[p.CAMPO_KWHR].tolist(), [5, 0, 1])
-
-    def test_energia_corregidas_k_l_m(self):
-        from Script.cra.hojas_entrada import corregir_energia
-
-        # (I kWhD, J kWhR) -> (K, L, M), una fila por rama de las formulas.
-        casos = {
-            (-3, 2): (-3, 2, -1),     # I<0
-            (0, -4): (-4, 0, -4),     # I=0 y J<0
-            (5, 0): (0, 5, 5),        # J<=0 (y L: J=0 e I>0)
-            (5, -2): (-2, 5, 3),      # J<0, I>0
-            (5, 2): (-2, 5, 3),       # I>J>0
-            (2, 5): (-2, 5, 3),       # J>I>0
-            (3, 3): (-3, 3, 0),       # I=J>0
-            (0, 0): (0, 0, 0),
-        }
-        for (i, j), esperado in casos.items():
-            self.assertEqual(corregir_energia(i, j), esperado, (i, j))
-
-    def test_energia_escribe_neto(self):
-        df = cra.construir_energia(_energia(self.base / "e.xlsx"), 2026, 8)
-
-        # kWhD/kWhR = (100, 5), (110, 0), (90, 1)
-        self.assertEqual(df[p.CAMPO_NETO].tolist(), [95, 110, 89])
-        self.assertEqual(df[p.CAMPO_KWHD_CORREGIDO].tolist(), [-5, 0, -1])
-        self.assertEqual(df[p.CAMPO_KWHR_CORREGIDO].tolist(), [100, 110, 90])
+        self.assertEqual(df[p.CAMPO_CUARTO].tolist(), [1, 4, 191])
+        self.assertEqual(df[p.CAMPO_NETO].tolist(), [95.0, 110.0, -1.5])
 
     def test_energia_de_otro_mes_se_rechaza(self):
-        ruta = _energia(self.base / "e.xlsx", mes=7)
+        ruta = _energia(self.base / "Medidas_CRA.xlsx", mes=7)
 
         with self.assertRaises(cra.ErrorEntrada):
             cra.construir_energia(ruta, 2026, 8)
@@ -326,8 +305,7 @@ class PruebaProceso(unittest.TestCase):
         self.base = Path(self._tmp.name) / "CRA 2608"
         cra.crear_carpetas_caso(self.base)
         self.rutas = cra.resolver_rutas(self.base)
-        _energia(self.rutas["energia"]
-                 / "Formato_Solicitud_SSAA_SSCC_Hidro_Agosto2026.xlsx")
+        _energia(self.rutas["medidas_cra"])
         _libro(self.rutas["fp"] / "fp_2608_def.xlsx",
                {(2, "A"): "B1", (2, "B"): 1, (2, "C"): 1.0, (2, "D"): 1})
         _libro(self.rutas["co"] / "cvar_cra_2608_def.xlsx",
@@ -378,23 +356,25 @@ class PruebaProceso(unittest.TestCase):
         filas = cra.revisar_estructura(self.base, "2608")
         por_id = {f["id"]: f for f in filas}
 
-        for id_ in ("energia", "fp", "co", "reporte_cra", "sobrecostos",
+        for id_ in ("medidas_cra", "fp", "co", "reporte_cra", "sobrecostos",
                     "sscc_desempeno", "prorrata", "centrales_cra"):
             self.assertEqual(por_id[id_]["estado"], "ok", id_)
         self.assertEqual(por_id["salida"]["estado"], "pendiente")
 
-    def test_fp_y_energia_de_otro_periodo_no_se_toman(self):
+    def test_fp_de_otro_periodo_no_se_toma(self):
         # Otro mes en el nombre: no es el archivo del periodo.
         (self.rutas["fp"] / "fp_2608_def.xlsx").rename(
             self.rutas["fp"] / "fp_2607_def.xlsx")
-        (self.rutas["energia"]
-         / "Formato_Solicitud_SSAA_SSCC_Hidro_Agosto2026.xlsx").rename(
-            self.rutas["energia"]
-            / "Formato_Solicitud_SSAA_SSCC_Hidro_Julio2026.xlsx")
 
         rutas = cra.resolver_rutas(self.base)
         self.assertIsNone(cra.buscar_entrada(rutas, "fp", "2608"))
-        self.assertIsNone(cra.buscar_entrada(rutas, "energia", "2608"))
+
+    def test_sin_formato_solicitud(self):
+        # El Formato_Solicitud_SSAA_* ya no se usa (2026-11-26).
+        ids = [f["id"] for f in cra.revisar_estructura(self.base, "2608")]
+        self.assertNotIn("energia", ids)
+        textos = [f["texto"] for f in cra.revisar_estructura(self.base, "2608")]
+        self.assertFalse(any("Formato_Solicitud" in t for t in textos))
 
     def test_aamm_invalido(self):
         for malo in ("", "26", "2613", "abcd"):

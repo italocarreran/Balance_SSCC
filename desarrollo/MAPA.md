@@ -81,7 +81,7 @@ Script/
         hojas_entrada.py       <- ENERGIA, FP, CO, SC y CO
         fuentes_bess.py        <- FD_CPF/CSF/CTF y matriz de PRORRATA_RETIROS
         politicas.py           <- botones Generar de fp_ y cvar_cra_
-        medidas_cra.py         <- Medidas_CRA.xlsx desde PRMTE (boton Generar del Formato_Solicitud)
+        medidas_cra.py         <- Medidas_CRA.xlsx desde PRMTE (boton Generar de su fila); de ahi sale la hoja ENERGIA
         maestros.py            <- Auxiliares/centrales_cra.xlsx (3 hojas)
         escritura.py           <- 5_REMUNERACION_CRA_AAMM.xlsx: cuadros y escritura rapida del BESS (conserva lo que no toca)
         proceso.py             <- SECCIONES y generar_balance_cra()
@@ -1207,7 +1207,7 @@ importable como cualquier módulo.
   bloquea el CRA. Todavía **no** tiene "Ejecutar todo".
 - **Caso (confirmado):** dentro de `<mes>/CRA/`:
   `Auxiliares/centrales_cra.xlsx`,
-  `Energia/Formato_Solicitud_SSAA_SSCC_Hidro_<Mes><AAAA>.xlsx`,
+  `Energia/Medidas_CRA.xlsx` (la arma el programa desde PRMTE),
   `FP/fp_<AAMM>*`, `CO/cvar_cra_<AAMM>_*`, `SC y CO/Reporte_CRA*.csv`,
   `SC y CO/Cálculo_SobrecostosSSCC_*.xlsm` (hoja `SOBRECOSTOS`), `Log/` y
   la salida `5_REMUNERACION_CRA_<AAMM>.xlsx` (un `Balance_CRA.xlsx` de
@@ -1219,12 +1219,13 @@ importable como cualquier módulo.
   para; los de fuente BESS usan el buscador del BESS (el
   `SSCC_Desempeño_*` más reciente, como la macro original).
 - **`Medidas_CRA.xlsx`** (`medidas_cra.py`, 2026-11-26): botón **Generar**
-  en la fila del `Formato_Solicitud_SSAA_*`. Es el mismo proceso y el mismo
+  en su fila (`CRA/Energia/`). Es el mismo proceso y el mismo
   formato que `Medidas_SAE.xlsx` (`nucleo.medidas_sae.armar_medidas`, que
   usan los dos): homologación de `CRA/Auxiliares/*homologacion*`, descarga de
   PRMTE con lotes en `CRA/Energia/_trabajo/`, suma por clave con el Flujo,
   hoja `Gen real` si hay, columnas `COLUMNAS_AI` y `Puntos_fallidos.xlsx` al
-  lado. La hoja `ENERGIA` sigue leyendo el Formato_Solicitud.
+  lado. De aquí sale la hoja `ENERGIA`: el `Formato_Solicitud_SSAA_*` se sacó
+  (2026-11-26, "ya no se necesita").
 - **Planilla:** mismas convenciones que la del BESS (fila 1 vacía,
   `Cuadro N° 1 — <TITULOS_HOJAS>` en la 2, encabezados en la 3, columna A
   de margen) y su escritura rápida (`nucleo.escritura._volcar` +
@@ -1235,8 +1236,11 @@ importable como cualquier módulo.
   regla), como define cada carga la trazabilidad. Hoja de cada origen en
   `HOJA_ORIGEN_*`: nombre, `0` (la primera) o `None` (no confirmada: la
   única, o se para si hay varias).
-- **`ENERGIA`:** B:J del origen + `kWhD corregido`, `kWhR corregido` y
-  `Neto` (`corregir_energia()`, fórmulas K/L/M de la traz. 6.1).
+- **`ENERGIA`:** desde `Medidas_CRA.xlsx` (2026-11-26): `Unidad
+  Generadora/Central` = clave, `Año`/`Mes`/`DIA` de `intervalo`, `HORADIA` =
+  Hora − 1, `PERIODO DE CALCULO` = (Hora − 1)·4 + Minutos/15 + 1, `Cuarto de
+  Hora` y `Neto` = `Gen_Unidad` (ya con el signo del Flujo). Sin `Punto De
+  Medida`, `kWhD`/`kWhR` ni las fórmulas K/L/M del Formato_Solicitud.
 - **`FD_*`:** `Fecha Hora` (clave horaria, con `Unidad`) + la hoja horaria
   del `SSCC_Desempeño`, **solo** con las unidades de la columna `FD` de la
   hoja `diccionario` de `centrales_cra.xlsx` (la misma lista para las tres;
@@ -1304,5 +1308,6 @@ importable como cualquier módulo.
 
 ## Diferencias con el documento de dominio
 
-_(vacío — no se detectaron diferencias entre `nucleo/`/`Balance_BESS.py`
-y `docs/Plan_Traspaso_Python_Balance_BESS.md` al organizar el repositorio)._
+| Documento | Dice | El código hace |
+|---|---|---|
+| `docs/Trazabilidad_CRA_Periodo_Generico_v5_Auditoria_Formulas.md` §6.1 | `ENERGIA` sale del `Formato_Solicitud_SSAA_SSCC_Hidro_MesAAAA.xlsx` (B:J) y arma el Neto con K/L/M | sale de `Medidas_CRA.xlsx` (PRMTE, formato Medidas_SAE), con el Neto ya hecho (pedido del usuario 2026-11-26) |

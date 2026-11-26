@@ -10,10 +10,10 @@ nunca importa nada de aca. La ventana es Balance_CRA.py.
     parametros.py     Carpetas, patrones de nombre, hojas y mapeos de columnas.
     lectura.py        Busqueda de archivos y lectura por letra/fila de Excel.
     rutas.py          Rutas del caso (<mes>/CRA/ + las comunes con el BESS) y AAMM.
-    hojas_entrada.py  ENERGIA, FP, CO y SC y CO.
+    hojas_entrada.py  ENERGIA (desde Medidas_CRA), FP, CO y SC y CO.
     fuentes_bess.py   FD_CPF/CSF/CTF y la matriz de PRORRATA_RETIROS (fuentes del BESS).
     politicas.py      Botones Generar de fp_ y cvar_cra_ (Script/Politicas).
-    medidas_cra.py    Medidas_CRA.xlsx desde PRMTE (boton Generar del Formato_Solicitud).
+    medidas_cra.py    Medidas_CRA.xlsx desde PRMTE (boton Generar de su fila).
     maestros.py       Auxiliares/centrales_cra.xlsx (configuraciones, empresas, diccionario FD).
     escritura.py      5_REMUNERACION_CRA_AAMM.xlsx (cuadros y escritura rapida del BESS).
     proceso.py        Las secciones y generar_balance_cra().

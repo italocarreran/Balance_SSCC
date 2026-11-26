@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 Las hojas de entrada del CRA cuya carga ya esta definida en la
-trazabilidad: ENERGIA (6.1), FP (6.4.1), CO (6.4.2) y SC y CO (6.6).
+trazabilidad: FP (6.4.1), CO (6.4.2) y SC y CO (6.6), y ENERGIA (desde
+Medidas_CRA.xlsx, ya no del Formato_Solicitud de la traz. 6.1).
 
 Cada construir_*() recibe la ruta del archivo origen y devuelve el
 DataFrame de la hoja, sin escribir nada. Se replica la carga tal cual
-esta documentada; lo que la trazabilidad deja PENDIENTE (el Neto de
-ENERGIA, CO_Barra_Propia) no se calcula aca.
+esta documentada; lo que la trazabilidad deja PENDIENTE
+(CO_Barra_Propia) no se calcula aca.
 """
 
 import re
@@ -19,7 +20,6 @@ from . import parametros as p
 from .lectura import (
     a_fecha_hora,
     dia_excel,
-    entero_si_se_puede,
     leer_columnas,
     numero_o_nada,
     texto_excel,
@@ -31,127 +31,73 @@ def _nada(*_args, **_kwargs):
 
 
 # ============================================================
-# ENERGIA (traz. 6.1)
+# ENERGIA: desde Medidas_CRA.xlsx
+#
+# Antes salia del Formato_Solicitud_SSAA_SSCC_Hidro_MesAAAA.xlsx (traz.
+# 6.1). El usuario lo saco (2026-11-26: "Formato solicitud sacalo, ya no
+# se necesita. Solo deja Medidas_CRA"): ahora la energia viene de PRMTE,
+# en Medidas_CRA.xlsx, con el formato de Medidas_SAE (una fila por clave
+# = Unidad y cuarto de hora, Gen_Unidad ya con el signo del Flujo).
+#
+#   Unidad Generadora/Central = clave
+#   Año / Mes / DIA           = de 'intervalo' (hora local)
+#   HORADIA                   = Hora - 1      (la HORA() de Excel, 0..23)
+#   PERIODO DE CALCULO        = (Hora - 1) * 4 + Minutos / 15 + 1
+#                               (= J*4 + (MINUTO+15)/15 de la traz.;
+#                               llega a 100 el dia que se atrasa la hora)
+#   Cuarto de Hora            = el del mes (cruza con el resto del balance)
+#   Neto                      = Gen_Unidad
+#
+# El Formato_Solicitud traia kWhD y kWhR por separado y el libro armaba
+# el Neto con dos formulas (K, L, M); Medidas_CRA ya trae el neto, asi
+# que esas columnas no estan.
 # ============================================================
 
 def construir_energia(ruta, anio, mes, registrar=_nada):
-    """
-    Formato_Solicitud_SSAA_SSCC_Hidro_MesAAAA.xlsx -> hoja ENERGIA.
+    """Medidas_CRA.xlsx -> hoja ENERGIA (ver arriba)."""
 
-      B:F -> copia directa (Unidad, Punto de Medida, Año, Mes, DIA)
-      HORADIA            = HORA(G)
-      PERIODO DE CALCULO = J*4 + (MINUTO(G)+15)/15
-      H -> kWhD, I -> kWhR
+    try:
+        origen = pd.read_excel(ruta, sheet_name=p.HOJA_MEDIDAS_CRA)
+    except ValueError as error:
+        raise ErrorEntrada(
+            f"{Path(ruta).name} no tiene la hoja '{p.HOJA_MEDIDAS_CRA}': "
+            f"generalo de nuevo con 'Generar'."
+        ) from error
 
-    Se valida que Año/Mes de todas las filas sean los del periodo: el
-    archivo es mensual y el nombre no se usa para buscarlo.
-    """
+    faltan = [c for c in p.COLUMNAS_MEDIDAS_ORIGEN if c not in origen.columns]
+    if faltan:
+        raise ErrorEntrada(
+            f"{Path(ruta).name} no trae las columnas {faltan}: generalo de "
+            f"nuevo con 'Generar'."
+        )
 
-    letras = list(p.COPIA_ENERGIA) + [
-        p.LETRA_FECHA_HORA_ENERGIA, p.LETRA_HORA_ENERGIA,
-    ]
-    origen = leer_columnas(
-        ruta, p.HOJA_ORIGEN_ENERGIA, p.FILA_INICIO_ENERGIA, letras
-    )
+    fechas = pd.to_datetime(origen["intervalo"], errors="coerce")
+    hora = pd.to_numeric(origen["Hora"], errors="coerce")
+    minutos = pd.to_numeric(origen["Minutos"], errors="coerce")
 
-    df = pd.DataFrame(
-        {campo: origen[letra] for letra, campo in p.COPIA_ENERGIA.items()},
-        dtype=object,
-    )
-
-    fechas = origen[p.LETRA_FECHA_HORA_ENERGIA].map(a_fecha_hora)
-    horas = origen[p.LETRA_HORA_ENERGIA].map(numero_o_nada)
-
-    df[p.CAMPO_HORADIA] = [
-        None if f is None else f.hour for f in fechas
-    ]
-    df[p.CAMPO_PERIODO] = [
-        None if f is None or h is None
-        else entero_si_se_puede(h * 4 + (f.minute + 15) / 15)
-        for f, h in zip(fechas, horas)
-    ]
+    df = pd.DataFrame({
+        p.CAMPO_UNIDAD: origen["clave"].astype(str),
+        p.CAMPO_ANIO: fechas.dt.year,
+        p.CAMPO_MES: fechas.dt.month,
+        p.CAMPO_DIA: fechas.dt.day,
+        p.CAMPO_HORADIA: hora - 1,
+        p.CAMPO_PERIODO: (hora - 1) * 4 + minutos / 15 + 1,
+        p.CAMPO_CUARTO: pd.to_numeric(origen["Cuarto de Hora"], errors="coerce"),
+        p.CAMPO_NETO: pd.to_numeric(origen["Gen_Unidad"], errors="coerce"),
+    })
 
     sin_fecha = int(fechas.isna().sum())
-    sin_hora = int(horas.isna().sum())
-    if sin_fecha or sin_hora:
-        registrar(
-            f"  AVISO ENERGIA: {sin_fecha} fila(s) sin fecha/hora en "
-            f"{p.LETRA_FECHA_HORA_ENERGIA} y {sin_hora} sin numero en "
-            f"{p.LETRA_HORA_ENERGIA}: quedan sin HORADIA/PERIODO."
-        )
+    if sin_fecha:
+        registrar(f"  AVISO ENERGIA: {sin_fecha} fila(s) sin fecha en 'intervalo'.")
+    for campo in (p.CAMPO_HORADIA, p.CAMPO_PERIODO, p.CAMPO_CUARTO):
+        df[campo] = df[campo].astype("Int64")
 
-    _validar_periodo(df, anio, mes, ruta)
+    _validar_periodo(df.dropna(subset=[p.CAMPO_ANIO]), anio, mes, ruta)
 
-    corregidas = [
-        corregir_energia(d, r)
-        for d, r in zip(
-            _numeros_o_cero(df[p.CAMPO_KWHD], "kWhD", registrar),
-            _numeros_o_cero(df[p.CAMPO_KWHR], "kWhR", registrar),
-        )
-    ]
-    df[p.CAMPO_KWHD_CORREGIDO] = [k for k, _, _ in corregidas]
-    df[p.CAMPO_KWHR_CORREGIDO] = [l for _, l, _ in corregidas]
-    df[p.CAMPO_NETO] = [m for _, _, m in corregidas]
-
-    return df[p.COLUMNAS_ENERGIA].reset_index(drop=True)
-
-
-def corregir_energia(i, j):
-    """
-    ENERGIA!K, L y M (traz. v5, 6.1), con I = kWhD y J = kWhR:
-
-      K = SI(I<0; I; SI(Y(I=0; J<0); J; SI(J<=0; J;
-            SI(Y(I>0; J>0; I>J); -J; -I))))
-      L = SI(Y(J>0; J>I); J; SI(Y(J=0; I>0); I; SI(I>=0; I;
-            SI(Y(I>0; J>0; I>J); I; J))))
-      M = L + K   (Neto)
-
-    Se transcriben las dos formulas tal cual, rama por rama, en vez de
-    la tabla "funcional" del documento: asi no hay que demostrar que son
-    equivalentes. Devuelve (K, L, M).
-    """
-
-    if i < 0:
-        k = i
-    elif i == 0 and j < 0:
-        k = j
-    elif j <= 0:
-        k = j
-    elif i > 0 and j > 0 and i > j:
-        k = -j
-    else:
-        k = -i
-
-    if j > 0 and j > i:
-        l = j
-    elif j == 0 and i > 0:
-        l = i
-    elif i >= 0:
-        l = i
-    elif i > 0 and j > 0 and i > j:
-        l = i
-    else:
-        l = j
-
-    return k, l, l + k
-
-
-def _numeros_o_cero(valores, nombre, registrar):
-    """
-    Como las lee la formula: una celda vacia vale 0. Un texto que no es
-    numero tambien queda en 0, pero se avisa (en Excel daria otra cosa).
-    """
-
-    numeros = valores.map(numero_o_nada)
-    texto = int((numeros.isna() & valores.map(texto_excel).ne("")).sum())
-
-    if texto:
-        registrar(
-            f"  AVISO ENERGIA: {texto} celda(s) de {nombre} con texto no "
-            f"numerico; para K/L/M se toman como 0."
-        )
-
-    return numeros.fillna(0.0).tolist()
+    return (
+        df.sort_values([p.CAMPO_UNIDAD, p.CAMPO_CUARTO])
+        [p.COLUMNAS_ENERGIA].reset_index(drop=True)
+    )
 
 
 def _validar_periodo(df, anio, mes, ruta):

@@ -49,7 +49,7 @@ HOJA_PRORRATA = "PRORRATA_RETIROS"
 # El titulo del cuadro de cada hoja ("Cuadro N° 1 — <titulo>" en la
 # fila 2, como en la planilla del BESS).
 TITULOS_HOJAS = {
-    HOJA_ENERGIA: "Energia inyectada y retirada por unidad",
+    HOJA_ENERGIA: "Energia neta por unidad (desde Medidas_CRA)",
     HOJA_FP: "Factores de penalizacion (fp_)",
     HOJA_CO: "Costos de operacion (cvar_cra_)",
     HOJA_SC_CO: "Sobrecostos (SC) y costos de oportunidad (CO)",
@@ -142,19 +142,6 @@ EXTENSIONES_EXCEL = (".xlsx", ".xlsm")
 # tambien en Excel por si alguna vez llega guardado asi.
 EXTENSIONES_REPORTE_CRA = (".csv",) + EXTENSIONES_EXCEL
 
-# Traz. 6.1: Formato_Solicitud_SSAA_SSCC_Hidro_MesAAAA.xlsx, con el mes
-# en palabras: ..._Agosto2026 (confirmado por el usuario). {mes} es el
-# nombre del mes en minusculas y sin tildes; ademas se valida el
-# periodo contra las columnas Año/Mes del propio archivo.
-PREFIJO_ENERGIA = "formato_solicitud_ssaa_sscc_hidro_{mes}{anio}"
-
-MESES = (
-    "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
-    "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-)
-# "Setiembre" tambien se usa en Chile: se acepta cualquiera de las dos.
-MESES_ALTERNATIVOS = {9: ("setiembre",)}
-
 # Traz. 6.4.1: fp_AAMM*.xlsx (el usuario confirmo que siempre lleva el
 # AAMM).
 PREFIJO_FP = "fp_{aamm}"
@@ -180,7 +167,6 @@ PREFIJO_SOBRECOSTOS = "calculo_sobrecostossscc"
 # Un .csv no tiene hojas: este valor no se usa.
 # ============================================================
 
-HOJA_ORIGEN_ENERGIA = None
 HOJA_ORIGEN_FP = None
 HOJA_ORIGEN_CO = None
 HOJA_ORIGEN_REPORTE_CRA = 0
@@ -194,54 +180,33 @@ HOJA_ORIGEN_SOBRECOSTOS = "SOBRECOSTOS"
 # salida.
 # ============================================================
 
-# --- ENERGIA (traz. 6.1) -----------------------------------
-# Los datos empiezan en la fila 3 del archivo origen.
-FILA_INICIO_ENERGIA = 3
-
+# --- ENERGIA (desde Medidas_CRA.xlsx; ver hojas_entrada) ----
+# El Formato_Solicitud_SSAA_SSCC_Hidro_* se saco (pedido del usuario
+# 2026-11-26): la hoja sale de Medidas_CRA.xlsx.
 CAMPO_UNIDAD = "Unidad Generadora/Central"
-CAMPO_PUNTO = "Punto De Medida"
 CAMPO_ANIO = "Año"
 CAMPO_MES = "Mes"
 CAMPO_DIA = "DIA"
 CAMPO_HORADIA = "HORADIA"
 CAMPO_PERIODO = "PERIODO DE CALCULO"
-CAMPO_KWHD = "kWhD"
-CAMPO_KWHR = "kWhR"
-
-# Copias directas.
-COPIA_ENERGIA = {
-    "B": CAMPO_UNIDAD,
-    "C": CAMPO_PUNTO,
-    "D": CAMPO_ANIO,
-    "E": CAMPO_MES,
-    "F": CAMPO_DIA,
-    "H": CAMPO_KWHD,
-    "I": CAMPO_KWHR,
-}
-
-# Columnas del origen que solo se usan para calcular:
-#   HORADIA            = HORA(G)
-#   PERIODO DE CALCULO = J*4 + (MINUTO(G)+15)/15
-LETRA_FECHA_HORA_ENERGIA = "G"
-LETRA_HORA_ENERGIA = "J"
-
-# "Corregidas" (traz. v5, 6.1): K, L y M son formulas del libro y M
-# (Neto) es lo que consume CÁLCULO_CRA. Ver corregir_energia().
-CAMPO_KWHD_CORREGIDO = "kWhD corregido"
-CAMPO_KWHR_CORREGIDO = "kWhR corregido"
+CAMPO_CUARTO = "Cuarto de Hora"
 CAMPO_NETO = "Neto"
 
 COLUMNAS_ENERGIA = [
-    CAMPO_UNIDAD, CAMPO_PUNTO, CAMPO_ANIO, CAMPO_MES, CAMPO_DIA,
-    CAMPO_HORADIA, CAMPO_PERIODO, CAMPO_KWHD, CAMPO_KWHR,
-    CAMPO_KWHD_CORREGIDO, CAMPO_KWHR_CORREGIDO, CAMPO_NETO,
+    CAMPO_UNIDAD, CAMPO_ANIO, CAMPO_MES, CAMPO_DIA, CAMPO_HORADIA,
+    CAMPO_PERIODO, CAMPO_CUARTO, CAMPO_NETO,
+]
+
+# Lo que la hoja ENERGIA necesita de Medidas_CRA.xlsx (las columnas de
+# Medidas_SAE).
+COLUMNAS_MEDIDAS_ORIGEN = [
+    "clave", "intervalo", "Hora", "Minutos", "Cuarto de Hora", "Gen_Unidad",
 ]
 
 # --- Medidas_CRA.xlsx (desde PRMTE; ver medidas_cra.py) -----
-# Lo arma el boton "Generar" de la fila del Formato_Solicitud_SSAA_*, en
-# la misma carpeta Energia/, con las mismas columnas que Medidas_SAE.xlsx
-# del BESS (pedido del usuario 2026-11-26). La hoja ENERGIA sigue leyendo
-# el Formato_Solicitud.
+# Lo arma el boton "Generar" de su fila, en Energia/, con las mismas
+# columnas que Medidas_SAE.xlsx del BESS (pedido del usuario 2026-11-26).
+# De aca sale la hoja ENERGIA.
 ARCHIVO_MEDIDAS_CRA = "Medidas_CRA.xlsx"
 HOJA_MEDIDAS_CRA = "Medidas"
 # Al lado, siempre (vacio si no falto nada), como el del BESS.

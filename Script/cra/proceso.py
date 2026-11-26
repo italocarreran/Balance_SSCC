@@ -29,7 +29,7 @@ def _nada(*_args, **_kwargs):
 
 def _hoja_energia(rutas, aamm, registrar):
     anio, mes = validar_aamm(aamm)
-    ruta = exigir_entrada(rutas, "energia", aamm)
+    ruta = exigir_entrada(rutas, "medidas_cra", aamm)
     registrar(f"  Leyendo {ruta.name}")
     return construir_energia(ruta, anio, mes, registrar)
 

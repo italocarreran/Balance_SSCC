@@ -21,8 +21,9 @@ la homologacion de <mes>/CRA/Auxiliares/ y su propia carpeta de trabajo:
   4. las centrales de la hoja 'Gen real' (API de operacion real), si hay.
 
 Salida con las mismas columnas que Medidas_SAE.xlsx (COLUMNAS_AI) y
-Puntos_fallidos.xlsx al lado. La hoja ENERGIA sigue leyendo el
-Formato_Solicitud.
+Puntos_fallidos.xlsx al lado. De aca sale la hoja ENERGIA: el
+Formato_Solicitud_SSAA_* ya no se usa ("Formato solicitud sacalo, ya no se
+necesita. Solo deja Medidas_CRA", 2026-11-26).
 """
 
 from ..nucleo.escritura import escribir_tabla_rapida
@@ -41,7 +42,7 @@ def _nada(*_args, **_kwargs):
 
 def generar_medidas_cra(carpeta_base, aamm, registrar=_nada, progreso=_nada):
     """
-    Boton "Generar" de la fila del Formato_Solicitud_SSAA_*: arma
+    Boton "Generar" de la fila de Medidas_CRA.xlsx: arma
     <mes>/CRA/Energia/Medidas_CRA.xlsx desde PRMTE y, al lado,
     Puntos_fallidos.xlsx (vacio si no falto nada). Devuelve la ruta.
     """
