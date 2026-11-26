@@ -720,6 +720,10 @@ def main():
         if id_fila == "salida":
             return ("Actualizar", lambda: lanzar(
                 cra.generar_balance_cra, {}, "planilla completa"))
+        if id_fila == "energia":
+            # Medidas_CRA.xlsx desde PRMTE: replica el Formato_Solicitud.
+            return ("Generar", lambda: lanzar(
+                cra.generar_medidas_cra, {}, "Medidas_CRA.xlsx en CRA/Energia/"))
         if id_fila == "sscc_desempeno":
             return ("Traer", lambda: lanzar(
                 cra.traer_fd, {}, "SSCC_Desempeño_* en FD y FMA/"))
@@ -1120,6 +1124,7 @@ def main():
         "generar_balance_cra": "Planilla 5_REMUNERACION_CRA",
         "traer_fd": "Traer FD (SSCC_Desempeño)",
         "generar_politicas": "Generar politicas",
+        "generar_medidas_cra": "Generar Medidas_CRA (PRMTE)",
     }
 
     def lanzar(funcion, kwargs, etiqueta_salida):
@@ -1236,7 +1241,8 @@ def main():
         "Elige el balance arriba (año _ mes _ proceso) y entra con 'Ir a "
         "este balance' o, si todavia no tiene carpeta, con 'Examinar' (es "
         "la misma carpeta del mes que usa el BESS). Cada fila del diagrama "
-        "trae su propio boton: 'Generar' en FP/ y CO/, 'Traer' en el "
+        "trae su propio boton: 'Generar' en el Formato_Solicitud (arma "
+        "Medidas_CRA.xlsx desde PRMTE), en FP/ y en CO/, 'Traer' en el "
         "SSCC_Desempeño de FD y FMA/, y 'Actualizar' en la planilla (todas "
         "las hojas) y en cada hoja. Cada archivo y cada carpeta del "
         "diagrama es un link a su ruta."

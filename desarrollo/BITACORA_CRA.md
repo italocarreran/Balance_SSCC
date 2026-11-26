@@ -67,6 +67,10 @@ se adivinó: lo que depende de una respuesta quedó como constante en
   xvfb, pero no en Windows): el formato nuevo, "Ir a este mes", el cambio
   de mes que va solo a la carpeta del BESS, y que el registro quede en
   `CRA/Log/`.
+- **Medidas_CRA (2026-11-26):** correrlo con un mes real (homologación del
+  CRA en `CRA/Auxiliares/`) y decidir si la hoja `ENERGIA` pasa a leer
+  `Medidas_CRA` (hoy tiene el formato de `Medidas_SAE`: suma por clave con
+  el Flujo, no kWhD/kWhR por punto).
 - **Carpeta del mes compartida (2026-11-16):** a decidir con el usuario:
   - Probar `Herramientas/Reorganizar_Carpetas.py` en Windows con un mes
     real de antes (y con algo abierto en Excel, para ver que se para bien).
@@ -495,3 +499,62 @@ ventana del BESS elige el caso como balance (año _ mes _ proceso) con
   bloqueo solo del CRA, carpeta del balance desde el BESS). 576 pruebas con
   pantalla (xvfb), 59 salteadas sin tkinter.
 
+## 2026-11-26 (2) — Medidas_CRA.xlsx desde PRMTE
+
+Pedido del usuario: "el archivo Formato_Solicitud_SSAA tenga un botón para
+generarlo, la info viene de PRMTE así que tenemos que replicar el archivo de
+los SAE, que genere una salida que se llame Medidas_CRA. Misma idea, y la
+salida en este formato por ahora, para comparar: Unidad, Punto De Medida,
+Año, Mes, DIA, FECHA_HORA, kWhD, kWhR. En auxiliares del CRA va a haber un
+homologacion también igual que el de SAE".
+
+- `Script/cra/medidas_cra.py`: `generar_medidas_cra(base, aamm)` y
+  `construir_medidas_cra(df_crudo, df_homol)`. Reusa tal cual
+  `Homologacion` (buscar/leer la hoja `homol` de `CRA/Auxiliares/`),
+  `Descarga_PRMTE.descargar` (lotes reanudables en `CRA/Energia/_trabajo/`),
+  `Claves_Balance` (fechas, hora inexistente, incompletos, huecos,
+  calendario) y `armar/escribir_puntos_fallidos` y `escribir_tabla_rapida`
+  del núcleo.
+- Diferencia con el SAE: no suma por clave con el `Flujo`; deja una fila por
+  Unidad (`clave`) + Punto de Medida + cuarto de hora con kWhD y kWhR en
+  columnas, según el `Canal` de la homologación (termina en D / R; otro
+  canal se avisa y queda fuera), con el valor tal como lo da la API.
+  `FECHA_HORA` = inicio del cuarto de hora local; Año/Mes/DIA de ahí.
+- Salida en `CRA/Energia/Medidas_CRA.xlsx` (hoja `Medidas`) y
+  `Puntos_fallidos.xlsx` al lado. La hoja `ENERGIA` no cambia (sigue con el
+  Formato_Solicitud) hasta comparar.
+- Árbol: fila de la homologación en `CRA/Auxiliares/` y de `Medidas_CRA.xlsx`
+  en `CRA/Energia/` (PENDIENTE hasta generarla); **Generar** en la fila del
+  Formato_Solicitud.
+- La hoja `Gen real` de la homologación todavía no se usa: si trae centrales,
+  se avisa.
+- `tests/test_cra_medidas.py` (5). 581 pruebas (59 salteadas sin tkinter;
+  todas con xvfb).
+
+## 2026-11-26 (3) — Varios paños en una línea de la homologación; Medidas_CRA con el formato del SAE
+
+Pedido del usuario: "el formato de los puntos de medida es
+NOMBRE_TENSIÓN_paño_algomas. El que necesito es poder en una misma línea
+incluir más de un paño con este formato: ALFALFAL_220_J1_AES+J2,
+LSQUILOS_006_G1_CLB+G2+G3, CPLMAIQN_006_U1_EPP+U2+U3+U4+U5, ..." (para CRA y
+BESS) y "que la salida de CRA tenga el mismo formato que [...] los SAE".
+
+- `Script/Medidas/Homologacion.py`: `expandir_punto(texto)` y
+  `expandir_paños(df)`; `leer_homologacion` devuelve una fila por punto
+  real (mismo Canal, clave y Flujo) y el texto escrito en
+  `COLUMNA_PUNTO_ORIGINAL`. Se descargan por separado y se suman en la
+  clave. El paño de cada `+` va tal como está escrito
+  (`CQLTHUES_012_CG1_AES+G2+G3` -> CG1, G2, G3). Un primero sin
+  `NOMBRE_TENSION_paño`, un `+` vacío o un paño con `_` cortan con un
+  error que dice el texto.
+- `nucleo/medidas_sae.py`: los pasos 1-4 salen a `armar_medidas(...)` (y el
+  resumen final a `informar_escritura`); `generar_medidas_sae` hace lo
+  mismo que antes. El registro dice cuántas líneas traen varios paños.
+- `cra/medidas_cra.py`: `Medidas_CRA.xlsx` ahora es **el mismo proceso y el
+  mismo formato que `Medidas_SAE.xlsx`** (`COLUMNAS_AI`, hoja `Medidas`, suma
+  por clave con el Flujo, y la hoja `Gen real` si hay). Se quitó la forma
+  de comparación con kWhD/kWhR de la entrada anterior.
+- `docs/Estructura_Archivos_Reales.md` §3.b con el formato `+`.
+- `tests/test_cra_medidas.py` (6): los ejemplos del usuario, mal escritos,
+  la hoja expandida, Medidas_SAE sumando los dos paños y Medidas_CRA con el
+  formato del SAE. 582 pruebas.

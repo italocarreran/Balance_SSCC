@@ -60,6 +60,60 @@ COLUMNA_PUNTO = "Punto de Medida"
 COLUMNA_CANAL = "Canal"
 COLUMNA_CLAVE = "clave"
 COLUMNA_FLUJO = "Flujo"
+# El texto tal como esta escrito en la hoja, antes de expandir los paños
+# (ver expandir_punto): "ALFALFAL_220_J1_AES+J2". Medidas_CRA muestra
+# este, con la suma de sus paños.
+COLUMNA_PUNTO_ORIGINAL = "Punto de Medida (homologacion)"
+
+# Varios paños en una misma linea (pedido del usuario 2026-11-26):
+# NOMBRE_TENSION_paño_algomas+paño2+paño3 = NOMBRE_TENSION_paño_algomas,
+# NOMBRE_TENSION_paño2_algomas y NOMBRE_TENSION_paño3_algomas.
+SEPARADOR_PAÑOS = "+"
+
+
+def expandir_punto(texto):
+    """
+    Los puntos de medida que dice una celda de la columna 'Punto de
+    Medida'. El formato es NOMBRE_TENSION_paño_algomas, y despues de un
+    "+" van mas paños que comparten el NOMBRE_TENSION y el algomas:
+
+        ALFALFAL_220_J1_AES+J2          -> ALFALFAL_220_J1_AES,
+                                           ALFALFAL_220_J2_AES
+        LSQUILOS_006_G1_CLB+G2+G3       -> LSQUILOS_006_G1_CLB,
+                                           LSQUILOS_006_G2_CLB,
+                                           LSQUILOS_006_G3_CLB
+        CQLTHUES_012_CG1_AES+G2+G3      -> CQLTHUES_012_CG1_AES,
+                                           CQLTHUES_012_G2_AES,
+                                           CQLTHUES_012_G3_AES
+
+    (el paño de cada "+" va tal como esta escrito). Sin "+", el mismo
+    texto. ErrorMedidas si el primero no tiene al menos NOMBRE_TENSION_
+    paño o si hay un "+" sin paño.
+    """
+
+    texto = str(texto).strip()
+    if SEPARADOR_PAÑOS not in texto:
+        return [texto]
+
+    primero, *extras = [parte.strip() for parte in texto.split(SEPARADOR_PAÑOS)]
+    partes = primero.split("_")
+    if len(partes) < 3 or not all(partes[:3]):
+        raise ErrorMedidas(
+            f"Punto de medida '{texto}': el primero tiene que tener la forma "
+            f"NOMBRE_TENSION_paño_algomas para poder agregarle paños con "
+            f"'{SEPARADOR_PAÑOS}' (ej. ALFALFAL_220_J1_AES+J2)."
+        )
+    if not all(extras) or any("_" in extra for extra in extras):
+        raise ErrorMedidas(
+            f"Punto de medida '{texto}': despues de cada "
+            f"'{SEPARADOR_PAÑOS}' va solo el paño (ej. "
+            f"ALFALFAL_220_J1_AES+J2+J3)."
+        )
+
+    nombre, tension, _, *resto = partes
+    return [primero] + [
+        "_".join([nombre, tension, extra, *resto]) for extra in extras
+    ]
 
 # Unidades que se reconocen en la columna "Canal" de la hoja
 # "Gen real", y el factor que lleva cada una a kWh, que es la unidad en
@@ -196,7 +250,27 @@ def leer_homologacion(ruta):
             f"'Punto de Medida' y 'Canal' cargados."
         )
 
-    return df[[COLUMNA_PUNTO, COLUMNA_CANAL, COLUMNA_CLAVE, COLUMNA_FLUJO]]
+    return expandir_paños(
+        df[[COLUMNA_PUNTO, COLUMNA_CANAL, COLUMNA_CLAVE, COLUMNA_FLUJO]]
+    )
+
+
+def expandir_paños(df):
+    """
+    Una fila por punto de medida real: la de "ALFALFAL_220_J1_AES+J2"
+    pasa a dos (J1 y J2) con el mismo Canal, clave y Flujo, asi la
+    descarga pide los dos y el cruce suma los dos en la clave. El texto
+    escrito queda en COLUMNA_PUNTO_ORIGINAL.
+    """
+
+    df = df.copy()
+    df[COLUMNA_PUNTO_ORIGINAL] = df[COLUMNA_PUNTO].astype(str).str.strip()
+    df[COLUMNA_PUNTO] = df[COLUMNA_PUNTO_ORIGINAL].map(expandir_punto)
+    df = df.explode(COLUMNA_PUNTO, ignore_index=True)
+    return df[[
+        COLUMNA_PUNTO, COLUMNA_CANAL, COLUMNA_CLAVE, COLUMNA_FLUJO,
+        COLUMNA_PUNTO_ORIGINAL,
+    ]]
 
 
 def _buscar_hoja(excel, nombre):

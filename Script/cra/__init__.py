@@ -13,6 +13,7 @@ nunca importa nada de aca. La ventana es Balance_CRA.py.
     hojas_entrada.py  ENERGIA, FP, CO y SC y CO.
     fuentes_bess.py   FD_CPF/CSF/CTF y la matriz de PRORRATA_RETIROS (fuentes del BESS).
     politicas.py      Botones Generar de fp_ y cvar_cra_ (Script/Politicas).
+    medidas_cra.py    Medidas_CRA.xlsx desde PRMTE (boton Generar del Formato_Solicitud).
     maestros.py       Auxiliares/centrales_cra.xlsx (configuraciones, empresas, diccionario FD).
     escritura.py      5_REMUNERACION_CRA_AAMM.xlsx (cuadros y escritura rapida del BESS).
     proceso.py        Las secciones y generar_balance_cra().
@@ -39,6 +40,7 @@ from .maestros import (
     leer_empresas,
     leer_unidades_fd,
 )
+from .medidas_cra import generar_medidas_cra
 from .politicas import generar_politicas
 from .proceso import SECCIONES, generar_balance_cra, traer_fd
 from .rutas import (
@@ -57,7 +59,8 @@ __all__ = [
     "construir_sc_co_desde_reporte", "construir_sc_co_desde_sobrecostos",
     "participacion_por_servicio", "SECCIONES", "generar_balance_cra",
     "construir_fd", "construir_matriz_prorrata", "traer_fd",
-    "generar_politicas", "leer_configuraciones", "leer_empresas",
+    "generar_politicas", "generar_medidas_cra",
+    "leer_configuraciones", "leer_empresas",
     "leer_unidades_fd",
     "buscar_entrada", "crear_carpetas_caso", "resolver_rutas", "validar_aamm",
     "nombre_salida", "raiz_cra", "subcarpetas_del_caso",

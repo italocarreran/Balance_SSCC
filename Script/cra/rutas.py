@@ -123,6 +123,9 @@ def resolver_rutas(carpeta_base, aamm=None):
         "prorrata": base / p.CARPETA_PRORRATA,
         "cmg": base / p.CARPETA_CMG,
         "salida": salida,
+        "medidas_cra": raiz / p.CARPETA_ENERGIA / p.ARCHIVO_MEDIDAS_CRA,
+        "puntos_fallidos": raiz / p.CARPETA_ENERGIA / p.ARCHIVO_PUNTOS_FALLIDOS_CRA,
+        "trabajo_medidas": raiz / p.CARPETA_ENERGIA / p.CARPETA_TRABAJO_MEDIDAS,
         "log_dir": raiz / p.CARPETA_LOG,
         "registro": raiz / p.CARPETA_LOG / p.ARCHIVO_REGISTRO,
     }
@@ -193,11 +196,28 @@ def _buscar_centrales_cra(carpeta, aamm):
     return ruta if ruta.is_file() else None
 
 
+def _buscar_homologacion(carpeta, aamm):
+    # El mismo buscador del BESS: cualquier Excel con "homologacion" en
+    # el nombre (si hay varios, el mas reciente).
+    from ..nucleo.externos import Homologacion
+
+    return Homologacion.buscar_archivo_homologacion(carpeta)
+
+
+def _buscar_medidas_cra(carpeta, aamm):
+    ruta = Path(carpeta) / p.ARCHIVO_MEDIDAS_CRA
+    return ruta if ruta.is_file() else None
+
+
 ENTRADAS = [
     ("centrales_cra", "auxiliares", p.ARCHIVO_CENTRALES_CRA,
      _buscar_centrales_cra),
+    ("homologacion", "auxiliares", "*Homologacion*.xlsx",
+     _buscar_homologacion),
     ("energia", "energia",
      "Formato_Solicitud_*Hidro_<Mes><AAAA>.xlsx", _buscar_energia),
+    # La genera el boton "Generar" de la fila de arriba (desde PRMTE).
+    ("medidas_cra", "energia", p.ARCHIVO_MEDIDAS_CRA, _buscar_medidas_cra),
     ("fp", "fp", "fp_<AAMM>*.xlsx", _buscar_fp),
     ("co", "co", "cvar_cra_<AAMM>_*.xlsx", _buscar_co),
     ("reporte_cra", "sc_co", "Reporte_CRA*.csv", _buscar_reporte_cra),

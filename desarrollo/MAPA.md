@@ -81,6 +81,7 @@ Script/
         hojas_entrada.py       <- ENERGIA, FP, CO, SC y CO
         fuentes_bess.py        <- FD_CPF/CSF/CTF y matriz de PRORRATA_RETIROS
         politicas.py           <- botones Generar de fp_ y cvar_cra_
+        medidas_cra.py         <- Medidas_CRA.xlsx desde PRMTE (boton Generar del Formato_Solicitud)
         maestros.py            <- Auxiliares/centrales_cra.xlsx (3 hojas)
         escritura.py           <- 5_REMUNERACION_CRA_AAMM.xlsx: cuadros y escritura rapida del BESS (conserva lo que no toca)
         proceso.py             <- SECCIONES y generar_balance_cra()
@@ -362,6 +363,14 @@ importable como cualquier módulo.
   | `Claves_Balance.py` | `2_generacion_claves_Balance.py` | calendario de cuartos de hora + agrupación por clave |
   | `Generacion_Real.py` | `3_Generacion_Real.py` | agrega las centrales de la hoja `Gen real` desde la API de operación real |
 
+- **Varios paños en una línea de `homol`** (2026-11-26):
+  `ALFALFAL_220_J1_AES+J2` se expande a `ALFALFAL_220_J1_AES` y
+  `ALFALFAL_220_J2_AES` (`Homologacion.expandir_punto` / `expandir_paños`,
+  al leer): se descargan por separado y se suman en la clave. El texto
+  escrito queda en `COLUMNA_PUNTO_ORIGINAL`. Lo comparten BESS y CRA.
+- **`nucleo.medidas_sae.armar_medidas(archivo_homol, aamm, carpeta_trabajo)`**:
+  los pasos 1-4 sin escribir; la usan `generar_medidas_sae` (BESS) y
+  `cra.generar_medidas_cra`.
 - **Qué cambió respecto de los scripts sueltos** (todo a pedido del usuario,
   salvo donde se diga):
   - el Excel de homologación vive en `Auxiliares/`, al lado de
@@ -1209,6 +1218,13 @@ importable como cualquier módulo.
   del CRA se buscan por prefijo normalizado y si hay dos del mismo tipo se
   para; los de fuente BESS usan el buscador del BESS (el
   `SSCC_Desempeño_*` más reciente, como la macro original).
+- **`Medidas_CRA.xlsx`** (`medidas_cra.py`, 2026-11-26): botón **Generar**
+  en la fila del `Formato_Solicitud_SSAA_*`. Es el mismo proceso y el mismo
+  formato que `Medidas_SAE.xlsx` (`nucleo.medidas_sae.armar_medidas`, que
+  usan los dos): homologación de `CRA/Auxiliares/*homologacion*`, descarga de
+  PRMTE con lotes en `CRA/Energia/_trabajo/`, suma por clave con el Flujo,
+  hoja `Gen real` si hay, columnas `COLUMNAS_AI` y `Puntos_fallidos.xlsx` al
+  lado. La hoja `ENERGIA` sigue leyendo el Formato_Solicitud.
 - **Planilla:** mismas convenciones que la del BESS (fila 1 vacía,
   `Cuadro N° 1 — <TITULOS_HOJAS>` en la 2, encabezados en la 3, columna A
   de margen) y su escritura rápida (`nucleo.escritura._volcar` +

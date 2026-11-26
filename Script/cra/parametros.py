@@ -237,6 +237,18 @@ COLUMNAS_ENERGIA = [
     CAMPO_KWHD_CORREGIDO, CAMPO_KWHR_CORREGIDO, CAMPO_NETO,
 ]
 
+# --- Medidas_CRA.xlsx (desde PRMTE; ver medidas_cra.py) -----
+# Lo arma el boton "Generar" de la fila del Formato_Solicitud_SSAA_*, en
+# la misma carpeta Energia/, con las mismas columnas que Medidas_SAE.xlsx
+# del BESS (pedido del usuario 2026-11-26). La hoja ENERGIA sigue leyendo
+# el Formato_Solicitud.
+ARCHIVO_MEDIDAS_CRA = "Medidas_CRA.xlsx"
+HOJA_MEDIDAS_CRA = "Medidas"
+# Al lado, siempre (vacio si no falto nada), como el del BESS.
+ARCHIVO_PUNTOS_FALLIDOS_CRA = "Puntos_fallidos.xlsx"
+# Lotes descargados y marca de reanudacion (no se muestran en la ventana).
+CARPETA_TRABAJO_MEDIDAS = "_trabajo"
+
 # --- FP (traz. 6.4.1): origen A2:D -------------------------
 FILA_INICIO_FP = 2
 

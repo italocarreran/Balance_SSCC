@@ -4,6 +4,8 @@ Medidas_SAE.xlsx: los cuatro pasos de un viaje.
 """
 
 import calendar
+from pathlib import Path
+
 import pandas as pd
 
 from .externos import (
@@ -13,7 +15,7 @@ from .externos import (
 from .alertas import ALTA, Alerta, anotar
 from .formato import formatear_hoja
 from .parametros import (
-    ARCHIVO_MEDIDAS_SAE, ARCHIVO_PUNTOS_FALLIDOS, COLUMNAS_AI,
+    COLUMNAS_AI,
     COLUMNAS_PUNTOS_FALLIDOS, HOJA_MEDIDAS_SAE, HOJA_PUNTOS_FALLIDOS,
     PROBLEMA_NO_ENCONTRADO, PROBLEMA_SIN_INFORMACION,
 )
@@ -132,30 +134,19 @@ def escribir_puntos_fallidos(ruta, df_fallidos):
         formatear_hoja(writer.sheets[HOJA_PUNTOS_FALLIDOS])
 
 
-def generar_medidas_sae(
-    carpeta_base, aamm, registrar=print, progreso=None
+def armar_medidas(
+    archivo_homol, aamm, carpeta_trabajo, registrar=print, progreso=None,
+    origen="Medidas_SAE",
 ):
     """
-    Genera/actualiza <CARPETA_BASE>/Medidas/Medidas_SAE.xlsx corriendo
-    los cuatro pasos seguidos (boton "Actualizar" de esa fila):
+    Los pasos 1 a 4 de Medidas_SAE (ver generar_medidas_sae) sin escribir
+    nada: devuelve (df_medidas, df_fallidos), con df_medidas en las
+    columnas COLUMNAS_AI y ordenado por Cuarto de Hora y clave.
 
-      1. lee el Excel de homologacion de Auxiliares/;
-      2. descarga las medidas por punto de medida (API de medidas),
-         reanudable por lotes;
-      3. arma el calendario de cuartos de hora y agrupa por clave;
-      4. agrega las centrales de la hoja "Gen real" del MISMO Excel
-         de homologacion, desde la API de operacion real.
-
-    Si faltan puntos de medida o cuartos de hora, el archivo se genera
-    IGUAL con lo que hay, y al lado se escribe Puntos_fallidos.xlsx con
-    el detalle (siempre se escribe: vacio si no falto nada).
-
-    El paso 4 es opcional: si la hoja no existe o esta vacia, se
-    escribe solo lo que viene del paso 3.
-
-    Las dos claves de las APIs (son distintas) salen de la seccion
-    "claves_api" de config.json, que no se versiona -- ver
-    Script/config.py y config.ejemplo.json.
+    La usan el BESS (Medidas_SAE.xlsx) y el CRA (Medidas_CRA.xlsx, pedido
+    del usuario 2026-11-26: "que la salida de CRA tenga el mismo formato
+    que [...] los SAE"), cada uno con su homologacion y su carpeta de
+    trabajo. `origen` es como se nombra en las alertas.
     """
 
     def avanzar(valor):
@@ -167,23 +158,6 @@ def generar_medidas_sae(
     periodo = f"{anio}{mes:02d}"
     ultimo_dia = calendar.monthrange(anio, mes)[1]
 
-    rutas = resolver_rutas(carpeta_base, aamm)
-
-    if not rutas["base"].is_dir():
-        raise ErrorEntrada(f"No se encontro la carpeta base {rutas['base']}")
-
-    archivo_homol = Homologacion.buscar_archivo_homologacion(
-        rutas["auxiliares_dir"]
-    )
-
-    if not archivo_homol:
-        raise ErrorEntrada(
-            f"No se encontro el archivo de homologacion en "
-            f"{rutas['auxiliares_dir']}: ningun Excel de esa carpeta "
-            f"tiene 'homologacion' en el nombre (el real se llama "
-            f"'Homologacion ClavesTF y PRMTE.xlsx')."
-        )
-
     registrar(f"Periodo: {anio}-{mes:02d} ({aamm})")
 
     try:
@@ -191,14 +165,24 @@ def generar_medidas_sae(
         df_homol = Homologacion.leer_homologacion(archivo_homol)
         for problema in Homologacion.revisar_homologacion(df_homol):
             anotar(registrar, Alerta(
-                problema["id"], ALTA, "Medidas_SAE",
+                problema["id"], ALTA, origen,
                 f"{problema['mensaje']}.",
                 central=problema["clave"], clave=problema["punto"],
                 accion=f"corregir la hoja '{Homologacion.HOJA_HOMOL}' y "
-                       f"volver a traer Medidas_SAE",
+                       f"volver a traer {origen}",
                 archivo=archivo_homol.name, hoja=Homologacion.HOJA_HOMOL,
                 origen_control="CONTROL NUEVO",
             ))
+        combinados = (
+            df_homol[Homologacion.COLUMNA_PUNTO_ORIGINAL]
+            .str.contains(Homologacion.SEPARADOR_PAÑOS, regex=False)
+        )
+        if combinados.any():
+            registrar(
+                f"  lineas con varios paños ('+'): "
+                f"{df_homol.loc[combinados, Homologacion.COLUMNA_PUNTO_ORIGINAL].nunique()}"
+                f" (se descargan por separado y se suman en su clave)"
+            )
         puntos = Homologacion.puntos_de_medida(df_homol)
         registrar(
             f"  puntos de medida a consultar: {len(puntos):,} "
@@ -208,7 +192,7 @@ def generar_medidas_sae(
 
         registrar("Descargando medidas por punto de medida...")
         df_crudo, _ = Descarga_PRMTE.descargar(
-            puntos, periodo, rutas["trabajo_medidas"],
+            puntos, periodo, carpeta_trabajo,
             registrar=registrar, progreso=progreso, desde=5, hasta=55,
         )
 
@@ -280,32 +264,27 @@ def generar_medidas_sae(
     if faltantes:
         raise ErrorEntrada(
             f"El resultado no trae las columnas {faltantes} que "
-            f"{ARCHIVO_MEDIDAS_SAE} necesita para alimentar Medidores."
+            f"{origen} necesita."
         )
 
-    rutas["medidas_dir"].mkdir(parents=True, exist_ok=True)
+    return df_sae[COLUMNAS_AI], df_fallidos
 
-    registrar(f"Escribiendo {rutas['medidas_sae']}...")
-    from .escritura import escribir_tabla_rapida
 
-    escribir_tabla_rapida(
-        df_sae[COLUMNAS_AI], rutas["medidas_sae"], HOJA_MEDIDAS_SAE
-    )
+def informar_escritura(df_sae, df_fallidos, ruta_salida, ruta_fallidos, registrar):
+    """Lo que se dice en el registro despues de escribir (BESS y CRA)."""
 
     registrar(f"  filas: {len(df_sae):,}")
     registrar(f"  claves: {df_sae['clave'].nunique()}")
     registrar(
         f"  cuartos de hora: 1 a {int(df_sae['Cuarto de Hora'].max())}"
     )
-
-    escribir_puntos_fallidos(rutas["puntos_fallidos"], df_fallidos)
     if df_fallidos.empty:
-        registrar(f"{ARCHIVO_PUNTOS_FALLIDOS}: sin problemas (vacio).")
+        registrar(f"{Path(ruta_fallidos).name}: sin problemas (vacio).")
     else:
         por_problema = df_fallidos.groupby("Problema")["Punto de Medida"]
         registrar(
-            f"AVISO: {ARCHIVO_MEDIDAS_SAE} se genero con informacion "
-            f"incompleta. Detalle en {rutas['puntos_fallidos']}:"
+            f"AVISO: {Path(ruta_salida).name} se genero con informacion "
+            f"incompleta. Detalle en {ruta_fallidos}:"
         )
         for problema, puntos_problema in por_problema:
             registrar(
@@ -313,7 +292,70 @@ def generar_medidas_sae(
                 f"de medida"
             )
 
-    avanzar(100)
+
+def generar_medidas_sae(
+    carpeta_base, aamm, registrar=print, progreso=None
+):
+    """
+    Genera/actualiza <CARPETA_BASE>/Medidas/Medidas_SAE.xlsx corriendo
+    los cuatro pasos seguidos (boton "Actualizar" de esa fila):
+
+      1. lee el Excel de homologacion de Auxiliares/;
+      2. descarga las medidas por punto de medida (API de medidas),
+         reanudable por lotes;
+      3. arma el calendario de cuartos de hora y agrupa por clave;
+      4. agrega las centrales de la hoja "Gen real" del MISMO Excel
+         de homologacion, desde la API de operacion real.
+
+    Si faltan puntos de medida o cuartos de hora, el archivo se genera
+    IGUAL con lo que hay, y al lado se escribe Puntos_fallidos.xlsx con
+    el detalle (siempre se escribe: vacio si no falto nada).
+
+    El paso 4 es opcional: si la hoja no existe o esta vacia, se
+    escribe solo lo que viene del paso 3.
+
+    Las dos claves de las APIs (son distintas) salen de la seccion
+    "claves_api" de config.json, que no se versiona -- ver
+    Script/config.py y config.ejemplo.json.
+    """
+
+    aamm = validar_aamm(aamm)
+    rutas = resolver_rutas(carpeta_base, aamm)
+
+    if not rutas["base"].is_dir():
+        raise ErrorEntrada(f"No se encontro la carpeta base {rutas['base']}")
+
+    archivo_homol = Homologacion.buscar_archivo_homologacion(
+        rutas["auxiliares_dir"]
+    )
+
+    if not archivo_homol:
+        raise ErrorEntrada(
+            f"No se encontro el archivo de homologacion en "
+            f"{rutas['auxiliares_dir']}: ningun Excel de esa carpeta "
+            f"tiene 'homologacion' en el nombre (el real se llama "
+            f"'Homologacion ClavesTF y PRMTE.xlsx')."
+        )
+
+    df_sae, df_fallidos = armar_medidas(
+        archivo_homol, aamm, rutas["trabajo_medidas"],
+        registrar=registrar, progreso=progreso,
+    )
+
+    rutas["medidas_dir"].mkdir(parents=True, exist_ok=True)
+
+    registrar(f"Escribiendo {rutas['medidas_sae']}...")
+    from .escritura import escribir_tabla_rapida
+
+    escribir_tabla_rapida(df_sae, rutas["medidas_sae"], HOJA_MEDIDAS_SAE)
+    escribir_puntos_fallidos(rutas["puntos_fallidos"], df_fallidos)
+    informar_escritura(
+        df_sae, df_fallidos, rutas["medidas_sae"], rutas["puntos_fallidos"],
+        registrar,
+    )
+
+    if progreso:
+        progreso(100)
     registrar(f"Listo: {rutas['medidas_sae']}")
 
     return rutas["medidas_sae"]
